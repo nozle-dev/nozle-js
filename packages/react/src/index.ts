@@ -7,6 +7,7 @@ export { useSubscribe } from "./hooks/use-subscribe";
 export { usePlans } from "./hooks/use-plans";
 export type {
   BillingState,
+  CheckoutResult,
   UseCanResult,
   UseUsageResult,
   UsePlanResult,

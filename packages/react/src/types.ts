@@ -30,3 +30,10 @@ export interface UsePlanResult {
   isLoading: boolean;
   error: Error | null;
 }
+
+export interface CheckoutResult {
+  client_secret: string;
+  invoice_id: string;
+  amount_cents: number;
+  currency: string;
+}

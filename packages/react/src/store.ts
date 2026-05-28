@@ -1,4 +1,4 @@
-import type { BillingState } from "./types";
+import type { BillingState, CheckoutResult } from "./types";
 
 export class BillingStore {
   readonly baseUrl: string;
@@ -87,7 +87,7 @@ export class BillingStore {
     }
   }
 
-  async fetchCheckoutSecret(planCode: string, successUrl?: string): Promise<string> {
+  async fetchCheckoutSecret(planCode: string, successUrl?: string): Promise<CheckoutResult> {
     const res = await fetch(`${this.baseUrl}/v1/checkout`, {
       method: "POST",
       headers: {
@@ -100,9 +100,11 @@ export class BillingStore {
         success_url: successUrl || `${window.location.origin}/checkout/complete?session_id={CHECKOUT_SESSION_ID}`,
       }),
     });
-    if (!res.ok) throw new Error("Failed to create checkout session");
-    const data = await res.json();
-    return data.client_secret;
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => ({}));
+      throw new Error(errorBody.error || "Failed to create checkout session");
+    }
+    return res.json();
   }
 
   async fetchPlans(): Promise<Array<{ code: string; name: string; amount_cents: number; amount_currency: string; interval: string }>> {

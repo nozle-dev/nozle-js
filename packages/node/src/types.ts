@@ -33,10 +33,9 @@ export interface Plan {
 
 export interface CheckoutResult {
   client_secret: string;
-  session_id: string;
-  plan_code: string;
-  plan_name: string;
+  invoice_id: string;
   amount_cents: number;
+  currency: string;
 }
 
 export interface SubscribeResult {
