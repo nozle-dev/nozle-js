@@ -5,7 +5,7 @@
  * Uses the useCredits hook with customerId prop.
  */
 
-import { useCredits } from "../../use-credits.js";
+import { useCredits } from '../../hooks/use-credits.js';
 
 export interface CreditBalanceProps {
   customerId: string;

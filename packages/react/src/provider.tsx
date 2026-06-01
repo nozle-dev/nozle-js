@@ -1,12 +1,47 @@
-/**
- * BillingProvider — React context provider for the Nozle SDK.
- * SDK-03: Provides NozleClient instance + Centrifugo credentials to all child hooks.
- *
- * No prop drilling: all useCan/useUsage/useCredits hooks read from context.
- */
+'use client';
 
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { NozleClient } from '@nozle/sdk';
+import React, { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from 'react';
+
+export interface CanResult {
+  allowed: boolean;
+  remaining: number | null;
+  limit: number | null;
+  used: number;
+  error?: string | null;
+}
+
+export interface NozleClient {
+  apiKey: string;
+  baseUrl: string;
+  fetch(path: string, init?: RequestInit): Promise<Response>;
+  can(customerId: string, feature: string): Promise<CanResult>;
+}
+
+function createClient(apiKey: string, baseUrl: string): NozleClient {
+  const base = baseUrl.replace(/\/+$/, '');
+
+  async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+    return fetch(`${base}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        ...init?.headers,
+      },
+    });
+  }
+
+  return {
+    apiKey,
+    baseUrl: base,
+    fetch: apiFetch,
+    async can(customerId: string, feature: string): Promise<CanResult> {
+      const res = await apiFetch(`/api/v1/can?customer_id=${encodeURIComponent(customerId)}&feature=${encodeURIComponent(feature)}`);
+      if (!res.ok) return { allowed: false, remaining: null, limit: null, used: 0 };
+      return res.json();
+    },
+  };
+}
 
 export interface BillingContextValue {
   client: NozleClient | null;
@@ -23,38 +58,21 @@ export const BillingContext = createContext<BillingContextValue>({
 });
 
 export interface BillingProviderProps {
-  client: NozleClient;
-  workspaceId: string;
-  /**
-   * Centrifugo WebSocket URL.
-   * Defaults to process.env.NEXT_PUBLIC_CENTRIFUGO_URL if not provided.
-   */
+  apiKey: string;
+  baseUrl?: string;
+  workspaceId?: string;
   centrifugoUrl?: string;
   children: ReactNode;
 }
 
-interface CentrifugoTokenResponse {
-  token: string;
-  workspaceId: string;
-}
-
-/**
- * BillingProvider wraps your application and provides the NozleClient and
- * Centrifugo connection details to all child Nozle hooks.
- *
- * Usage:
- * ```tsx
- * <BillingProvider client={client} workspaceId="ws_xxx">
- *   <App />
- * </BillingProvider>
- * ```
- */
 export function BillingProvider({
-  client,
-  workspaceId,
+  apiKey,
+  baseUrl = 'https://api.nozle.app',
+  workspaceId = '',
   centrifugoUrl,
   children,
 }: BillingProviderProps): React.ReactElement {
+  const client = useMemo(() => createClient(apiKey, baseUrl), [apiKey, baseUrl]);
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
 
   const resolvedCentrifugoUrl =
@@ -64,42 +82,21 @@ export function BillingProvider({
   useEffect(() => {
     let cancelled = false;
 
-    // SDK-03: Fetch API-key-based centrifugo token from BFF
     async function fetchCentrifugoToken(): Promise<void> {
       try {
-        // Access the internal apiKey via the client options — use a cast for now
-        const clientInternal = client as unknown as {
-          apiKey?: string;
-          baseUrl?: string;
-        };
-        const apiKey = clientInternal.apiKey ?? '';
-        const baseUrl = clientInternal.baseUrl ?? 'https://api.nozle.io';
-
-        const response = await fetch(`${baseUrl}/api/v1/auth/centrifugo-token`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-          },
-        });
-
-        if (!response.ok) {
-          return;
-        }
-
-        const data = (await response.json()) as CentrifugoTokenResponse;
+        const response = await client.fetch('/api/v1/auth/centrifugo-token');
+        if (!response.ok) return;
+        const data = await response.json();
         if (!cancelled && data.token) {
           setCentrifugoToken(data.token);
         }
       } catch {
-        // Best-effort: if token fetch fails, hooks fall back to polling-free degraded mode
+        // Best-effort: centrifugo is optional for real-time updates
       }
     }
 
     void fetchCentrifugoToken();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [client]);
 
   const contextValue: BillingContextValue = {
@@ -112,10 +109,12 @@ export function BillingProvider({
   return React.createElement(BillingContext.Provider, { value: contextValue }, children);
 }
 
-/**
- * Internal hook for accessing the BillingContext.
- * Used by useCan, useUsage, useCredits.
- */
 export function useBillingContext(): BillingContextValue {
   return useContext(BillingContext);
+}
+
+export function useNozleClient(): NozleClient {
+  const { client } = useBillingContext();
+  if (!client) throw new Error('useNozleClient must be used within <BillingProvider>');
+  return client;
 }

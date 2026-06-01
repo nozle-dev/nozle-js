@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useBillingContext } from "../provider";
+import { useBillingContext } from '../provider.js';
 
 export interface Plan {
   code: string;

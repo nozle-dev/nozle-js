@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useBillingContext } from "../provider";
+import { useBillingContext } from '../provider.js';
 
 export interface UseSubscribeResult {
   subscribe: (planCode: string) => Promise<any>;

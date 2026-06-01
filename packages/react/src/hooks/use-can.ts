@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from "react";
 import { Centrifuge } from "centrifuge";
-import { useBillingContext } from "./provider.js";
+import { useBillingContext } from '../provider.js';
 
 export interface CanState {
   allowed: boolean;

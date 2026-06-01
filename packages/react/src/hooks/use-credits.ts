@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { useBillingContext } from "./provider.js";
+import { useBillingContext } from '../provider.js';
 
 export interface CreditsState {
   balance: number | null;

@@ -3,17 +3,17 @@
  * Main entry point — re-exports all public components and hooks.
  */
 
-export { BillingProvider, BillingContext, useBillingContext } from './provider.js';
-export type { BillingContextValue, BillingProviderProps } from './provider.js';
+export { BillingProvider, BillingContext, useBillingContext, useNozleClient } from './provider.js';
+export type { BillingContextValue, BillingProviderProps, NozleClient } from './provider.js';
 
-export { useCan } from './use-can.js';
-export type { CanState } from './use-can.js';
+export { useCan } from './hooks/use-can.js';
+export type { CanState } from './hooks/use-can.js';
 
-export { useUsage } from './use-usage.js';
-export type { UsageState } from './use-usage.js';
+export { useUsage } from './hooks/use-usage.js';
+export type { UsageState } from './hooks/use-usage.js';
 
-export { useCredits } from './use-credits.js';
-export type { CreditsState } from './use-credits.js';
+export { useCredits } from './hooks/use-credits.js';
+export type { CreditsState } from './hooks/use-credits.js';
 
 // UI-01: Billing portal wrapper + pricing components
 export {

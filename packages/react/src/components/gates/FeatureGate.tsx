@@ -7,7 +7,7 @@
 "use client";
 
 import React, { type ReactNode } from "react";
-import { useCan } from "../../use-can.js";
+import { useCan } from '../../hooks/use-can.js';
 
 export interface FeatureGateProps {
   /** Customer ID to check entitlement for */

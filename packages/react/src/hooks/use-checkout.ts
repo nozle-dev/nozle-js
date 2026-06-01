@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useBillingContext } from "../provider";
+import { useBillingContext } from '../provider.js';
 import type { CheckoutResult } from "../types";
 
 export interface UseCheckoutResult {

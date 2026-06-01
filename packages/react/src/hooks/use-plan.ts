@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { useBillingContext } from "../provider";
+import { useBillingContext } from '../provider.js';
 import type { UsePlanResult } from "../types";
 
 export function usePlan(): UsePlanResult {
