@@ -86,7 +86,7 @@ export function CreditHistory({
           timeout?: number;
         };
         const apiKey = clientInternal.apiKey ?? "";
-        const baseUrl = clientInternal.baseUrl ?? "https://api.nozle.io";
+        const baseUrl = clientInternal.baseUrl ?? "https://api.nozle.app";
         const timeout = clientInternal.timeout ?? 5000;
 
         const controller = new AbortController();

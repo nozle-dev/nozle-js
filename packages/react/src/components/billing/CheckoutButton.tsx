@@ -81,7 +81,7 @@ function loadRazorpayScript(): Promise<void> {
 export function CheckoutButton({
   planId,
   label = "Get Started",
-  apiBaseUrl = "https://api.nozle.io",
+  apiBaseUrl = "https://api.nozle.app",
   className,
   style,
   onError,

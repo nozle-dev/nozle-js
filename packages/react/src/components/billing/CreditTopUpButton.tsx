@@ -27,7 +27,7 @@ export interface CreditTopUpButtonProps {
  */
 export function CreditTopUpButton({
   label = "Add Credits",
-  apiBaseUrl = "https://api.nozle.io",
+  apiBaseUrl = "https://api.nozle.app",
   className,
   style,
   onSuccess,

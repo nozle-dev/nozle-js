@@ -27,7 +27,7 @@ export interface UpgradeButtonProps {
 export function UpgradeButton({
   targetPlanId,
   label = "Upgrade",
-  apiBaseUrl = "https://api.nozle.io",
+  apiBaseUrl = "https://api.nozle.app",
   className,
   style,
   onUpgraded,

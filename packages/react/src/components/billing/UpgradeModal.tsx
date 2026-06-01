@@ -35,7 +35,7 @@ export function UpgradeModal({
   isOpen,
   targetPlanId,
   customerId,
-  apiBaseUrl = "https://api.nozle.io",
+  apiBaseUrl = "https://api.nozle.app",
   apiKey = "",
   onConfirm,
   onCancel,
