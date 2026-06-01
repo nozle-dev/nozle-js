@@ -1,81 +1,121 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  type ReactNode,
-} from "react";
-import { loadStripe, type Stripe } from "@stripe/stripe-js";
-import { BillingStore } from "./store";
-import { connectCentrifugo, type CentrifugoConnection } from "./centrifugo";
+/**
+ * BillingProvider — React context provider for the Nozle SDK.
+ * SDK-03: Provides NozleClient instance + Centrifugo credentials to all child hooks.
+ *
+ * No prop drilling: all useCan/useUsage/useCredits hooks read from context.
+ */
 
-interface BillingContextValue {
-  store: BillingStore;
-  stripePromise: Promise<Stripe | null> | null;
+import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { NozleClient } from '@nozle/sdk';
+
+export interface BillingContextValue {
+  client: NozleClient | null;
+  workspaceId: string;
+  centrifugoUrl: string;
+  centrifugoToken: string | null;
 }
 
-const BillingContext = createContext<BillingContextValue | null>(null);
+export const BillingContext = createContext<BillingContextValue>({
+  client: null,
+  workspaceId: '',
+  centrifugoUrl: '',
+  centrifugoToken: null,
+});
 
-interface BillingProviderProps {
-  apiKey: string;
-  customerId: string;
-  baseUrl?: string;
-  wsUrl?: string;
-  stripeKey?: string;
-  features?: string[];
+export interface BillingProviderProps {
+  client: NozleClient;
+  workspaceId: string;
+  /**
+   * Centrifugo WebSocket URL.
+   * Defaults to process.env.NEXT_PUBLIC_CENTRIFUGO_URL if not provided.
+   */
+  centrifugoUrl?: string;
   children: ReactNode;
 }
 
-export function BillingProvider({
-  apiKey,
-  customerId,
-  baseUrl = "http://localhost:8080",
-  wsUrl = "ws://localhost:8001/connection/websocket",
-  stripeKey,
-  features = [],
-  children,
-}: BillingProviderProps) {
-  const storeRef = useRef<BillingStore>(null!);
-
-  if (!storeRef.current) {
-    storeRef.current = new BillingStore(baseUrl, apiKey, customerId);
-  }
-
-  const stripePromise = useMemo(
-    () => (stripeKey ? loadStripe(stripeKey) : null),
-    [stripeKey]
-  );
-
-  useEffect(() => {
-    const store = storeRef.current!;
-
-    for (const feature of features) {
-      store.fetchUsage(feature);
-    }
-
-    const connection: CentrifugoConnection = connectCentrifugo(
-      store,
-      customerId,
-      wsUrl
-    );
-
-    return () => {
-      connection.disconnect();
-    };
-  }, [apiKey, customerId, baseUrl, wsUrl, features]);
-
-  return (
-    <BillingContext.Provider value={{ store: storeRef.current, stripePromise }}>
-      {children}
-    </BillingContext.Provider>
-  );
+interface CentrifugoTokenResponse {
+  token: string;
+  workspaceId: string;
 }
 
+/**
+ * BillingProvider wraps your application and provides the NozleClient and
+ * Centrifugo connection details to all child Nozle hooks.
+ *
+ * Usage:
+ * ```tsx
+ * <BillingProvider client={client} workspaceId="ws_xxx">
+ *   <App />
+ * </BillingProvider>
+ * ```
+ */
+export function BillingProvider({
+  client,
+  workspaceId,
+  centrifugoUrl,
+  children,
+}: BillingProviderProps): React.ReactElement {
+  const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
+
+  const resolvedCentrifugoUrl =
+    centrifugoUrl ??
+    (typeof process !== 'undefined' ? (process.env['NEXT_PUBLIC_CENTRIFUGO_URL'] ?? '') : '');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // SDK-03: Fetch API-key-based centrifugo token from BFF
+    async function fetchCentrifugoToken(): Promise<void> {
+      try {
+        // Access the internal apiKey via the client options — use a cast for now
+        const clientInternal = client as unknown as {
+          apiKey?: string;
+          baseUrl?: string;
+        };
+        const apiKey = clientInternal.apiKey ?? '';
+        const baseUrl = clientInternal.baseUrl ?? 'https://api.nozle.io';
+
+        const response = await fetch(`${baseUrl}/api/v1/auth/centrifugo-token`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+          },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const data = (await response.json()) as CentrifugoTokenResponse;
+        if (!cancelled && data.token) {
+          setCentrifugoToken(data.token);
+        }
+      } catch {
+        // Best-effort: if token fetch fails, hooks fall back to polling-free degraded mode
+      }
+    }
+
+    void fetchCentrifugoToken();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  const contextValue: BillingContextValue = {
+    client,
+    workspaceId,
+    centrifugoUrl: resolvedCentrifugoUrl,
+    centrifugoToken,
+  };
+
+  return React.createElement(BillingContext.Provider, { value: contextValue }, children);
+}
+
+/**
+ * Internal hook for accessing the BillingContext.
+ * Used by useCan, useUsage, useCredits.
+ */
 export function useBillingContext(): BillingContextValue {
-  const ctx = useContext(BillingContext);
-  if (!ctx) {
-    throw new Error("useBillingContext must be used within a BillingProvider");
-  }
-  return ctx;
+  return useContext(BillingContext);
 }
