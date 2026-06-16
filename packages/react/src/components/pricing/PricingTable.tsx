@@ -16,6 +16,7 @@ export interface PricingPlan {
 
 export interface PricingTableProps {
   customerId?: string;
+  currentPlanCode?: string;
   plans?: PricingPlan[];
   features?: string[][];
   onSelect?: (plan: PricingPlan) => void;
@@ -390,6 +391,7 @@ function Skeleton(): React.ReactElement {
 
 export function PricingTable({
   customerId,
+  currentPlanCode,
   plans: propPlans,
   features,
   onSelect,
@@ -400,7 +402,7 @@ export function PricingTable({
 }: PricingTableProps): React.ReactElement {
   const client = useNozleClient();
   const [plans, setPlans] = useState<PricingPlan[]>(propPlans ?? []);
-  const [currentPlan, setCurrentPlan] = useState<string | null>(null);
+  const [currentPlan, setCurrentPlan] = useState<string | null>(currentPlanCode ?? null);
   const [isAnnual, setIsAnnual] = useState(false);
   const [loading, setLoading] = useState(!propPlans);
 
@@ -417,6 +419,10 @@ export function PricingTable({
   }, [client, propPlans]);
 
   useEffect(() => {
+    if (currentPlanCode !== undefined) {
+      setCurrentPlan(currentPlanCode);
+      return;
+    }
     if (!customerId) return;
     let cancelled = false;
     client.fetch(`/api/v1/billing/status?customer_id=${encodeURIComponent(customerId)}`)
@@ -427,7 +433,7 @@ export function PricingTable({
         }
       }).catch(() => {});
     return () => { cancelled = true; };
-  }, [client, customerId]);
+  }, [client, customerId, currentPlanCode]);
 
   const hasAnnual = plans.some(p => p.interval === 'yearly');
   const filtered = showToggle && hasAnnual
