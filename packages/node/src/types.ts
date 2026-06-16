@@ -52,3 +52,32 @@ export interface MarginQueryParams {
 export interface TrendParams extends MarginQueryParams {
   granularity?: "hour" | "day" | "week" | "month";
 }
+
+export interface PingResult {
+  ok: boolean;
+  engine: string;
+  version?: string;
+}
+
+export interface CustomerUpsertParams {
+  externalId: string;
+  name?: string;
+  email?: string;
+}
+
+export interface CustomerUpsertResult {
+  external_id: string;
+  name?: string;
+  email?: string;
+}
+
+export interface CheckAndDeductParams {
+  customerId: string;
+  feature: string;
+  credits: number;
+}
+
+export interface CheckAndDeductResult {
+  allowed: boolean;
+  remaining: number;
+}

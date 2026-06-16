@@ -8,6 +8,11 @@ import type {
   Plan,
   CheckoutResult,
   SubscribeResult,
+  PingResult,
+  CustomerUpsertParams,
+  CustomerUpsertResult,
+  CheckAndDeductParams,
+  CheckAndDeductResult,
 } from "./types";
 
 export class Nozle {
@@ -15,6 +20,7 @@ export class Nozle {
   readonly baseUrl: string;
   readonly eventsUrl: string;
   readonly margin: MarginClient;
+  readonly customers: CustomersNamespace;
 
   private readonly timeout: number;
   private subCache = new Map<string, string>();
@@ -25,6 +31,7 @@ export class Nozle {
     this.eventsUrl = (config.eventsUrl ?? "http://localhost:3000").replace(/\/+$/, "");
     this.timeout = config.timeout ?? 10_000;
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.timeout);
+    this.customers = new CustomersNamespace(this.baseUrl, this.apiKey, this.timeout);
   }
 
   async track(
@@ -45,7 +52,7 @@ export class Nozle {
   }
 
   async plans(): Promise<Plan[]> {
-    const res = await fetch(`${this.baseUrl}/v1/plans`, {
+    const res = await fetch(`${this.baseUrl}/api/v1/plans`, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
       signal: AbortSignal.timeout(this.timeout),
     });
@@ -55,7 +62,7 @@ export class Nozle {
   }
 
   async checkout(customerId: string, planCode: string, successUrl?: string): Promise<CheckoutResult> {
-    const res = await fetch(`${this.baseUrl}/v1/checkout`, {
+    const res = await fetch(`${this.baseUrl}/api/v1/checkout`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -73,7 +80,7 @@ export class Nozle {
   }
 
   async subscribe(customerId: string, planCode: string): Promise<SubscribeResult> {
-    const res = await fetch(`${this.baseUrl}/v1/subscribe`, {
+    const res = await fetch(`${this.baseUrl}/api/v1/subscribe`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -86,6 +93,33 @@ export class Nozle {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!res.ok) throw new Error(`subscribe failed: ${res.status} ${res.statusText}`);
+    return res.json();
+  }
+
+  async ping(): Promise<PingResult> {
+    const res = await fetch(`${this.baseUrl}/api/v1/ping`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      signal: AbortSignal.timeout(this.timeout),
+    });
+    if (!res.ok) throw new Error(`ping failed: ${res.status} ${res.statusText}`);
+    return res.json();
+  }
+
+  async checkAndDeduct(params: CheckAndDeductParams): Promise<CheckAndDeductResult> {
+    const res = await fetch(`${this.baseUrl}/api/v1/check-and-deduct`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customer_id: params.customerId,
+        feature: params.feature,
+        credits: params.credits,
+      }),
+      signal: AbortSignal.timeout(this.timeout),
+    });
+    if (!res.ok) throw new Error(`checkAndDeduct failed: ${res.status} ${res.statusText}`);
     return res.json();
   }
 
@@ -117,5 +151,31 @@ export class Nozle {
     const extId = subs[0].external_id;
     this.subCache.set(customerId, extId);
     return extId;
+  }
+}
+
+class CustomersNamespace {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly apiKey: string,
+    private readonly timeout: number,
+  ) {}
+
+  async upsert(params: CustomerUpsertParams): Promise<CustomerUpsertResult> {
+    const res = await fetch(`${this.baseUrl}/api/v1/customers`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        external_id: params.externalId,
+        name: params.name,
+        email: params.email,
+      }),
+      signal: AbortSignal.timeout(this.timeout),
+    });
+    if (!res.ok) throw new Error(`customers.upsert failed: ${res.status} ${res.statusText}`);
+    return res.json();
   }
 }

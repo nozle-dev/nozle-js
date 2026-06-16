@@ -6,7 +6,7 @@ export class MarginClient {
   private readonly timeout: number;
 
   constructor(baseUrl: string, apiKey: string, timeout = 10_000) {
-    this.base = `${baseUrl}/v1/margin`;
+    this.base = `${baseUrl}/api/v1/margin`;
     this.headers = { Authorization: `Bearer ${apiKey}` };
     this.timeout = timeout;
   }

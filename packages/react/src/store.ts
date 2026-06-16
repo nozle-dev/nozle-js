@@ -61,7 +61,7 @@ export class BillingStore {
   async fetchUsage(feature: string): Promise<void> {
     try {
       const res = await fetch(
-        `${this.baseUrl}/v1/can?customer_id=${this.customerId}&feature=${feature}`,
+        `${this.baseUrl}/api/v1/can?customer_id=${this.customerId}&feature=${feature}`,
         { headers: { Authorization: `Bearer ${this.apiKey}` } }
       );
       if (!res.ok) return;
@@ -88,7 +88,7 @@ export class BillingStore {
   }
 
   async fetchCheckoutSecret(planCode: string, successUrl?: string): Promise<CheckoutResult> {
-    const res = await fetch(`${this.baseUrl}/v1/checkout`, {
+    const res = await fetch(`${this.baseUrl}/api/v1/checkout`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -108,7 +108,7 @@ export class BillingStore {
   }
 
   async fetchPlans(): Promise<Array<{ code: string; name: string; amount_cents: number; amount_currency: string; interval: string }>> {
-    const res = await fetch(`${this.baseUrl}/v1/plans`, {
+    const res = await fetch(`${this.baseUrl}/api/v1/plans`, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
     });
     if (!res.ok) return [];

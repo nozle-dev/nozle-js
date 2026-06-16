@@ -25,17 +25,17 @@ function App() {
   return (
     <BillingProvider
       apiKey="pk_live_..."
-      customerId="cust_123"
-      baseUrl="https://your-api.example.com"
-      wsUrl="wss://your-ws.example.com/connection/websocket"
-      stripeKey="pk_test_..."
-      features={["tokens_used", "code_completions"]}
+      baseUrl="https://api.nozle.app"       // Default: https://api.nozle.app
+      workspaceId="ws_123"                   // Optional: workspace scoping
+      centrifugoUrl="wss://ws.nozle.app/connection/websocket"  // Optional: real-time updates
     >
       <YourApp />
     </BillingProvider>
   );
 }
 ```
+
+> **Note:** LLM wrappers (`wrapOpenAI`, `wrapAnthropic`) and server-side methods (`checkAndDeduct`, `customers.upsert`) are only available in `@nozle-js/node`. The React SDK is for client-side billing UI only.
 
 ## Hooks
 

@@ -113,7 +113,7 @@ describe("Nozle", () => {
       expect(result.allowed).toBe(true);
       expect(result.used).toBe(5);
       const [url] = fetchMock.mock.calls[0];
-      expect(url.toString()).toContain("/v1/can");
+      expect(url.toString()).toContain("/api/v1/can");
       expect(url.toString()).toContain("customer_id=cust_1");
       expect(url.toString()).toContain("feature=code_completion");
     });

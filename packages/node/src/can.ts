@@ -7,7 +7,7 @@ export async function can(
   feature: string,
   timeout = 10_000,
 ): Promise<CanResult> {
-  const url = new URL(`${baseUrl}/v1/can`);
+  const url = new URL(`${baseUrl}/api/v1/can`);
   url.searchParams.set("customer_id", customerId);
   url.searchParams.set("feature", feature);
 

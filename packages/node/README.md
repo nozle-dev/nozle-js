@@ -1,6 +1,6 @@
 # @nozle-js/node
 
-Server-side Node.js SDK for usage tracking, entitlement checks, margin intelligence, and billing management.
+Server-side Node.js SDK for usage tracking, entitlement checks, margin intelligence, LLM cost capture, and billing management.
 
 ## Install
 
@@ -35,6 +35,72 @@ const nozle = new Nozle({
 });
 ```
 
+## LLM Auto-Capture
+
+Automatically extract model name, token counts, and latency from LLM API responses. No manual tracking needed — the SDK intercepts completions and calls `nozle.track()` for you.
+
+Cost calculation happens server-side via the Go engine's cost model system.
+
+### OpenAI
+
+```bash
+npm install openai  # peer dependency, >=4.0.0
+```
+
+```ts
+import OpenAI from "openai";
+import { Nozle, wrapOpenAI } from "@nozle-js/node";
+
+const nozle = new Nozle({ apiKey: "sk_live_..." });
+const openai = wrapOpenAI(new OpenAI(), nozle, {
+  customerId: "cust_123",
+  feature: "code_completion",  // optional: tag for entitlement tracking
+  metricCode: "llm_tokens",   // optional: defaults to "llm_tokens"
+});
+
+// Use OpenAI normally — tracking happens automatically
+const response = await openai.chat.completions.create({
+  model: "gpt-4o",
+  messages: [{ role: "user", content: "Hello" }],
+});
+
+// Streaming works too
+const stream = await openai.chat.completions.create({
+  model: "gpt-4o",
+  messages: [{ role: "user", content: "Hello" }],
+  stream: true,
+});
+for await (const chunk of stream) {
+  // usage is captured from the final chunk
+}
+```
+
+### Anthropic
+
+```bash
+npm install @anthropic-ai/sdk  # peer dependency, >=0.30.0
+```
+
+```ts
+import Anthropic from "@anthropic-ai/sdk";
+import { Nozle, wrapAnthropic } from "@nozle-js/node";
+
+const nozle = new Nozle({ apiKey: "sk_live_..." });
+const anthropic = wrapAnthropic(new Anthropic(), nozle, {
+  customerId: "cust_123",
+  feature: "code_completion",
+});
+
+// Use Anthropic normally
+const message = await anthropic.messages.create({
+  model: "claude-sonnet-4-20250514",
+  max_tokens: 1024,
+  messages: [{ role: "user", content: "Hello" }],
+});
+```
+
+Each tracked event sends `{ model, input_tokens, output_tokens, latency_ms, feature }` to the engine. The Go cost model system calculates `cost_cents` server-side.
+
 ## Usage Tracking
 
 ```ts
@@ -61,10 +127,8 @@ Subscription auto-resolution: if no `subscriptionId` is provided, the SDK looks 
 const result = await nozle.can("cust_123", "code_completion");
 
 if (result.allowed) {
-  // Feature is available
   console.log(`${result.remaining} uses remaining`);
 } else {
-  // Blocked: result.reason is "usage_limit_exceeded" or "below_margin_floor"
   console.log(`Blocked: ${result.reason}`);
 }
 ```
@@ -78,23 +142,53 @@ result.margin_per_use_cents  // Revenue minus cost
 result.min_margin_percent    // Configured margin floor (if set)
 ```
 
+## Credit Check & Deduct
+
+Atomically check wallet balance and deduct credits in a single transaction. Uses row-level locking to prevent race conditions.
+
+```ts
+const result = await nozle.checkAndDeduct({
+  customerId: "cust_123",
+  feature: "code_completion",
+  credits: 5,
+});
+
+if (result.allowed) {
+  console.log(`Deducted. Remaining: ${result.remaining}`);
+} else {
+  console.log(`Insufficient credits. Balance: ${result.remaining}`);
+}
+```
+
+## Customer Management
+
+```ts
+// Create or update a customer
+const customer = await nozle.customers.upsert({
+  externalId: "cust_123",
+  name: "Acme Corp",
+  email: "billing@acme.com",
+});
+```
+
+## Health Check
+
+```ts
+const status = await nozle.ping();
+// { ok: true, engine: "ok" }
+```
+
 ## Margin Intelligence
 
 Requires a secret key (`sk_` prefix).
 
 ```ts
-// Overall margin summary
 const summary = await nozle.margin.summary();
-
-// Breakdown by dimension
 const byCustomer = await nozle.margin.byCustomer();
 const byMetric = await nozle.margin.byMetric();
 const byPlan = await nozle.margin.byPlan();
 const byModel = await nozle.margin.byModel();
-
-// Trend over time
 const trend = await nozle.margin.trend({ granularity: "day" });
-const weeklyTrend = await nozle.margin.trend({ granularity: "week" });
 
 // With time range
 const q1 = await nozle.margin.summary({
@@ -130,6 +224,12 @@ import type {
   SubscribeResult,
   MarginQueryParams,
   TrendParams,
+  PingResult,
+  CustomerUpsertParams,
+  CustomerUpsertResult,
+  CheckAndDeductParams,
+  CheckAndDeductResult,
+  WrapOptions,
 } from "@nozle-js/node";
 ```
 
