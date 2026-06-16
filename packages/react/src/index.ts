@@ -26,7 +26,8 @@ export type {
 } from './components/billing/BillingPortalProvider.js';
 
 export { PricingTable } from './components/pricing/PricingTable.js';
-export type { PricingTableProps } from './components/pricing/PricingTable.js';
+export type { PricingTableProps, PricingPlan } from './components/pricing/PricingTable.js';
+
 
 export { PlanCard } from './components/pricing/PlanCard.js';
 export type { Plan, PlanCardProps } from './components/pricing/PlanCard.js';
