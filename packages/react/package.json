@@ -1,21 +1,35 @@
 {
   "name": "@nozle-js/react",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./styles/preset": {
-      "import": { "types": "./dist/styles/preset.d.ts", "default": "./dist/styles/preset.js" },
-      "require": { "types": "./dist/styles/preset.d.cts", "default": "./dist/styles/preset.cjs" }
+      "import": {
+        "types": "./dist/styles/preset.d.ts",
+        "default": "./dist/styles/preset.js"
+      },
+      "require": {
+        "types": "./dist/styles/preset.d.cts",
+        "default": "./dist/styles/preset.cjs"
+      }
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",

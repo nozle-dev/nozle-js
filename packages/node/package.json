@@ -1,17 +1,25 @@
 {
   "name": "@nozle-js/node",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
@@ -25,15 +33,27 @@
     "anthropic": ">=0.30.0"
   },
   "peerDependenciesMeta": {
-    "openai": { "optional": true },
-    "anthropic": { "optional": true }
+    "openai": {
+      "optional": true
+    },
+    "anthropic": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
     "vitest": "^3.1.0"
   },
-  "keywords": ["billing", "usage-tracking", "margin", "ai", "metering", "entitlements", "nozle"],
+  "keywords": [
+    "billing",
+    "usage-tracking",
+    "margin",
+    "ai",
+    "metering",
+    "entitlements",
+    "nozle"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
