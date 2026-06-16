@@ -169,6 +169,92 @@ function AfterPayment({ planCode }: { planCode: string }) {
 
 Pre-built UI components with built-in styling. No CSS imports needed.
 
+### `PricingTable`
+
+Renders plan cards in a responsive grid with monthly/annual toggle, current plan detection, and CSS variable theming. Auto-fetches plans from the API if none are provided.
+
+```tsx
+import { PricingTable } from "@nozle-js/react";
+
+// Auto-fetch plans from API
+<PricingTable
+  customerId="cust_123"
+  highlightPlan="pro"
+  onSelect={(plan) => handleUpgrade(plan)}
+/>
+
+// Or pass plans explicitly
+<PricingTable
+  plans={[
+    { code: "starter", name: "Starter", amount_cents: 2900, amount_currency: "USD", interval: "monthly" },
+    { code: "pro", name: "Pro", amount_cents: 9900, amount_currency: "USD", interval: "monthly" },
+  ]}
+  features={[
+    ["10K API calls", "Email support"],
+    ["100K API calls", "Priority support", "Analytics"],
+  ]}
+  currentPlanCode="starter"
+  highlightPlan="pro"
+  onSelect={(plan) => console.log("Selected:", plan.code)}
+  showToggle={true}
+  enterpriseEmail="sales@example.com"
+  className="my-pricing"
+/>
+```
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `customerId` | `string` | -- | Customer ID for auto-detecting current plan |
+| `currentPlanCode` | `string` | -- | Explicitly set current plan (overrides auto-detect) |
+| `plans` | `PricingPlan[]` | -- | Plans to display (auto-fetched from API if omitted) |
+| `features` | `string[][]` | -- | Feature lists per plan (index-matched to plans array) |
+| `onSelect` | `(plan: PricingPlan) => void` | -- | Called when a plan's CTA is clicked |
+| `highlightPlan` | `string` | -- | Plan code to highlight as "Most Popular" |
+| `enterpriseEmail` | `string` | -- | Email for enterprise plan "Contact Sales" button |
+| `showToggle` | `boolean` | `true` | Show monthly/annual toggle (only when annual plans exist) |
+| `className` | `string` | -- | CSS class for the outer wrapper |
+
+#### PricingPlan type
+
+```ts
+interface PricingPlan {
+  code: string;
+  name: string;
+  amount_cents: number;
+  amount_currency: string;
+  interval: string;
+  description?: string;
+}
+```
+
+#### CSS Variable Theming
+
+PricingTable uses CSS custom properties for full theming control. Set these on a parent element or `:root`:
+
+```css
+:root {
+  /* Component-specific overrides */
+  --nozle-pricing-bg: #ffffff;
+  --nozle-pricing-card-bg: #ffffff;
+  --nozle-pricing-highlight: #6366f1;
+  --nozle-pricing-border: #e5e7eb;
+  --nozle-pricing-radius: 12px;
+
+  /* Or use global Nozle variables (PricingTable falls back to these) */
+  --nozle-background: #ffffff;
+  --nozle-card: #ffffff;
+  --nozle-primary: #6366f1;
+  --nozle-border: #e5e7eb;
+  --nozle-radius: 12px;
+  --nozle-foreground: #111827;
+  --nozle-muted-foreground: #6b7280;
+  --nozle-muted: #f3f4f6;
+  --nozle-primary-foreground: #ffffff;
+}
+```
+
+The component-specific variables (`--nozle-pricing-*`) take precedence over the global ones (`--nozle-*`), which fall back to sensible defaults.
+
 ### `UsageMeter`
 
 Displays usage with bar, ring, or minimal variants.
@@ -230,6 +316,8 @@ import type {
   UsePlanResult,
   UseCheckoutResult,
   Plan,
+  PricingPlan,
+  PricingTableProps,
   UsageMeterProps,
   PlanBadgeProps,
   UpgradePromptProps,
