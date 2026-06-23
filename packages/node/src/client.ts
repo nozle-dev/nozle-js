@@ -47,8 +47,8 @@ export class Nozle {
     return _track(this.eventsUrl, this.apiKey, customerId, event, metadata, opts, this.timeout);
   }
 
-  async can(customerId: string, feature: string): Promise<CanResult> {
-    return _can(this.baseUrl, this.apiKey, customerId, feature, this.timeout);
+  async can(customerId: string, feature: string, metadata?: Record<string, string>): Promise<CanResult> {
+    return _can(this.baseUrl, this.apiKey, customerId, feature, metadata, this.timeout);
   }
 
   async plans(): Promise<Plan[]> {

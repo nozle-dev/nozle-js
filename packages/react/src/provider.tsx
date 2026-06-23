@@ -14,7 +14,7 @@ export interface NozleClient {
   apiKey: string;
   baseUrl: string;
   fetch(path: string, init?: RequestInit): Promise<Response>;
-  can(customerId: string, feature: string): Promise<CanResult>;
+  can(customerId: string, feature: string, metadata?: Record<string, string>): Promise<CanResult>;
 }
 
 function createClient(apiKey: string, baseUrl: string): NozleClient {
@@ -35,8 +35,12 @@ function createClient(apiKey: string, baseUrl: string): NozleClient {
     apiKey,
     baseUrl: base,
     fetch: apiFetch,
-    async can(customerId: string, feature: string): Promise<CanResult> {
-      const res = await apiFetch(`/api/v1/can?customer_id=${encodeURIComponent(customerId)}&feature=${encodeURIComponent(feature)}`);
+    async can(customerId: string, feature: string, metadata?: Record<string, string>): Promise<CanResult> {
+      let url = `/api/v1/can?customer_id=${encodeURIComponent(customerId)}&feature=${encodeURIComponent(feature)}`;
+      if (metadata) {
+        url += `&metadata=${encodeURIComponent(JSON.stringify(metadata))}`;
+      }
+      const res = await apiFetch(url);
       if (!res.ok) return { allowed: false, remaining: null, limit: null, used: 0 };
       return res.json();
     },
