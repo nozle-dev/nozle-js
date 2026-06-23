@@ -1,0 +1,110 @@
+import prompts from 'prompts'
+import ora from 'ora'
+import { validateApiKey as validateApiKeyFormat } from './validation.js'
+import { validateApiKey, derivePublicKey, configureWorkspace } from '../api/nozle-client.js'
+import { logger } from '../utils/logger.js'
+import type { Nozle } from '@nozle-js/node'
+import { UNIVERSAL_TEMPLATE, USAGE_TYPE_OPTIONS, customizeTemplate } from '../constants/plan-templates.js'
+
+export interface SetupConfig {
+  apiKey: string
+  publicKey: string
+  workspaceId?: string
+  usageType: string
+  nozle: Nozle
+}
+
+export async function promptSetupWizard(): Promise<SetupConfig | null> {
+  logger.header('Nozle Setup Wizard')
+  logger.info('Let\'s configure your billing infrastructure!')
+  logger.newline()
+
+  // Step 1: API Key
+  logger.step(1, 3, '🔑 API Key Setup')
+
+  const apiKeyResponse = await prompts({
+    type: 'password',
+    name: 'apiKey',
+    message: 'Enter your Nozle API key (starts with sk_):',
+    validate: (value: string) => validateApiKeyFormat(value),
+  })
+
+  if (!apiKeyResponse.apiKey) return null
+
+  const baseUrl = process.env.NOZLE_API_URL || 'https://api.nozle.ai'
+  const spinner = ora(`Validating API key (${baseUrl})...`).start()
+  const validation = await validateApiKey(apiKeyResponse.apiKey)
+
+  if (!validation.valid || !validation.nozle) {
+    spinner.fail('API key validation failed')
+    logger.error(validation.error || 'Unknown error')
+    logger.newline()
+    logger.info('Troubleshooting:')
+    logger.info('  • Check your API key in the Nozle dashboard')
+    logger.info('  • For local dev: set NOZLE_API_URL=http://localhost:8080')
+    logger.info('  • Ensure backend is running and accessible')
+    return null
+  }
+
+  spinner.succeed(`API key validated (${baseUrl})`)
+  logger.success('Connected to Nozle')
+  const publicKey = derivePublicKey(apiKeyResponse.apiKey)
+
+  // Step 2: Usage Type Selection
+  logger.step(2, 3, '📊 What are you billing for?')
+  logger.info('This helps us set up your billing with the right terminology.')
+  logger.newline()
+
+  const usageTypeResponse = await prompts({
+    type: 'select',
+    name: 'usageType',
+    message: 'Select your usage type:',
+    choices: USAGE_TYPE_OPTIONS,
+  })
+
+  if (!usageTypeResponse.usageType) return null
+
+  let customName: string | undefined
+  if (usageTypeResponse.usageType === 'custom') {
+    const customNameResponse = await prompts({
+      type: 'text',
+      name: 'customName',
+      message: 'Enter your custom metric name (e.g., "Messages", "Reports"):',
+      validate: (value: string) => value.trim().length > 0 || 'Please enter a metric name',
+    })
+
+    if (!customNameResponse.customName) return null
+    customName = customNameResponse.customName
+  }
+
+  // Step 3: Configure Workspace
+  logger.step(3, 3, '⚙️  Configuring Your Workspace')
+  logger.info('Creating billing infrastructure...')
+  logger.newline()
+
+  const template = customizeTemplate(UNIVERSAL_TEMPLATE, usageTypeResponse.usageType, customName)
+
+  const configured = await configureWorkspace(validation.nozle, template)
+
+  if (!configured) {
+    logger.error('Failed to configure workspace')
+    return null
+  }
+
+  logger.newline()
+  logger.divider()
+  logger.success('Setup configuration complete!')
+  logger.success('Created:')
+  logger.info(`  • 1 billable metric (${template.billableMetrics[0].name})`)
+  logger.info(`  • 3 pricing plans (Free, Starter, Pro)`)
+  logger.info(`  • 3 feature gates (API Access, Priority Support, Advanced Analytics)`)
+  logger.newline()
+
+  return {
+    apiKey: apiKeyResponse.apiKey,
+    publicKey,
+    workspaceId: undefined,
+    usageType: usageTypeResponse.usageType,
+    nozle: validation.nozle,
+  }
+}

@@ -90,8 +90,10 @@ export function BillingProvider({
         if (!cancelled && data.token) {
           setCentrifugoToken(data.token);
         }
-      } catch {
+      } catch (error) {
         // Best-effort: centrifugo is optional for real-time updates
+        // Silently fail - CORS errors are expected in local development
+        console.debug('Centrifugo token fetch failed (expected in local dev):', error instanceof Error ? error.message : 'Unknown error');
       }
     }
 

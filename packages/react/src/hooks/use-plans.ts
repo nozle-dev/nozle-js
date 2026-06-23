@@ -9,17 +9,38 @@ export interface Plan {
   interval: string;
 }
 
-export function usePlans() {
-  const { store } = useBillingContext();
+export interface UsePlansResult {
+  plans: Plan[];
+  loading: boolean;
+}
+
+export function usePlans(): UsePlansResult {
+  const { client } = useBillingContext();
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    store
-      .fetchPlans()
-      .then(setPlans)
-      .finally(() => setIsLoading(false));
-  }, [store]);
+    async function fetchPlans() {
+      if (!client) {
+        setLoading(false);
+        return;
+      }
 
-  return { plans, isLoading };
+      try {
+        const response = await client.fetch('/api/v1/plans');
+        if (response.ok) {
+          const data = await response.json();
+          setPlans(data.plans || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch plans:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchPlans();
+  }, [client]);
+
+  return { plans, loading };
 }

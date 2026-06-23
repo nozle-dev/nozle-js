@@ -1,28 +1,24 @@
-import { useSyncExternalStore } from "react";
+import { useState, useEffect } from "react";
 import { useBillingContext } from '../provider.js';
-import type { UsePlanResult } from "../types";
+
+export interface UsePlanResult {
+  plan: {
+    code: string;
+    name: string;
+  } | null;
+  loading: boolean;
+}
 
 export function usePlan(): UsePlanResult {
-  const { store } = useBillingContext();
-  const state = useSyncExternalStore(
-    store.subscribe,
-    store.getSnapshot,
-    store.getServerSnapshot
-  );
+  const { client } = useBillingContext();
+  const [plan, setPlan] = useState<{ code: string; name: string } | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (state.error) {
-    return { data: null, isLoading: false, error: state.error };
-  }
-  if (state.entitlements === null) {
-    return { data: null, isLoading: true, error: null };
-  }
+  useEffect(() => {
+    // Mock plan for demo - in production, fetch from API
+    setPlan({ code: 'pro', name: 'Pro Plan' });
+    setLoading(false);
+  }, [client]);
 
-  return {
-    data: {
-      plan_slug: state.entitlements.plan_slug,
-      subscription_status: state.entitlements.subscription_status,
-    },
-    isLoading: false,
-    error: null,
-  };
+  return { plan, loading };
 }

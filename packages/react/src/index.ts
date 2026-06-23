@@ -15,6 +15,9 @@ export type { UsageState } from './hooks/use-usage.js';
 export { useCredits } from './hooks/use-credits.js';
 export type { CreditsState } from './hooks/use-credits.js';
 
+export { usePlan } from './hooks/use-plan.js';
+export { usePlans } from './hooks/use-plans.js';
+
 // UI-01: Billing portal wrapper + pricing components
 export {
   BillingPortalProvider,
