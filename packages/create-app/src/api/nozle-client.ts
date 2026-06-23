@@ -54,9 +54,9 @@ async function retryWithBackoff<T>(
 }
 
 export async function validateApiKey(apiKey: string): Promise<ValidationResult> {
-  // Determine API URLs from environment or default to production
-  const baseUrl = process.env.NOZLE_API_URL || 'https://api.nozle.ai'
-  const eventsUrl = process.env.NOZLE_EVENTS_URL || 'https://api.nozle.ai'
+  // Always use production URL
+  const baseUrl = 'https://api.nozle.app'
+  const eventsUrl = 'https://api.nozle.app'
 
   try {
     const nozle = new Nozle({ apiKey, baseUrl, eventsUrl })
@@ -74,18 +74,27 @@ export async function validateApiKey(apiKey: string): Promise<ValidationResult> 
       return {
         valid: false,
         nozle: null,
-        error: `API returned not OK (tried ${baseUrl}/api/v1/ping)`
+        error: 'Invalid API key. Check your Nozle dashboard.'
       }
     }
   } catch (error) {
-    const baseUrl = process.env.NOZLE_API_URL || 'https://api.nozle.ai'
     let errorMessage = error instanceof Error ? error.message : 'Unknown error'
 
-    // Enhance error message with helpful context
-    if (errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED')) {
-      errorMessage = `Cannot connect to ${baseUrl}. Check NOZLE_API_URL environment variable.`
-    } else if (errorMessage.includes('401') || errorMessage.includes('ping failed: 401')) {
-      errorMessage = 'Invalid API key. Check your Nozle dashboard for the correct key.'
+    // Simplified error messages based on error type
+    if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+      errorMessage = 'Invalid API key. Please check your key and try again.'
+    } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+      errorMessage = 'API key does not have required permissions.'
+    } else if (errorMessage.includes('fetch failed') || errorMessage.includes('ECONNREFUSED')) {
+      errorMessage = 'Cannot connect to Nozle. Please check your internet connection.'
+    } else if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('getaddrinfo')) {
+      errorMessage = 'Cannot reach Nozle servers. Please check your internet connection.'
+    } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+      errorMessage = 'Connection timed out. Please try again.'
+    } else if (errorMessage.includes('certificate') || errorMessage.includes('SSL')) {
+      errorMessage = 'SSL certificate error. Please check your network settings.'
+    } else {
+      errorMessage = 'Connection failed. Please try again.'
     }
 
     return {
@@ -132,6 +141,21 @@ export function derivePublicKey(secretKey: string): string {
 }
 
 /**
+ * Check if user is already onboarded by checking if they have any plans
+ */
+export async function checkOnboardingStatus(nozle: Nozle): Promise<boolean> {
+  try {
+    // If user has plans, they're onboarded
+    const plans = await nozle.plans()
+    return Array.isArray(plans) && plans.length > 0
+  } catch (error) {
+    // If plans endpoint fails, assume not onboarded
+    console.error('Failed to check onboarding status:', error)
+    return false
+  }
+}
+
+/**
  * Configure workspace with billing infrastructure via GraphQL mutations
  * This replicates the flow from core's useOnboardingActions.createAll()
  */
@@ -145,11 +169,7 @@ export async function configureWorkspace(
       throw new Error('No API key found in Nozle client')
     }
 
-    // Determine GraphQL URL from environment
-    // For local dev: NOZLE_EVENTS_URL=http://localhost:3000
-    // For production: defaults to https://api.nozle.ai
-    const eventsUrl = process.env.NOZLE_EVENTS_URL || 'https://api.nozle.ai'
-    const graphqlUrl = `${eventsUrl}/graphql`
+    const graphqlUrl = 'https://core.nozle.app/graphql'
 
     // Helper function to make GraphQL requests
     async function graphql<T = any>(
@@ -170,7 +190,7 @@ export async function configureWorkspace(
         throw new Error(`GraphQL request failed: ${response.status} ${errorText}`)
       }
 
-      const result = await response.json()
+      const result = await response.json() as { data?: T; errors?: any[] }
 
       if (result.errors) {
         throw new Error(`GraphQL errors: ${JSON.stringify(result.errors)}`)

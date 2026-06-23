@@ -15,12 +15,17 @@ export interface CanResult {
   allowed: boolean;
   reason?: string;
   used: number;
-  limit: number;
-  remaining: number;
+  limit?: number;
+  remaining?: number;
+  overage?: boolean;
   cost_per_use_cents: number;
   revenue_per_use_cents: number;
   margin_per_use_cents: number;
+  margin_percent?: number;
   min_margin_percent?: number;
+  margin_level?: string;
+  margin_enforcement_mode?: string;
+  warning?: string;
 }
 
 export interface Plan {

@@ -10,7 +10,7 @@ import { generateFeatureGates, generateMiddleware, generateFeatureEnvVars } from
 import { logger } from '../utils/logger.js'
 
 export interface CreateOptions {
-  template?: 'app-router-ts' | 'pages-router-ts'
+  template?: 'flat-subscription' | 'saas-usage' | 'compute' | 'credit-based'
   noTailwind?: boolean
   pkgManager?: 'npm' | 'pnpm' | 'yarn' | 'bun'
   noInstall?: boolean
@@ -22,7 +22,11 @@ export async function createApp(
 ): Promise<void> {
   const cwd = process.cwd()
 
-  logger.header('Create Nozle App')
+  // Show banner first
+  logger.banner('NOZLE')
+  logger.newline()
+  logger.box('Create your SaaS with billing in 2 minutes', { borderColor: 'magenta' })
+  logger.newline()
 
   // Step 1: Project configuration
   const projectConfig = await promptProjectConfig(projectName, cwd)
@@ -42,7 +46,6 @@ export async function createApp(
   const setupConfig = await promptSetupWizard()
 
   if (!setupConfig) {
-    logger.error('Setup is required to create a Nozle app.')
     process.exit(1)
   }
 
@@ -54,39 +57,60 @@ export async function createApp(
   await fs.ensureDir(projectPath)
   dirSpinner.succeed('Project directory created')
 
-  // Step 4: Copy template (from setupConfig, not projectConfig)
-  const templateSpinner = ora(`Copying ${setupConfig.template} template...`).start()
-  await copyTemplate(setupConfig.template, projectPath)
-  templateSpinner.succeed('Template copied')
+  // Step 4: Copy template - different paths for onboarded vs new users
+  if (setupConfig.onboarded) {
+    // User already onboarded - create simple Next.js with Nozle SDK
+    logger.info(chalk.cyan('Scaffolding Next.js app with Nozle SDK...'))
+    logger.newline()
 
-  // Step 5: Update package.json
-  const pkgSpinner = ora('Configuring package.json...').start()
-  await updatePackageJson(projectPath, projectConfig.projectName)
-  pkgSpinner.succeed('package.json configured')
+    const templateSpinner = ora('Creating app structure...').start()
+    await copyTemplate('flat-subscription', projectPath) // Use flat-subscription as base
+    templateSpinner.succeed('App structure created')
 
-  // Step 6: Generate feature gates
-  if (setupConfig && setupConfig.featureCodes.length > 0) {
-    const gatesSpinner = ora('Generating feature gates...').start()
-    await generateFeatureGates(projectPath, setupConfig.featureCodes)
-    await generateMiddleware(projectPath, setupConfig.featureCodes, projectConfig.template)
-    gatesSpinner.succeed(`Generated ${setupConfig.featureCodes.length} feature gate(s)`)
+    // Just write .env with API keys, no template-specific setup
+    const envSpinner = ora('Configuring environment...').start()
+    await writeEnvFile(projectPath, {
+      apiKey: setupConfig.apiKey,
+      publicKey: setupConfig.publicKey,
+    })
+    envSpinner.succeed('Environment configured')
+
+  } else {
+    // Normal template flow for new users
+    const templateSpinner = ora(`Copying ${setupConfig.template} template...`).start()
+    await copyTemplate(setupConfig.template!, projectPath)
+    templateSpinner.succeed('Template copied')
+
+    // Step 5: Update package.json
+    const pkgSpinner = ora('Configuring package.json...').start()
+    await updatePackageJson(projectPath, projectConfig.projectName)
+    pkgSpinner.succeed('package.json configured')
+
+    // Step 6: Generate feature gates
+    if (setupConfig && setupConfig.featureCodes.length > 0) {
+      const gatesSpinner = ora('Generating feature gates...').start()
+      await generateFeatureGates(projectPath, setupConfig.featureCodes)
+      // All templates use App Router
+      await generateMiddleware(projectPath, setupConfig.featureCodes, 'app-router-ts')
+      gatesSpinner.succeed(`Generated ${setupConfig.featureCodes.length} feature gate(s)`)
+    }
+
+    // Step 7: Generate .env.local
+    const envSpinner = ora('Generating environment variables...').start()
+
+    const features = setupConfig.featureCodes.length > 0
+      ? generateFeatureEnvVars(setupConfig.featureCodes)
+      : undefined
+
+    await writeEnvFile(projectPath, {
+      apiKey: setupConfig.apiKey,
+      publicKey: setupConfig.publicKey,
+      workspaceId: setupConfig.workspaceId,
+      features,
+    })
+
+    envSpinner.succeed('Environment variables configured')
   }
-
-  // Step 7: Generate .env.local
-  const envSpinner = ora('Generating environment variables...').start()
-
-  const features = setupConfig.featureCodes.length > 0
-    ? generateFeatureEnvVars(setupConfig.featureCodes)
-    : undefined
-
-  await writeEnvFile(projectPath, {
-    apiKey: setupConfig.apiKey,
-    publicKey: setupConfig.publicKey,
-    workspaceId: setupConfig.workspaceId,
-    features,
-  })
-
-  envSpinner.succeed('Environment variables configured')
 
   // Step 8: Install dependencies
   if (!options.noInstall) {
@@ -94,41 +118,51 @@ export async function createApp(
     await installDependencies(projectPath, projectConfig.packageManager)
   }
 
-  // Success message
+  // Enhanced success message
   logger.newline()
-  logger.divider()
-  logger.success(chalk.bold.green(`✨ Success! Created ${projectConfig.projectName}`))
-  logger.divider()
+  logger.celebrate()
+  logger.newline()
+  logger.banner('SUCCESS')
   logger.newline()
 
-  logger.info('Next steps:')
+  const templateName = setupConfig.onboarded
+    ? 'Next.js with Nozle SDK'
+    : getTemplateName(setupConfig.template!)
+
+  logger.box(
+    chalk.bold.green('Your Nozle app is ready! 🎉\n\n') +
+    chalk.white(`Project: ${chalk.cyan(projectConfig.projectName)}\n`) +
+    chalk.white(`Template: ${chalk.cyan(templateName)}\n`) +
+    chalk.white(`Location: ${chalk.dim(projectPath)}`),
+    { borderColor: 'green', padding: 1, margin: 1 }
+  )
+
+  logger.newline()
+  logger.gradientText('Next steps:', 'rainbow')
   logger.info(`  1. ${chalk.cyan(`cd ${projectConfig.projectName}`)}`)
 
-  if (setupConfig.featureCodes.length > 0) {
+  if (!setupConfig.onboarded && setupConfig.featureCodes.length > 0) {
     logger.info(`  2. ${chalk.cyan('Update feature flags in .env.local based on your plan')}`)
     logger.info(`  3. ${chalk.cyan('Add Stripe keys to .env.local')}`)
-  } else {
+  } else if (!setupConfig.onboarded) {
     logger.info(`  2. ${chalk.cyan('Add Stripe keys to .env.local')}`)
   }
 
   const runCmd = getRunCommand(projectConfig.packageManager)
-  logger.info(`  ${setupConfig.featureCodes.length > 0 ? '4' : '3'}. ${chalk.cyan(`${runCmd} dev`)}`)
+  const stepNum = setupConfig.onboarded ? 2 : (setupConfig.featureCodes.length > 0 ? 4 : 3)
+  logger.info(`  ${stepNum}. ${chalk.cyan(`${runCmd} dev`)}`)
   logger.newline()
 
-  logger.newline()
-  logger.info(chalk.bold('✨ Your app is ready with:'))
-  logger.info(`  • Template: ${chalk.cyan(setupConfig.template)}`)
-  logger.info(`  • Full dashboard implementation`)
-  logger.info(`  • API routes and billing integration`)
-  logger.info(`  • Demo mode enabled (works without database)`)
-
-  logger.newline()
-  logger.info(chalk.bold('📚 Additional setup:'))
-  logger.info(`  • Review ${chalk.cyan('.env.example')} and add Stripe keys`)
-  logger.info(`  • For production: Set up PostgreSQL (see ${chalk.cyan('db/README.md')})`)
-  logger.info(`  • Templates work in demo mode by default`)
-
-  logger.newline()
   logger.info(chalk.gray('Happy building! 🎉'))
   logger.newline()
+
+function getTemplateName(template: string): string {
+  const names: Record<string, string> = {
+    'flat-subscription': 'Flat Subscription',
+    'saas-usage': 'SaaS + Usage',
+    'compute': 'Compute/Infrastructure',
+    'credit-based': 'Credit-Based',
+  }
+  return names[template] || template
+}
 }

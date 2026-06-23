@@ -2,55 +2,134 @@ import prompts from 'prompts'
 import ora from 'ora'
 import chalk from 'chalk'
 import { validateApiKey as validateApiKeyFormat } from './validation.js'
-import { validateApiKey, derivePublicKey, configureWorkspace } from '../api/nozle-client.js'
+import { validateApiKey, derivePublicKey, configureWorkspace, checkOnboardingStatus } from '../api/nozle-client.js'
 import { logger } from '../utils/logger.js'
 import type { Nozle } from '@nozle-js/node'
 
 export type TemplateType = 'flat-subscription' | 'saas-usage' | 'compute' | 'credit-based'
 
 export interface SetupConfig {
-  template: TemplateType
+  template: TemplateType | null  // null for onboarded users
   apiKey: string
   publicKey: string
   workspaceId?: string
   nozle: Nozle
   featureCodes: string[]
+  onboarded?: boolean  // Track if user is already onboarded
 }
 
 export async function promptSetupWizard(): Promise<SetupConfig | null> {
-  logger.header('Nozle Setup Wizard')
-  logger.info('Let\'s configure your billing infrastructure!')
+  // Step 1: API Key with retry loop
+  logger.step(1, 2, '🔑 API Key Setup')
+
+  let validation: { valid: boolean; nozle: any; error?: string } | null = null
+  let apiKey = ''
+  let publicKey = ''
+
+  // Retry loop for API key validation
+  while (!validation || !validation.valid) {
+    const apiKeyResponse = await prompts({
+      type: 'password',
+      name: 'apiKey',
+      message: validation ? 'Try again - Enter your Nozle API key (starts with sk_):' : 'Enter your Nozle API key (starts with sk_):',
+      validate: (value: string) => validateApiKeyFormat(value),
+    })
+
+    if (!apiKeyResponse.apiKey) return null
+
+    apiKey = apiKeyResponse.apiKey
+
+    const spinner = ora('Validating API key...').start()
+    validation = await validateApiKey(apiKey)
+
+    if (!validation.valid || !validation.nozle) {
+      spinner.fail('Validation failed')
+      logger.error(validation.error || 'Unknown error')
+      logger.newline()
+
+      // Ask if user wants to retry
+      const retryResponse = await prompts({
+        type: 'confirm',
+        name: 'retry',
+        message: 'Would you like to try a different API key?',
+        initial: true
+      })
+
+      if (!retryResponse.retry) {
+        logger.newline()
+        logger.info(chalk.dim('Setup cancelled. You can restart anytime with: npx create-nozle-app'))
+        logger.newline()
+        logger.error('A valid API key is required to create a Nozle app.')
+        return null
+      }
+
+      logger.newline()
+    } else {
+      spinner.succeed('API key validated')
+      logger.success('Connected to Nozle')
+      publicKey = derivePublicKey(apiKey)
+    }
+  }
+
   logger.newline()
 
-  // Step 1: Template Selection
-  logger.step(1, 3, '🎨 Choose Your Template')
+  // Check onboarding status
+  const checkSpinner = ora('Checking your workspace...').start()
+  const isOnboarded = await checkOnboardingStatus(validation!.nozle)
+  checkSpinner.stop()
+
+  if (isOnboarded) {
+    // User is already onboarded - skip template wizard
+    logger.newline()
+    logger.box(
+      chalk.green.bold('✓ You\'re all set!\n\n') +
+      'Your workspace already has billing configured.\n' +
+      'We\'ll create a Next.js app with Nozle SDK integrated.',
+      { borderColor: 'green' }
+    )
+    logger.newline()
+
+    return {
+      template: null, // No template needed
+      apiKey,
+      publicKey,
+      workspaceId: undefined,
+      nozle: validation!.nozle,
+      featureCodes: [],
+      onboarded: true
+    }
+  }
+
+  // User is NOT onboarded - show template wizard
+  logger.newline()
+  logger.step(2, 2, '🎨 Choose Your Template')
   logger.info('Select the billing model that matches your use case:')
   logger.newline()
 
   const templateResponse = await prompts({
     type: 'select',
     name: 'template',
-    message: 'Which template best fits your product?',
+    message: chalk.cyan('Which billing model matches your product?'),
     choices: [
       {
-        title: 'Flat Subscription',
+        title: chalk.bold.cyan('💳 Flat Subscription'),
         value: 'flat-subscription',
-        description: 'SaaS workspace with flat monthly pricing (e.g., Notion, Linear)'
+        description: chalk.white('Fixed monthly pricing • Notion, Linear, Slack\n')
       },
       {
-        title: 'SaaS + Usage',
+        title: chalk.bold.magenta('📊 SaaS + Usage'),
         value: 'saas-usage',
-        description: 'API platform with base fee + overage (e.g., Stripe, Twilio)'
+        description: chalk.white('Base fee + usage overage • Stripe, Twilio, SendGrid\n')
       },
       {
-        title: 'Compute/Infrastructure',
+        title: chalk.bold.blue('⚡ Compute/Infrastructure'),
         value: 'compute',
-        description: 'Cloud platform with tiered usage (e.g., Vercel, Railway)'
+        description: chalk.white('Tiered usage pricing • Vercel, Railway, AWS\n')
       },
       {
-        title: 'Credit-Based',
+        title: chalk.bold.yellow('🪙 Credit-Based'),
         value: 'credit-based',
-        description: 'Prepaid credits for actions (e.g., Midjourney, Canva)'
+        description: chalk.white('Prepaid action credits • Midjourney, Canva, Replicate\n')
       },
     ]
   })
@@ -62,41 +141,7 @@ export async function promptSetupWizard(): Promise<SetupConfig | null> {
   logger.success(`Selected: ${getTemplateName(template)}`)
   logger.newline()
 
-  // Step 2: API Key
-  logger.step(2, 3, '🔑 API Key Setup')
-
-  const apiKeyResponse = await prompts({
-    type: 'password',
-    name: 'apiKey',
-    message: 'Enter your Nozle API key (starts with sk_):',
-    validate: (value: string) => validateApiKeyFormat(value),
-  })
-
-  if (!apiKeyResponse.apiKey) return null
-
-  const baseUrl = process.env.NOZLE_API_URL || 'https://api.nozle.ai'
-  const spinner = ora(`Validating API key (${baseUrl})...`).start()
-  const validation = await validateApiKey(apiKeyResponse.apiKey)
-
-  if (!validation.valid || !validation.nozle) {
-    spinner.fail('API key validation failed')
-    logger.error(validation.error || 'Unknown error')
-    logger.newline()
-    logger.info('Troubleshooting:')
-    logger.info('  • Check your API key in the Nozle dashboard')
-    logger.info('  • For local dev: set NOZLE_API_URL=http://localhost:8080')
-    logger.info('  • Ensure backend is running and accessible')
-    return null
-  }
-
-  spinner.succeed(`API key validated (${baseUrl})`)
-  logger.success('Connected to Nozle')
-  const publicKey = derivePublicKey(apiKeyResponse.apiKey)
-
-  logger.newline()
-
-  // Step 3: Configure Workspace with Template
-  logger.step(3, 3, '⚙️ Creating Billing Infrastructure')
+  // Configure Workspace with Template
   logger.info(getTemplateDescription(template))
   logger.newline()
 
@@ -111,7 +156,7 @@ export async function promptSetupWizard(): Promise<SetupConfig | null> {
     }
 
     // Create complete workspace infrastructure in database
-    const success = await configureWorkspace(validation.nozle, templateConfig.config)
+    const success = await configureWorkspace(validation!.nozle, templateConfig.config)
 
     if (!success) {
       throw new Error('Failed to create billing infrastructure')
@@ -147,11 +192,12 @@ export async function promptSetupWizard(): Promise<SetupConfig | null> {
 
   return {
     template,
-    apiKey: apiKeyResponse.apiKey,
+    apiKey,
     publicKey,
     workspaceId: undefined,
-    nozle: validation.nozle,
-    featureCodes: []
+    nozle: validation!.nozle,
+    featureCodes: [],
+    onboarded: false
   }
 }
 

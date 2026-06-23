@@ -1,3 +1,5 @@
+import path from 'node:path'
+import fs from 'fs-extra'
 import { fetchTemplate, type TemplateType } from './fetch-template.js'
 
 /**

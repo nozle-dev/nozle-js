@@ -4,10 +4,10 @@ import { detectPackageManager, type PackageManager } from '../utils/install-deps
 
 export interface ProjectConfig {
   projectName: string
-  template: 'app-router-ts' // Always App Router + TypeScript
-  useTailwind: true // Always include Tailwind
+  template: 'app-router-ts' | 'flat-subscription' | 'saas-usage' | 'compute' | 'credit-based' // Billing template type
+  useTailwind: boolean // Tailwind CSS support
   packageManager: PackageManager
-  skipSetup: false // Setup is always required - cannot be skipped
+  skipSetup: boolean // Setup wizard
 }
 
 export async function promptProjectConfig(

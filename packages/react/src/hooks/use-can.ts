@@ -45,7 +45,7 @@ interface EntitlementPublication {
  * @param featureKey - Feature key to check
  * @returns CanState with allowed, remaining, limit, loading, error
  */
-export function useCan(customerId: string, featureKey: string): CanState {
+export function useCan(customerId: string, featureKey: string, metadata?: Record<string, string>): CanState {
   const { client, workspaceId, centrifugoUrl, centrifugoToken } =
     useBillingContext();
   const [state, setState] = useState<CanState>(initialState);
@@ -66,7 +66,7 @@ export function useCan(customerId: string, featureKey: string): CanState {
 
     async function checkEntitlement(): Promise<void> {
       try {
-        const result = await client!.can(customerId, featureKey);
+        const result = await client!.can(customerId, featureKey, metadata);
         if (!cancelled) {
           setState({
             allowed: result.allowed,
@@ -95,7 +95,7 @@ export function useCan(customerId: string, featureKey: string): CanState {
     return () => {
       cancelled = true;
     };
-  }, [client, customerId, featureKey]);
+  }, [client, customerId, featureKey, metadata]);
 
   // Centrifugo subscription for live updates
   // CONTEXT.md hard requirement: Centrifugo WebSocket only, no setInterval
