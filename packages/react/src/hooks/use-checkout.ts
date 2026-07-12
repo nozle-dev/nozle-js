@@ -11,7 +11,7 @@ export interface UseCheckoutResult {
 }
 
 export function useCheckout(): UseCheckoutResult {
-  const { store, stripePromise } = useBillingContext();
+  const { client, customerId } = useBillingContext();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [checkout, setCheckout] = useState<CheckoutResult | null>(null);
@@ -21,7 +21,21 @@ export function useCheckout(): UseCheckoutResult {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await store.fetchCheckoutSecret(planCode, successUrl);
+        if (!client || !customerId) {
+          throw new Error("BillingProvider customerId is required");
+        }
+        const response = await client.fetch("/api/v1/checkout", {
+          method: "POST",
+          body: JSON.stringify({
+            plan_code: planCode,
+            customer_id: customerId,
+            success_url: successUrl,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: Checkout failed`);
+        }
+        const result = (await response.json()) as CheckoutResult;
         setCheckout(result);
         return result.client_secret;
       } catch (err) {
@@ -32,8 +46,8 @@ export function useCheckout(): UseCheckoutResult {
         setIsLoading(false);
       }
     },
-    [store]
+    [client, customerId]
   );
 
-  return { fetchClientSecret, checkout, stripePromise, isLoading, error };
+  return { fetchClientSecret, checkout, stripePromise: null, isLoading, error };
 }

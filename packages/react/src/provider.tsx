@@ -49,20 +49,18 @@ function createClient(apiKey: string, baseUrl: string): NozleClient {
 
 export interface BillingContextValue {
   client: NozleClient | null;
+  customerId: string;
   workspaceId: string;
   centrifugoUrl: string;
   centrifugoToken: string | null;
 }
 
-export const BillingContext = createContext<BillingContextValue>({
-  client: null,
-  workspaceId: '',
-  centrifugoUrl: '',
-  centrifugoToken: null,
-});
+export const BillingContext = createContext<BillingContextValue | null>(null);
 
 export interface BillingProviderProps {
-  apiKey: string;
+  apiKey?: string;
+  publishableKey?: string;
+  customerId?: string;
   baseUrl?: string;
   workspaceId?: string;
   centrifugoUrl?: string;
@@ -71,12 +69,22 @@ export interface BillingProviderProps {
 
 export function BillingProvider({
   apiKey,
+  publishableKey,
+  customerId = '',
   baseUrl = 'https://api.nozle.app',
   workspaceId = '',
   centrifugoUrl,
   children,
 }: BillingProviderProps): React.ReactElement {
-  const client = useMemo(() => createClient(apiKey, baseUrl), [apiKey, baseUrl]);
+  const resolvedApiKey = apiKey ?? publishableKey;
+  if (!resolvedApiKey) {
+    throw new Error('BillingProvider requires apiKey or publishableKey');
+  }
+
+  const client = useMemo(
+    () => createClient(resolvedApiKey, baseUrl),
+    [resolvedApiKey, baseUrl],
+  );
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
 
   const resolvedCentrifugoUrl =
@@ -105,6 +113,7 @@ export function BillingProvider({
 
   const contextValue: BillingContextValue = {
     client,
+    customerId,
     workspaceId,
     centrifugoUrl: resolvedCentrifugoUrl,
     centrifugoToken,
@@ -114,7 +123,11 @@ export function BillingProvider({
 }
 
 export function useBillingContext(): BillingContextValue {
-  return useContext(BillingContext);
+  const context = useContext(BillingContext);
+  if (!context) {
+    throw new Error('useBillingContext must be used within a BillingProvider');
+  }
+  return context;
 }
 
 export function useNozleClient(): NozleClient {

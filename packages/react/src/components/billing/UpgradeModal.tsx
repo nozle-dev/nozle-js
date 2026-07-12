@@ -23,6 +23,10 @@ export interface UpgradeModalProps {
   customerId: string;
   apiBaseUrl?: string;
   apiKey?: string;
+  onStripeClientSecret?: (clientSecret: string) => void;
+  onCheckoutStarted?: () => void;
+  onCompleted?: () => void;
+  onScheduled?: () => void;
   onConfirm?: () => void;
   onCancel?: () => void;
 }
@@ -37,6 +41,10 @@ export function UpgradeModal({
   customerId,
   apiBaseUrl = "https://api.nozle.app",
   apiKey = "",
+  onStripeClientSecret,
+  onCheckoutStarted,
+  onCompleted,
+  onScheduled,
   onConfirm,
   onCancel,
 }: UpgradeModalProps): React.ReactElement | null {
@@ -65,7 +73,10 @@ export function UpgradeModal({
               "Content-Type": "application/json",
               Authorization: `Bearer ${apiKey}`,
             },
-            body: JSON.stringify({ targetPlanId, customerId }),
+            body: JSON.stringify({
+              plan_code: targetPlanId,
+              customer_id: customerId,
+            }),
           },
         );
 
@@ -102,25 +113,73 @@ export function UpgradeModal({
   async function handleConfirm(): Promise<void> {
     setConfirming(true);
     try {
-      const response = await fetch(
-        `${apiBaseUrl}/api/v1/subscriptions/change`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({ targetPlanId, customerId }),
+      const response = await fetch(`${apiBaseUrl}/api/v1/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
         },
-      );
+        body: JSON.stringify({
+          plan_code: targetPlanId,
+          customer_id: customerId,
+        }),
+      });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: Upgrade failed`);
+        const errorBody = (await response.json().catch(() => ({}))) as {
+          code?: string;
+        };
+        if (errorBody.code === "checkout_not_required_for_downgrade") {
+          const changeResponse = await fetch(
+            `${apiBaseUrl}/api/v1/subscriptions/change`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                plan_code: targetPlanId,
+                customer_id: customerId,
+              }),
+            },
+          );
+          if (!changeResponse.ok) {
+            throw new Error(`HTTP ${changeResponse.status}: Plan change failed`);
+          }
+
+          onScheduled?.();
+          onConfirm?.();
+          return;
+        }
+
+        throw new Error(`HTTP ${response.status}: Checkout failed`);
+      }
+
+      const data = (await response.json()) as {
+        type?: string;
+        url?: string;
+        clientSecret?: string;
+        client_secret?: string;
+      };
+      const clientSecret = data.clientSecret ?? data.client_secret;
+
+      if (data.type === "completed") {
+        onCompleted?.();
+      } else if (data.url) {
+        window.location.href = data.url;
+      } else if (data.type === "stripe" && clientSecret && onStripeClientSecret) {
+        onStripeClientSecret(clientSecret);
+        onCheckoutStarted?.();
+      } else if (data.type === "stripe" && clientSecret) {
+        throw new Error("onStripeClientSecret is required for embedded Stripe checkout");
+      } else {
+        throw new Error("Unknown checkout response format");
       }
 
       onConfirm?.();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Upgrade failed";
+      const message = err instanceof Error ? err.message : "Checkout failed";
       setError(message);
     } finally {
       setConfirming(false);

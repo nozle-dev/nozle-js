@@ -30,6 +30,19 @@ export interface CheckoutButtonProps {
   onStripeClientSecret?: (clientSecret: string) => void;
   /** Called with the Razorpay payment ID after a successful Razorpay payment. */
   onSuccess?: (paymentId: string) => void;
+  /** Called when Nozle completes the plan change using credits without external payment. */
+  onComplete?: (result: CompletedCheckoutResult) => void;
+}
+
+export interface CompletedCheckoutResult {
+  type: "completed";
+  status: "succeeded";
+  payment_source?: string;
+  subscription_id?: string;
+  plan_code?: string;
+  invoice_id?: string;
+  amount_cents?: number;
+  currency?: string;
 }
 
 interface RazorpayOptions {
@@ -48,9 +61,10 @@ declare global {
 }
 
 type CheckoutResponse =
-  | { type: "stripe"; url: string; clientSecret?: string }
-  | { type: "stripe"; clientSecret: string; url?: string }
+  | { type: "stripe"; url: string; clientSecret?: string; client_secret?: string }
+  | { type: "stripe"; clientSecret?: string; client_secret?: string; url?: string }
   | { type: "razorpay"; orderId: string }
+  | CompletedCheckoutResult
   | { url: string }; // legacy — no type field
 
 /**
@@ -81,27 +95,30 @@ function loadRazorpayScript(): Promise<void> {
 export function CheckoutButton({
   planId,
   label = "Get Started",
-  apiBaseUrl = "https://api.nozle.app",
+  apiBaseUrl,
   className,
   style,
   onError,
   razorpayKeyId,
   onStripeClientSecret,
   onSuccess,
+  onComplete,
 }: CheckoutButtonProps): React.ReactElement {
-  const { customerId, apiKey } = useBillingPortal();
+  const portal = useBillingPortal();
+  const { customerId, apiKey } = portal;
+  const baseUrl = apiBaseUrl ?? portal.apiBaseUrl;
   const [loading, setLoading] = useState(false);
 
   async function handleClick(): Promise<void> {
     setLoading(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/api/v1/checkout`, {
+      const response = await fetch(`${baseUrl}/api/v1/checkout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({ planId, customerId }),
+        body: JSON.stringify({ plan_code: planId, customer_id: customerId }),
       });
 
       if (!response.ok) {
@@ -110,7 +127,9 @@ export function CheckoutButton({
 
       const data = (await response.json()) as CheckoutResponse;
 
-      if ("type" in data && data.type === "razorpay") {
+      if ("type" in data && data.type === "completed") {
+        onComplete?.(data);
+      } else if ("type" in data && data.type === "razorpay") {
         // Razorpay checkout path
         if (!razorpayKeyId) {
           onError?.(
@@ -132,10 +151,15 @@ export function CheckoutButton({
         rzp.open();
       } else if ("type" in data && data.type === "stripe") {
         // Stripe checkout path
+        const clientSecret = data.clientSecret ?? data.client_secret;
         if (data.url) {
           window.location.href = data.url;
-        } else if (data.clientSecret) {
-          onStripeClientSecret?.(data.clientSecret);
+        } else if (clientSecret && onStripeClientSecret) {
+          onStripeClientSecret(clientSecret);
+        } else if (clientSecret) {
+          onError?.(
+            new Error("onStripeClientSecret is required for embedded Stripe checkout"),
+          );
         } else {
           onError?.(
             new Error("Stripe checkout: no url or clientSecret in response"),

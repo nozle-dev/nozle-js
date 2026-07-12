@@ -14,6 +14,7 @@ import { createContext, useContext, type ReactNode } from "react";
 export interface BillingPortalContextValue {
   customerId: string;
   apiKey: string;
+  apiBaseUrl: string;
 }
 
 const BillingPortalContext = createContext<BillingPortalContextValue | null>(
@@ -30,9 +31,14 @@ export function useBillingPortal(): BillingPortalContextValue {
   return ctx;
 }
 
+export function useOptionalBillingPortal(): BillingPortalContextValue | null {
+  return useContext(BillingPortalContext);
+}
+
 export interface BillingPortalProviderProps {
   customerId: string;
   apiKey: string;
+  apiBaseUrl?: string;
   children: ReactNode;
 }
 
@@ -51,10 +57,11 @@ export interface BillingPortalProviderProps {
 export function BillingPortalProvider({
   customerId,
   apiKey,
+  apiBaseUrl = "https://api.nozle.app",
   children,
 }: BillingPortalProviderProps): React.ReactElement {
   return (
-    <BillingPortalContext.Provider value={{ customerId, apiKey }}>
+    <BillingPortalContext.Provider value={{ customerId, apiKey, apiBaseUrl }}>
       {children}
     </BillingPortalContext.Provider>
   );

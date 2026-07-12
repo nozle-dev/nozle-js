@@ -15,6 +15,7 @@ export interface CreditsState {
 interface CreditsResponse {
   balance?: number;
   amount?: number;
+  credits_balance?: string | number;
 }
 
 /**
@@ -77,7 +78,10 @@ export function useCredits(customerId: string): CreditsState {
         const data = (await response.json()) as CreditsResponse;
         if (!cancelled) {
           setState({
-            balance: data.balance ?? data.amount ?? null,
+            balance:
+              data.credits_balance !== undefined
+                ? Number(data.credits_balance)
+                : (data.balance ?? data.amount ?? null),
             loading: false,
             error: null,
           });

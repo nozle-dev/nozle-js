@@ -1,11 +1,29 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { BillingStore } from "../store";
 
-describe("BillingStore", () => {
-  it("returns initial state with null entitlements and credits", () => {
-    const store = new BillingStore();
-    const snapshot = store.getSnapshot();
+const baseUrl = "https://api.example.test";
+const apiKey = "pk_test";
+const customerId = "cust_123";
 
+function createStore() {
+  return new BillingStore(baseUrl, apiKey, customerId);
+}
+
+function jsonResponse(body: unknown, ok = true) {
+  return {
+    ok,
+    json: vi.fn().mockResolvedValue(body),
+  } as unknown as Response;
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("BillingStore", () => {
+  it("returns its initial state", () => {
+    const snapshot = createStore().getSnapshot();
     expect(snapshot.entitlements).toBeNull();
     expect(snapshot.credits).toBeNull();
     expect(snapshot.usage).toEqual({});
@@ -13,130 +31,111 @@ describe("BillingStore", () => {
     expect(snapshot.error).toBeNull();
   });
 
-  it("subscribe/emit triggers listeners", () => {
-    const store = new BillingStore();
+  it("notifies subscribers when state changes", () => {
+    const store = createStore();
     const listener = vi.fn();
-
     const unsubscribe = store.subscribe(listener);
-    store.setConnectionState("connected");
 
+    store.setConnectionState("connected");
     expect(listener).toHaveBeenCalledTimes(1);
 
     unsubscribe();
     store.setConnectionState("disconnected");
-
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it("setConnectionState updates state", () => {
-    const store = new BillingStore();
-    store.setConnectionState("connected");
+  it("fetches usage with the tenant customer id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ allowed: true, used: 2, limit: 10, remaining: 8 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createStore();
 
-    expect(store.getSnapshot().connectionState).toBe("connected");
-  });
+    await store.fetchUsage("agent_execution");
 
-  it("setError updates state", () => {
-    const store = new BillingStore();
-    const err = new Error("test error");
-    store.setError(err);
-
-    expect(store.getSnapshot().error).toBe(err);
-  });
-
-  it("fetchInitialState populates entitlements, credits, and usage", async () => {
-    const store = new BillingStore();
-    const mockClient = {
-      request: vi.fn().mockImplementation((method: string, path: string) => {
-        if (path === "/v1/entitlements") {
-          return Promise.resolve({
-            plan_slug: "pro",
-            subscription_status: "active",
-            features: { ai_copilot: { enabled: true, source: "plan" } },
-            limits: {
-              api_calls: { limit: 10000, used: 2500, source: "plan" },
-            },
-            credits: 500,
-          });
-        }
-        if (path === "/v1/credits/balance") {
-          return Promise.resolve({
-            balance: 500,
-            currency: "USD",
-          });
-        }
-        return Promise.reject(new Error("Unknown path"));
-      }),
-    };
-
-    await store.fetchInitialState(mockClient as any, "cust_123");
-
-    const snapshot = store.getSnapshot();
-    expect(snapshot.entitlements).toBeDefined();
-    expect(snapshot.entitlements!.plan_slug).toBe("pro");
-    expect(snapshot.credits).toBeDefined();
-    expect(snapshot.credits!.balance).toBe(500);
-    expect(snapshot.usage.api_calls).toEqual({
-      used: 2500,
-      limit: 10000,
-      remaining: 7500,
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${baseUrl}/api/v1/can?customer_id=${customerId}&feature=agent_execution`,
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+    );
+    expect(store.getSnapshot().usage.agent_execution).toEqual({
+      used: 2,
+      limit: 10,
+      remaining: 8,
     });
-    expect(snapshot.error).toBeNull();
   });
 
-  it("fetchInitialState sets error on failure", async () => {
-    const store = new BillingStore();
-    const mockClient = {
-      request: vi.fn().mockRejectedValue(new Error("Network error")),
-    };
+  it("records usage-fetch errors", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
+    const store = createStore();
 
-    await store.fetchInitialState(mockClient as any, "cust_123");
+    await store.fetchUsage("voice_call");
 
-    const snapshot = store.getSnapshot();
-    expect(snapshot.error).toBeInstanceOf(Error);
-    expect(snapshot.error!.message).toBe("Network error");
+    expect(store.getSnapshot().error?.message).toBe("Network error");
   });
 
-  it("handleEvent triggers refetch for known event types", async () => {
-    const store = new BillingStore();
-    const mockClient = {
-      request: vi.fn().mockResolvedValue({
-        plan_slug: "pro",
-        subscription_status: "active",
-        features: {},
-        limits: {},
-        credits: 0,
+  it("creates checkout using canonical request fields", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ client_secret: "cs_123", invoice_id: "inv_1" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createStore();
+
+    await store.fetchCheckoutSecret("pro", "https://app.test/complete");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${baseUrl}/api/v1/checkout`,
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          plan_code: "pro",
+          customer_id: customerId,
+          success_url: "https://app.test/complete",
+        }),
       }),
-    };
-
-    store.handleEvent(
-      { type: "entitlement.changed" },
-      mockClient as any,
-      "cust_123"
     );
-
-    // Wait for the async refetch
-    await new Promise((r) => setTimeout(r, 10));
-
-    expect(mockClient.request).toHaveBeenCalled();
   });
 
-  it("handleEvent ignores unknown event types", () => {
-    const store = new BillingStore();
-    const mockClient = {
-      request: vi.fn(),
-    };
-
-    store.handleEvent(
-      { type: "unknown.event" },
-      mockClient as any,
-      "cust_123"
+  it("fetches plans through the authenticated organization", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          plans: [
+            {
+              code: "pro",
+              name: "Pro",
+              amount_cents: 1499,
+              amount_currency: "USD",
+              interval: "monthly",
+            },
+          ],
+        }),
+      ),
     );
-
-    expect(mockClient.request).not.toHaveBeenCalled();
+    const plans = await createStore().fetchPlans();
+    expect(plans).toHaveLength(1);
+    expect(plans[0]?.code).toBe("pro");
   });
 
-  it("getServerSnapshot returns same as getSnapshot", () => {
-    const store = new BillingStore();
-    expect(store.getServerSnapshot()).toBe(store.getSnapshot());
+  it("applies real-time usage updates", () => {
+    const store = createStore();
+    store.handleEvent({
+      type: "usage.updated",
+      metric: "chat",
+      used: 4,
+      limit: 50,
+      remaining: 46,
+    });
+    expect(store.getSnapshot().usage.chat).toEqual({
+      used: 4,
+      limit: 50,
+      remaining: 46,
+    });
+  });
+
+  it("ignores unknown real-time events", () => {
+    const store = createStore();
+    store.handleEvent({ type: "unknown.event" });
+    expect(store.getSnapshot().usage).toEqual({});
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { BillingProvider } from "../provider";
 import { useCan } from "../hooks/use-can";
@@ -26,31 +26,23 @@ vi.mock("centrifuge", () => {
 let fetchResponses: Record<string, unknown> = {};
 
 const mockFetch = vi.fn().mockImplementation((url: string) => {
-  // Connection token
-  if (url.includes("/realtime/token")) {
+  if (url.includes("/auth/centrifugo-token")) {
     return Promise.resolve({
       ok: true,
       json: () => Promise.resolve({ token: "fake-token" }),
     });
   }
-  // Default: return entitlements-like response
+  const feature = new URL(url).searchParams.get("feature");
   return Promise.resolve({
     ok: true,
-    json: () =>
-      Promise.resolve(
-        fetchResponses["default"] ?? {
-          plan_slug: "pro",
-          subscription_status: "active",
-          features: {
-            ai_copilot: { enabled: true, source: "plan" },
-            advanced_reports: { enabled: false, source: "plan" },
-          },
-          limits: {},
-          credits: 100,
-          balance: 100,
-          currency: "USD",
-        }
-      ),
+    json: () => Promise.resolve(
+      fetchResponses[feature ?? "default"] ?? {
+        allowed: feature === "ai_copilot",
+        remaining: null,
+        limit: null,
+        used: 0,
+      },
+    ),
   });
 });
 global.fetch = mockFetch;
@@ -78,10 +70,7 @@ describe("useCan", () => {
   it("returns allowed=true for enabled feature after fetch", async () => {
     const { result } = renderHook(() => useCan("ai_copilot"), { wrapper });
 
-    // Wait for fetch to complete
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.isLoading).toBe(false);
     expect(result.current.allowed).toBe(true);
@@ -93,9 +82,7 @@ describe("useCan", () => {
       wrapper,
     });
 
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.isLoading).toBe(false);
     expect(result.current.allowed).toBe(false);
@@ -107,9 +94,7 @@ describe("useCan", () => {
       wrapper,
     });
 
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 50));
-    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.isLoading).toBe(false);
     expect(result.current.allowed).toBe(false);

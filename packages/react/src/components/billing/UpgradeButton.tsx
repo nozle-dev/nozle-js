@@ -17,6 +17,10 @@ export interface UpgradeButtonProps {
   apiBaseUrl?: string;
   className?: string;
   style?: React.CSSProperties;
+  onStripeClientSecret?: (clientSecret: string) => void;
+  onCheckoutStarted?: () => void;
+  onDowngradeScheduled?: () => void;
+  /** Called when prepaid credits complete the upgrade without external payment. */
   onUpgraded?: () => void;
 }
 
@@ -27,12 +31,17 @@ export interface UpgradeButtonProps {
 export function UpgradeButton({
   targetPlanId,
   label = "Upgrade",
-  apiBaseUrl = "https://api.nozle.app",
+  apiBaseUrl,
   className,
   style,
+  onStripeClientSecret,
+  onCheckoutStarted,
+  onDowngradeScheduled,
   onUpgraded,
 }: UpgradeButtonProps): React.ReactElement {
-  const { customerId, apiKey } = useBillingPortal();
+  const portal = useBillingPortal();
+  const { customerId, apiKey } = portal;
+  const baseUrl = apiBaseUrl ?? portal.apiBaseUrl;
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -58,11 +67,20 @@ export function UpgradeButton({
         isOpen={isOpen}
         targetPlanId={targetPlanId}
         customerId={customerId}
-        apiBaseUrl={apiBaseUrl}
+        apiBaseUrl={baseUrl}
         apiKey={apiKey}
-        onConfirm={() => {
+        onStripeClientSecret={onStripeClientSecret}
+        onCheckoutStarted={() => {
+          setIsOpen(false);
+          onCheckoutStarted?.();
+        }}
+        onCompleted={() => {
           setIsOpen(false);
           onUpgraded?.();
+        }}
+        onScheduled={() => {
+          setIsOpen(false);
+          onDowngradeScheduled?.();
         }}
         onCancel={() => setIsOpen(false)}
       />

@@ -19,6 +19,20 @@ export interface Invoice {
   pdf_url?: string;
 }
 
+interface InvoiceResponse {
+  id: string;
+  number: string;
+  date?: string;
+  issuing_date?: string | null;
+  created_at?: string;
+  amount?: number;
+  amount_cents?: number;
+  currency: string;
+  status?: string;
+  payment_status?: string;
+  pdf_url?: string;
+}
+
 export interface InvoiceListProps {
   customerId: string;
 }
@@ -56,6 +70,29 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+function normalizeInvoice(invoice: InvoiceResponse): Invoice {
+  let status: Invoice["status"] = "open";
+  if (invoice.payment_status === "succeeded" || invoice.status === "paid") {
+    status = "paid";
+  } else if (invoice.payment_status === "failed") {
+    status = "uncollectible";
+  } else if (invoice.status === "draft") {
+    status = "draft";
+  } else if (invoice.status === "void" || invoice.status === "voided") {
+    status = "void";
+  }
+
+  return {
+    id: invoice.id,
+    number: invoice.number,
+    date: invoice.date ?? invoice.issuing_date ?? invoice.created_at ?? "",
+    amount: invoice.amount ?? invoice.amount_cents ?? 0,
+    currency: invoice.currency,
+    status,
+    pdf_url: invoice.pdf_url,
+  };
 }
 
 export function InvoiceList({ customerId }: InvoiceListProps) {
@@ -101,11 +138,11 @@ export function InvoiceList({ customerId }: InvoiceListProps) {
         }
 
         const data = (await response.json()) as {
-          invoices?: Invoice[];
-          data?: Invoice[];
+          invoices?: InvoiceResponse[];
+          data?: InvoiceResponse[];
         };
         if (!cancelled) {
-          setInvoices(data.invoices ?? data.data ?? []);
+          setInvoices((data.invoices ?? data.data ?? []).map(normalizeInvoice));
           setLoading(false);
         }
       } catch (err: unknown) {

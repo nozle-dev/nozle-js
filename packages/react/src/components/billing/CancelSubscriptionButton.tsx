@@ -13,6 +13,7 @@
  */
 
 import { useState } from "react";
+import { useOptionalBillingPortal } from "./BillingPortalProvider.js";
 
 type CancelStep = "idle" | "confirm" | "reason";
 
@@ -26,17 +27,25 @@ export const CANCEL_REASONS = [
 
 export interface CancelSubscriptionButtonProps {
   subscriptionId: string;
+  apiBaseUrl?: string;
+  apiKey?: string;
   onCancelled?: () => void;
+  onError?: (error: Error) => void;
 }
 
 export function CancelSubscriptionButton({
   subscriptionId,
+  apiBaseUrl,
+  apiKey,
   onCancelled,
+  onError,
 }: CancelSubscriptionButtonProps) {
+  const portal = useOptionalBillingPortal();
   const [step, setStep] = useState<CancelStep>("idle");
   const [selectedReason, setSelectedReason] = useState("");
   const [otherText, setOtherText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleDismiss = () => {
     setStep("idle");
@@ -50,15 +59,45 @@ export function CancelSubscriptionButton({
 
   const handleSubmitCancellation = async () => {
     const reason = selectedReason === "Other" ? otherText : selectedReason;
+    const effectiveApiKey = apiKey ?? portal?.apiKey;
+    const effectiveBaseUrl = apiBaseUrl ?? portal?.apiBaseUrl ?? "https://api.nozle.app";
+
+    if (!effectiveApiKey) {
+      const cancellationError = new Error(
+        "CancelSubscriptionButton requires apiKey or BillingPortalProvider",
+      );
+      setError(cancellationError.message);
+      onError?.(cancellationError);
+      return;
+    }
+
     setLoading(true);
-    await fetch(`/api/v1/subscriptions/${subscriptionId}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason }),
-    });
-    setLoading(false);
-    handleDismiss();
-    onCancelled?.();
+    setError(null);
+    try {
+      const response = await fetch(
+        `${effectiveBaseUrl}/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${effectiveApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ reason }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Cancellation failed`);
+      }
+      handleDismiss();
+      onCancelled?.();
+    } catch (err: unknown) {
+      const cancellationError =
+        err instanceof Error ? err : new Error("Cancellation failed");
+      setError(cancellationError.message);
+      onError?.(cancellationError);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isSubmitDisabled =
@@ -217,6 +256,18 @@ export function CancelSubscriptionButton({
             >
               Your feedback helps us improve.
             </p>
+            {error && (
+              <p
+                role="alert"
+                style={{
+                  color: "var(--nozle-destructive, var(--destructive, #dc2626))",
+                  fontSize: "0.875rem",
+                  marginBottom: "1rem",
+                }}
+              >
+                {error}
+              </p>
+            )}
             <fieldset
               style={{
                 border: "none",

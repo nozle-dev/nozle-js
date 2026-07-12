@@ -10,11 +10,13 @@ import { useCredits } from '../../hooks/use-credits.js';
 export interface CreditBalanceProps {
   customerId: string;
   currency?: string;
+  unit?: "credits" | "currency";
 }
 
 export function CreditBalance({
   customerId,
   currency = "USD",
+  unit = "credits",
 }: CreditBalanceProps) {
   const { balance, loading, error } = useCredits(customerId);
 
@@ -56,11 +58,15 @@ export function CreditBalance({
         </span>
       ) : (
         <span className="font-semibold">
-          {new Intl.NumberFormat("en-US", {
-            style: "currency",
-            currency,
-            minimumFractionDigits: 2,
-          }).format(amount)}
+          {unit === "currency"
+            ? new Intl.NumberFormat("en-US", {
+                style: "currency",
+                currency,
+                minimumFractionDigits: 2,
+              }).format(amount)
+            : `${new Intl.NumberFormat("en-US", {
+                maximumFractionDigits: 2,
+              }).format(amount)} credits`}
         </span>
       )}
     </div>

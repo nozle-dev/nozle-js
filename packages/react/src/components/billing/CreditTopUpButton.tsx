@@ -10,14 +10,26 @@ import React from "react";
 import { useState } from "react";
 import { useBillingPortal } from "./BillingPortalProvider.js";
 
-const PRESET_AMOUNTS = [10, 25, 50, 100, 250];
+const PRESET_AMOUNTS = [5, 10, 25, 50, 100];
+
+export interface CreditPurchaseCheckout {
+  type: "stripe";
+  url?: string;
+  client_secret?: string;
+  clientSecret?: string;
+  amount_dollars: number;
+  credits: number;
+}
 
 export interface CreditTopUpButtonProps {
   label?: string;
   apiBaseUrl?: string;
   className?: string;
   style?: React.CSSProperties;
-  onSuccess?: (amount: number) => void;
+  minimumAmount?: number;
+  creditsPerDollar?: number;
+  onCheckoutCreated?: (checkout: CreditPurchaseCheckout) => void;
+  onStripeClientSecret?: (clientSecret: string) => void;
   onError?: (error: Error) => void;
 }
 
@@ -27,15 +39,20 @@ export interface CreditTopUpButtonProps {
  */
 export function CreditTopUpButton({
   label = "Add Credits",
-  apiBaseUrl = "https://api.nozle.app",
+  apiBaseUrl,
   className,
   style,
-  onSuccess,
+  minimumAmount = 5,
+  creditsPerDollar = 25,
+  onCheckoutCreated,
+  onStripeClientSecret,
   onError,
 }: CreditTopUpButtonProps): React.ReactElement {
-  const { customerId, apiKey } = useBillingPortal();
+  const portal = useBillingPortal();
+  const { customerId, apiKey } = portal;
+  const baseUrl = apiBaseUrl ?? portal.apiBaseUrl;
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedAmount, setSelectedAmount] = useState<number>(25);
+  const [selectedAmount, setSelectedAmount] = useState<number>(10);
   const [customAmount, setCustomAmount] = useState<string>("");
   const [useCustom, setUseCustom] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -46,8 +63,8 @@ export function CreditTopUpButton({
     : selectedAmount;
 
   async function handlePurchase(): Promise<void> {
-    if (finalAmount <= 0) {
-      setError("Please enter a valid amount");
+    if (finalAmount < minimumAmount) {
+      setError(`Minimum purchase is $${minimumAmount}`);
       return;
     }
 
@@ -55,21 +72,41 @@ export function CreditTopUpButton({
     setError(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/v1/credits/purchase`, {
+      const response = await fetch(`${baseUrl}/api/v1/credits/purchase`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({ customerId, amount: finalAmount }),
+        body: JSON.stringify({
+          customer_id: customerId,
+          amount_dollars: finalAmount,
+        }),
       });
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: Credit purchase failed`);
       }
 
+      const checkout = (await response.json()) as CreditPurchaseCheckout;
+      const clientSecret = checkout.client_secret ?? checkout.clientSecret;
+      if (!checkout.url && !clientSecret) {
+        throw new Error("Credit purchase checkout returned no payment session");
+      }
+
+      onCheckoutCreated?.(checkout);
+
+      if (checkout.url) {
+        window.location.href = checkout.url;
+      } else if (clientSecret && onStripeClientSecret) {
+        onStripeClientSecret(clientSecret);
+      } else {
+        throw new Error(
+          "onStripeClientSecret is required for embedded Stripe checkout",
+        );
+      }
+
       setIsOpen(false);
-      onSuccess?.(finalAmount);
     } catch (err: unknown) {
       const purchaseError =
         err instanceof Error ? err : new Error("Credit purchase failed");
@@ -198,7 +235,7 @@ export function CreditTopUpButton({
                   value={customAmount}
                   onChange={(e) => setCustomAmount(e.target.value)}
                   placeholder="Enter amount"
-                  min={1}
+                  min={minimumAmount}
                   style={{
                     width: "100%",
                     padding: "0.5rem 0.75rem",
@@ -211,6 +248,17 @@ export function CreditTopUpButton({
                 />
               )}
             </div>
+
+            <p
+              style={{
+                color: "var(--nozle-muted-foreground, var(--muted-foreground))",
+                fontSize: "0.875rem",
+                margin: "0 0 1.25rem",
+              }}
+            >
+              {Math.floor(finalAmount * creditsPerDollar).toLocaleString()} credits
+              at {creditsPerDollar} credits per $1. Minimum ${minimumAmount}.
+            </p>
 
             {error && (
               <p
@@ -258,7 +306,7 @@ export function CreditTopUpButton({
                   fontWeight: 500,
                   opacity: loading ? 0.7 : 1,
                 }}
-                disabled={loading || finalAmount <= 0}
+                disabled={loading || finalAmount < minimumAmount}
               >
                 {loading ? "Processing..." : `Add $${finalAmount}`}
               </button>

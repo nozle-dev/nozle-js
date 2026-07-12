@@ -8,7 +8,7 @@ export interface UseSubscribeResult {
 }
 
 export function useSubscribe(): UseSubscribeResult {
-  const { store } = useBillingContext();
+  const { client, customerId } = useBillingContext();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -17,15 +17,14 @@ export function useSubscribe(): UseSubscribeResult {
       setIsLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${store.baseUrl}/v1/subscribe`, {
+        if (!client || !customerId) {
+          throw new Error("BillingProvider customerId is required");
+        }
+        const res = await client.fetch(`/api/v1/subscribe`, {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${store.apiKey}`,
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify({
             plan_code: planCode,
-            customer_id: store.customerId,
+            customer_id: customerId,
           }),
         });
         if (!res.ok) throw new Error("Failed to create subscription");
@@ -38,7 +37,7 @@ export function useSubscribe(): UseSubscribeResult {
         setIsLoading(false);
       }
     },
-    [store]
+    [client, customerId]
   );
 
   return { subscribe, isLoading, error };

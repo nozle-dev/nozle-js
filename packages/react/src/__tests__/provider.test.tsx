@@ -41,7 +41,6 @@ describe("BillingProvider", () => {
 
     const { result } = renderHook(() => useBillingContext(), { wrapper });
 
-    expect(result.current.store).toBeDefined();
     expect(result.current.client).toBeDefined();
     expect(result.current.customerId).toBe("cust_123");
   });

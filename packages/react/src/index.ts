@@ -19,6 +19,7 @@ export type { CreditsState } from './hooks/use-credits.js';
 export {
   BillingPortalProvider,
   useBillingPortal,
+  useOptionalBillingPortal,
 } from './components/billing/BillingPortalProvider.js';
 export type {
   BillingPortalContextValue,
@@ -40,7 +41,10 @@ export type {
 
 // UI-02: Billing action buttons + upgrade modal
 export { CheckoutButton } from './components/billing/CheckoutButton.js';
-export type { CheckoutButtonProps } from './components/billing/CheckoutButton.js';
+export type {
+  CheckoutButtonProps,
+  CompletedCheckoutResult,
+} from './components/billing/CheckoutButton.js';
 
 // UI-CHECKOUT: Stripe Elements drop-in checkout component
 export { Checkout, useCheckout } from './components/billing/Checkout.js';
@@ -50,7 +54,10 @@ export { UpgradeButton } from './components/billing/UpgradeButton.js';
 export type { UpgradeButtonProps } from './components/billing/UpgradeButton.js';
 
 export { CreditTopUpButton } from './components/billing/CreditTopUpButton.js';
-export type { CreditTopUpButtonProps } from './components/billing/CreditTopUpButton.js';
+export type {
+  CreditPurchaseCheckout,
+  CreditTopUpButtonProps,
+} from './components/billing/CreditTopUpButton.js';
 
 export { UpgradeModal } from './components/billing/UpgradeModal.js';
 export type { ProrationPreview, UpgradeModalProps } from './components/billing/UpgradeModal.js';

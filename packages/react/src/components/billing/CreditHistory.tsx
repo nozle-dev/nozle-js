@@ -18,6 +18,17 @@ export interface CreditTransaction {
   createdAt: string;
 }
 
+interface CreditTransactionResponse {
+  id: string;
+  type: string;
+  amount?: number | string;
+  credit_amount?: number | string;
+  description?: string;
+  createdAt?: string;
+  created_at?: string;
+  settled_at?: string | null;
+}
+
 export interface CreditHistoryProps {
   customerId: string;
   viewAllHref?: string;
@@ -106,11 +117,33 @@ export function CreditHistory({
         }
 
         const data = (await response.json()) as {
-          transactions?: CreditTransaction[];
+          transactions?: CreditTransactionResponse[];
         };
         if (!cancelled) {
           setTransactions(
             (data.transactions ?? [])
+              .map((transaction): CreditTransaction => {
+                const isOutbound = transaction.type === "outbound";
+                return {
+                  id: transaction.id,
+                  amount: Number(
+                    transaction.credit_amount ?? transaction.amount ?? 0,
+                  ),
+                  type: isOutbound
+                    ? "deduct"
+                    : transaction.type === "inbound"
+                      ? "grant"
+                      : transaction.type,
+                  description:
+                    transaction.description ??
+                    (isOutbound ? "Credits used" : "Credits added"),
+                  createdAt:
+                    transaction.createdAt ??
+                    transaction.settled_at ??
+                    transaction.created_at ??
+                    "",
+                };
+              })
               .slice()
               .sort(
                 (a, b) =>

@@ -1,7 +1,14 @@
 'use client';
 
 import React, { createContext, useContext, useMemo, useState } from 'react';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import {
+  EmbeddedCheckout as StripeEmbeddedCheckout,
+  EmbeddedCheckoutProvider,
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import type { Appearance, StripeElementsOptions } from '@stripe/stripe-js';
 
@@ -18,6 +25,8 @@ export interface CheckoutProps {
   submitLabel?: string;
   /** Called with the paymentIntentId when payment succeeds without redirect */
   onSuccess?: (paymentIntentId: string) => void;
+  /** Called when an embedded Checkout Session completes without a redirect. */
+  onComplete?: () => void;
   /** Called with the error when payment fails */
   onError?: (error: Error) => void;
   /** Called when the PaymentElement becomes interactive */
@@ -26,6 +35,8 @@ export interface CheckoutProps {
   className?: string;
   /** Inline styles for the outer wrapper */
   style?: React.CSSProperties;
+  /** Optional custom controls for the PaymentIntent/PaymentElement branch. */
+  children?: React.ReactNode;
 }
 
 export interface UseCheckoutResult {
@@ -85,7 +96,7 @@ function buildStripeAppearance(): Appearance {
 type CheckoutInnerProps = Pick<
   CheckoutProps,
   'submitLabel' | 'onSuccess' | 'onError' | 'onReady' | 'className' | 'style'
->;
+> & {children?: React.ReactNode};
 
 function CheckoutInner({
   submitLabel,
@@ -94,6 +105,7 @@ function CheckoutInner({
   onReady,
   className,
   style,
+  children,
 }: CheckoutInnerProps) {
   const stripe = useStripe();
   const elements = useElements();
@@ -156,26 +168,28 @@ function CheckoutInner({
           </p>
         )}
 
-        <button
-          type="button"
-          onClick={() => void confirmPayment()}
-          disabled={isProcessing || !stripe}
-          aria-busy={isProcessing}
-          style={{
-            padding: '0.75rem 1.5rem',
-            borderRadius: 'var(--nozle-radius, 0.5rem)',
-            border: 'none',
-            background: 'var(--nozle-primary, var(--primary))',
-            color: 'var(--nozle-primary-foreground, var(--primary-foreground))',
-            cursor: isProcessing ? 'not-allowed' : 'pointer',
-            fontWeight: 500,
-            opacity: isProcessing ? 0.7 : 1,
-            marginTop: '1rem',
-            width: '100%',
-          }}
-        >
-          {isProcessing ? 'Processing...' : (submitLabel ?? 'Pay now')}
-        </button>
+        {children ?? (
+          <button
+            type="button"
+            onClick={() => void confirmPayment()}
+            disabled={isProcessing || !stripe}
+            aria-busy={isProcessing}
+            style={{
+              padding: '0.75rem 1.5rem',
+              borderRadius: 'var(--nozle-radius, 0.5rem)',
+              border: 'none',
+              background: 'var(--nozle-primary, var(--primary))',
+              color: 'var(--nozle-primary-foreground, var(--primary-foreground))',
+              cursor: isProcessing ? 'not-allowed' : 'pointer',
+              fontWeight: 500,
+              opacity: isProcessing ? 0.7 : 1,
+              marginTop: '1rem',
+              width: '100%',
+            }}
+          >
+            {isProcessing ? 'Processing...' : (submitLabel ?? 'Pay now')}
+          </button>
+        )}
       </div>
     </CheckoutContext.Provider>
   );
@@ -189,10 +203,12 @@ export function Checkout({
   stripeAccount,
   submitLabel,
   onSuccess,
+  onComplete,
   onError,
   onReady,
   className,
   style,
+  children,
 }: CheckoutProps) {
   const stripePromise = useMemo(
     () => loadStripe(publishableKey, stripeAccount ? { stripeAccount } : undefined),
@@ -200,6 +216,21 @@ export function Checkout({
   );
 
   const appearance = useMemo(() => buildStripeAppearance(), []);
+
+  const embeddedOptions = useMemo(
+    () => ({clientSecret, onComplete}),
+    [clientSecret, onComplete]
+  );
+
+  if (clientSecret.startsWith('cs_')) {
+    return (
+      <div className={className} style={style}>
+        <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
+          <StripeEmbeddedCheckout />
+        </EmbeddedCheckoutProvider>
+      </div>
+    );
+  }
 
   const options: StripeElementsOptions = { clientSecret, appearance };
 
@@ -212,6 +243,7 @@ export function Checkout({
         onReady={onReady}
         className={className}
         style={style}
+        children={children}
       />
     </Elements>
   );

@@ -15,6 +15,7 @@ export interface CanState {
   remaining: number | null;
   limit: number | null;
   loading: boolean;
+  isLoading: boolean;
   error: string | null;
 }
 
@@ -23,6 +24,7 @@ const initialState: CanState = {
   remaining: null,
   limit: null,
   loading: true,
+  isLoading: true,
   error: null,
 };
 
@@ -45,9 +47,28 @@ interface EntitlementPublication {
  * @param featureKey - Feature key to check
  * @returns CanState with allowed, remaining, limit, loading, error
  */
-export function useCan(customerId: string, featureKey: string, metadata?: Record<string, string>): CanState {
-  const { client, workspaceId, centrifugoUrl, centrifugoToken } =
-    useBillingContext();
+export function useCan(
+  customerOrFeature: string,
+  featureOrMetadata?: string | Record<string, string>,
+  metadata?: Record<string, string>,
+): CanState {
+  const {
+    client,
+    customerId: contextCustomerId,
+    workspaceId,
+    centrifugoUrl,
+    centrifugoToken,
+  } = useBillingContext();
+  const hasExplicitCustomer = typeof featureOrMetadata === "string";
+  const customerId = hasExplicitCustomer
+    ? customerOrFeature
+    : contextCustomerId;
+  const featureKey = hasExplicitCustomer
+    ? featureOrMetadata
+    : customerOrFeature;
+  const resolvedMetadata = hasExplicitCustomer
+    ? metadata
+    : featureOrMetadata;
   const [state, setState] = useState<CanState>(initialState);
 
   // Initial entitlement check via client.can()
@@ -56,6 +77,7 @@ export function useCan(customerId: string, featureKey: string, metadata?: Record
       setState({
         ...initialState,
         loading: false,
+        isLoading: false,
         error: "No client in context",
       });
       return;
@@ -66,13 +88,18 @@ export function useCan(customerId: string, featureKey: string, metadata?: Record
 
     async function checkEntitlement(): Promise<void> {
       try {
-        const result = await client!.can(customerId, featureKey, metadata);
+        const result = await client!.can(
+          customerId,
+          featureKey,
+          resolvedMetadata,
+        );
         if (!cancelled) {
           setState({
             allowed: result.allowed,
             remaining: result.remaining,
             limit: result.limit,
             loading: false,
+            isLoading: false,
             error: result.error ?? null,
           });
         }
@@ -84,6 +111,7 @@ export function useCan(customerId: string, featureKey: string, metadata?: Record
             remaining: null,
             limit: null,
             loading: false,
+            isLoading: false,
             error: message,
           });
         }
@@ -95,7 +123,7 @@ export function useCan(customerId: string, featureKey: string, metadata?: Record
     return () => {
       cancelled = true;
     };
-  }, [client, customerId, featureKey, metadata]);
+  }, [client, customerId, featureKey, resolvedMetadata]);
 
   // Centrifugo subscription for live updates
   // CONTEXT.md hard requirement: Centrifugo WebSocket only, no setInterval
