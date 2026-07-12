@@ -191,6 +191,7 @@ describe("billing action API contract", () => {
     );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(await view.findByText("Credits applied")).toBeTruthy();
     fireEvent.click(view.getByRole("button", {name: "Confirm Upgrade"}));
     await waitFor(() => expect(onCompleted).toHaveBeenCalledOnce());
     expect(onStripeClientSecret).not.toHaveBeenCalled();

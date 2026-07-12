@@ -257,7 +257,7 @@ export function UpgradeModal({
                 <div
                   style={{ display: "flex", justifyContent: "space-between" }}
                 >
-                  <span>Credit from current plan</span>
+                  <span>Credits applied</span>
                   <span style={{ color: "oklch(0.6 0.15 150)" }}>
                     -${preview.credit.toFixed(2)}
                   </span>
