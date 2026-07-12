@@ -35,6 +35,40 @@ function App() {
 }
 ```
 
+### Required customer app config
+
+For a customer integration, keep the Nozle secret key server-side only. The browser should use the customer's publishable key.
+
+Example Vite env:
+
+```bash
+VITE_NOZLE_PUBLISHABLE_KEY=pk_nozle_...
+VITE_NOZLE_API_URL=https://api.nozle.app
+VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...
+```
+
+Example Next.js env:
+
+```bash
+NEXT_PUBLIC_NOZLE_PUBLISHABLE_KEY=pk_nozle_...
+NEXT_PUBLIC_NOZLE_API_URL=https://api.nozle.app
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
+```
+
+Use the Nozle publishable key with `BillingProvider`:
+
+```tsx
+<BillingProvider
+  publishableKey={import.meta.env.VITE_NOZLE_PUBLISHABLE_KEY}
+  baseUrl={import.meta.env.VITE_NOZLE_API_URL}
+  customerId={currentCustomerId}
+>
+  <BillingPortal />
+</BillingProvider>
+```
+
+Use the Stripe publishable key only when the app mounts embedded Stripe checkout. If you only redirect to a hosted checkout URL, the host app does not need to mount Stripe Elements.
+
 > **Note:** LLM wrappers (`wrapOpenAI`, `wrapAnthropic`) and server-side methods (`checkAndDeduct`, `customers.upsert`) are only available in `@nozle-js/node`. The React SDK is for client-side billing UI only.
 
 ## Hooks
