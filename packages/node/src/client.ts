@@ -1,6 +1,9 @@
 import { can as _can } from "./can";
+import { CreditsNamespace } from "./credits";
+import { CreditSystemsNamespace } from "./credit-systems";
 import { MarginClient } from "./margin";
 import { track as _track } from "./track";
+import { UsageNamespace } from "./usage";
 import type {
   NozleConfig,
   CanResult,
@@ -21,6 +24,9 @@ export class Nozle {
   readonly eventsUrl: string;
   readonly margin: MarginClient;
   readonly customers: CustomersNamespace;
+  readonly creditSystems: CreditSystemsNamespace;
+  readonly credits: CreditsNamespace;
+  readonly usage: UsageNamespace;
 
   private readonly timeout: number;
   private subCache = new Map<string, string>();
@@ -32,6 +38,9 @@ export class Nozle {
     this.timeout = config.timeout ?? 10_000;
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.timeout);
     this.customers = new CustomersNamespace(this.baseUrl, this.apiKey, this.timeout);
+    this.creditSystems = new CreditSystemsNamespace(this.eventsUrl, this.apiKey, this.timeout);
+    this.credits = new CreditsNamespace(this.baseUrl, this.apiKey, this.timeout);
+    this.usage = new UsageNamespace(this.baseUrl, this.apiKey, this.timeout);
   }
 
   async track(
