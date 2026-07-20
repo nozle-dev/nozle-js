@@ -19,12 +19,14 @@ npm install react react-dom @stripe/stripe-js @stripe/react-stripe-js
 Wrap your app with `BillingProvider`:
 
 ```tsx
-import { BillingProvider } from "@nozle-js/react";
+import { BillingProvider, ProductCreditBalance } from "@nozle-js/react";
 
 function App() {
   return (
     <BillingProvider
-      apiKey="pk_live_..."
+      publishableKey="pk_live_..."
+      customerSessionToken={customerSessionToken}
+      customerId="cust_123"
       baseUrl="https://api.nozle.app"       // Default: https://api.nozle.app
       workspaceId="ws_123"                   // Optional: workspace scoping
       centrifugoUrl="wss://ws.nozle.app/connection/websocket"  // Optional: real-time updates
@@ -37,7 +39,7 @@ function App() {
 
 ### Required customer app config
 
-For a customer integration, keep the Nozle secret key server-side only. The browser should use the customer's publishable key.
+For product-credit balances and ledger history, keep the Nozle secret key server-side and mint a short-lived customer session. A bare publishable key cannot read a customer's product-credit balance or operations. Customer sessions are used only by the new product-credit hooks and components; the legacy `BillingPortal` still uses its existing publishable-key APIs.
 
 Example Vite env:
 
@@ -55,17 +57,31 @@ NEXT_PUBLIC_NOZLE_API_URL=https://api.nozle.app
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 ```
 
-Use the Nozle publishable key with `BillingProvider`:
+Create the session in your backend with `@nozle-js/node`:
+
+```ts
+const session = await nozle.customerSessions.create({
+  customerId: currentCustomerId,
+  expiresInSeconds: 900,
+});
+```
+
+Pass that customer-bound token alongside the provider's existing publishable key:
 
 ```tsx
 <BillingProvider
   publishableKey={import.meta.env.VITE_NOZLE_PUBLISHABLE_KEY}
+  customerSessionToken={session.token}
   baseUrl={import.meta.env.VITE_NOZLE_API_URL}
   customerId={currentCustomerId}
 >
-  <BillingPortal />
+  <ProductCreditBalance creditSystemCode="ai_credits" />
 </BillingProvider>
 ```
+
+Publishable keys remain appropriate for public catalog and checkout components. Never put `sk_` keys in browser code.
+
+Product-credit reads use ordinary HTTP requests. The optional Centrifugo connection remains for the SDK's existing entitlement updates and does not receive customer-credit claims.
 
 Use the Stripe publishable key only when the app mounts embedded Stripe checkout. If you only redirect to a hosted checkout URL, the host app does not need to mount Stripe Elements.
 
@@ -220,6 +236,19 @@ function AfterPayment({ planCode }: { planCode: string }) {
 ## Components
 
 Pre-built UI components with built-in styling. No CSS imports needed.
+
+### Credit system reads
+
+These components use the Phase 1 product-credit ledger, not Lago wallet credits:
+
+```tsx
+<ProductCreditBalance creditSystemCode="ai_credits" />
+<LowCreditWarning creditSystemCode="ai_credits" threshold="100" />
+<CreditBreakdown creditSystemCode="ai_credits" />
+<CreditUsageHistory creditSystemCode="ai_credits" pageSize={20} />
+```
+
+Amounts remain decimal strings until display formatting, and operation history paginates without issuing duplicate concurrent requests.
 
 ### `PricingTable`
 
