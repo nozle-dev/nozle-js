@@ -7,8 +7,21 @@ interface ParsedDecimal {
 function parseDecimal(value: string): ParsedDecimal | null {
   const match = value.trim().match(/^([+-]?)(\d+)(?:\.(\d+))?$/);
   if (!match) return null;
-  const integer = (match[2] ?? "0").replace(/^0+(?=\d)/, "");
-  const fraction = (match[3] ?? "").replace(/0+$/, "");
+  const rawInteger = match[2] ?? "0";
+  let firstIntegerDigit = 0;
+  while (
+    firstIntegerDigit < rawInteger.length - 1 &&
+    rawInteger[firstIntegerDigit] === "0"
+  ) {
+    firstIntegerDigit += 1;
+  }
+  const integer = rawInteger.slice(firstIntegerDigit);
+  const rawFraction = match[3] ?? "";
+  let fractionEnd = rawFraction.length;
+  while (fractionEnd > 0 && rawFraction[fractionEnd - 1] === "0") {
+    fractionEnd -= 1;
+  }
+  const fraction = rawFraction.slice(0, fractionEnd);
   const zero = integer === "0" && fraction === "";
   return {
     sign: !zero && match[1] === "-" ? -1 : 1,
@@ -47,7 +60,16 @@ export function formatDecimalString(
     0,
     Math.min(30, Math.trunc(maximumFractionDigits)),
   );
-  const groupedInteger = parsed.integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const firstGroupLength = parsed.integer.length % 3 || 3;
+  const groups = [parsed.integer.slice(0, firstGroupLength)];
+  for (
+    let index = firstGroupLength;
+    index < parsed.integer.length;
+    index += 3
+  ) {
+    groups.push(parsed.integer.slice(index, index + 3));
+  }
+  const groupedInteger = groups.join(",");
   const fraction = parsed.fraction.slice(0, fractionLimit);
   return `${parsed.sign < 0 ? "-" : ""}${groupedInteger}${fraction ? `.${fraction}` : ""}`;
 }
