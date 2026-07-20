@@ -98,9 +98,9 @@ export function BillingProvider({
   centrifugoUrl,
   children,
 }: BillingProviderProps): React.ReactElement {
-  const resolvedAuthToken = apiKey ?? publishableKey ?? customerSessionToken;
+  const resolvedAuthToken = apiKey ?? publishableKey;
   if (!resolvedAuthToken) {
-    throw new Error('BillingProvider requires customerSessionToken, apiKey, or publishableKey');
+    throw new Error('BillingProvider requires apiKey or publishableKey');
   }
 
   const client = useMemo(

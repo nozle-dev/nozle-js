@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { CreditBalance } from "../components/billing/CreditBalance";
+import { ProductCreditBalance } from "../components/billing/ProductCreditBalance";
 import { CreditBreakdown } from "../components/billing/CreditBreakdown";
 import { CreditUsageHistory } from "../components/billing/CreditUsageHistory";
 import { LowCreditWarning } from "../components/billing/LowCreditWarning";
@@ -71,8 +71,12 @@ describe("customer-session credit components", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input, init) => {
         const url = String(input);
-        if (url.endsWith("/api/v1/auth/centrifugo-token"))
+        if (url.endsWith("/api/v1/auth/centrifugo-token")) {
+          expect(init?.headers).toEqual(
+            expect.objectContaining({ Authorization: "Bearer pk_browser" }),
+          );
           return jsonResponse({}, 404);
+        }
         expect(init?.headers).toEqual(
           expect.objectContaining({
             Authorization: `Bearer ${customerSessionToken}`,
@@ -87,7 +91,7 @@ describe("customer-session credit components", () => {
     render(
       provider(
         <>
-          <CreditBalance creditSystemCode="ai credits" />
+          <ProductCreditBalance creditSystemCode="ai credits" />
           <CreditBreakdown creditSystemCode="ai credits" />
         </>,
       ),

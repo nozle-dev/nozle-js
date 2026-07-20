@@ -15,7 +15,6 @@ import type { UsageDashboardFeature } from "../usage/UsageDashboard.js";
 
 export interface BillingPortalProps {
   customerId: string;
-  creditSystemCode?: string;
   usageFeatures?: UsageDashboardFeature[];
   usageLoading?: boolean;
   onChangePlan?: () => void;
@@ -58,7 +57,6 @@ function Section({
 
 export function BillingPortal({
   customerId,
-  creditSystemCode,
   usageFeatures,
   usageLoading = false,
   onChangePlan,
@@ -86,11 +84,9 @@ export function BillingPortal({
         <InvoiceList customerId={customerId} />
       </Section>
 
-      {creditSystemCode ? (
-        <Section title="Credits">
-          <CreditBalance customerId={customerId} creditSystemCode={creditSystemCode} />
-        </Section>
-      ) : null}
+      <Section title="Credits">
+        <CreditBalance customerId={customerId} />
+      </Section>
     </div>
   );
 }

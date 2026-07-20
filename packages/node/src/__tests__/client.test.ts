@@ -314,6 +314,21 @@ describe("Nozle", () => {
       );
     });
 
+    it("preserves a null next cursor when operation history is exhausted", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          customer_id: "acme",
+          operations: [],
+          next_cursor: null,
+        }),
+      );
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+
+      const operations = await client.credits.listOperations("acme");
+
+      expect(operations.next_cursor).toBeNull();
+    });
+
     it("rejects invalid operation limits without a request", async () => {
       const client = new Nozle({ apiKey: "sk_test" });
       await expect(client.credits.listOperations("acme", { limit: 101 })).rejects.toThrow(

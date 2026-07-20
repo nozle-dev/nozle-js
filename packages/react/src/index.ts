@@ -105,6 +105,9 @@ export type { UsageAlertProps, UsageAlertFeature } from './components/usage/Usag
 export { CreditBalance } from './components/billing/CreditBalance.js';
 export type { CreditBalanceProps } from './components/billing/CreditBalance.js';
 
+export { ProductCreditBalance } from './components/billing/ProductCreditBalance.js';
+export type { ProductCreditBalanceProps } from './components/billing/ProductCreditBalance.js';
+
 export { CreditBreakdown } from './components/billing/CreditBreakdown.js';
 export type { CreditBreakdownProps } from './components/billing/CreditBreakdown.js';
 

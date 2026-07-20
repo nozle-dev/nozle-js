@@ -1,89 +1,74 @@
 "use client";
 
-import type React from "react";
+/**
+ * CreditBalance — displays the current credit balance for a customer.
+ * Uses the useCredits hook with customerId prop.
+ */
 
-import { creditUnitLabel, formatDecimalString } from "../../core/decimal.js";
-import { useCreditBalance } from "../../hooks/use-credit-balance.js";
+import { useCredits } from '../../hooks/use-credits.js';
 
 export interface CreditBalanceProps {
-  creditSystemCode: string;
-  customerId?: string;
-  maximumFractionDigits?: number;
-  className?: string;
-  style?: React.CSSProperties;
+  customerId: string;
+  currency?: string;
+  unit?: "credits" | "currency";
 }
 
 export function CreditBalance({
-  creditSystemCode,
   customerId,
-  maximumFractionDigits = 12,
-  className,
-  style,
+  currency = "USD",
+  unit = "credits",
 }: CreditBalanceProps) {
-  const { data, isLoading, error } = useCreditBalance(creditSystemCode, {
-    customerId,
-  });
+  const { balance, loading, error } = useCredits(customerId);
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div
-        role="status"
-        aria-label="Loading credit balance"
-        className={className}
-        style={{
-          width: "8rem",
-          height: "2rem",
-          borderRadius: "0.375rem",
-          background: "var(--nozle-border, var(--border, #e5e7eb))",
-          ...style,
-        }}
+        className="animate-pulse h-8 w-24 rounded"
+        style={{ background: "var(--nozle-border, var(--border))" }}
       />
     );
   }
 
-  if (error || !data) {
+  if (error) {
     return (
       <span
-        role="alert"
-        className={className}
-        style={{
-          color: "var(--nozle-destructive, var(--destructive, #dc2626))",
-          ...style,
-        }}
+        style={{ color: "var(--nozle-destructive, var(--destructive))" }}
+        className="text-sm"
       >
-        Failed to load credit balance
+        Failed to load balance
       </span>
     );
   }
 
-  const amount = formatDecimalString(data.available, maximumFractionDigits);
+  const amount = balance ?? 0;
+
   return (
-    <div
-      className={className}
-      style={{
-        display: "flex",
-        alignItems: "baseline",
-        gap: "0.5rem",
-        ...style,
-      }}
-    >
-      <span
-        style={{
-          fontSize: "1.5rem",
-          fontWeight: 700,
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {amount}
+    <div className="flex items-center gap-2">
+      <span aria-label="wallet icon" style={{ fontSize: "1.25rem" }} role="img">
+        &#x1F4B3;
       </span>
-      <span
-        style={{
-          color:
-            "var(--nozle-muted-foreground, var(--muted-foreground, #64748b))",
-        }}
-      >
-        {creditUnitLabel(data.available, data.unit_name)}
-      </span>
+      {amount === 0 ? (
+        <span
+          style={{
+            color: "var(--nozle-muted-foreground, var(--muted-foreground))",
+          }}
+          className="text-sm"
+        >
+          No credits
+        </span>
+      ) : (
+        <span className="font-semibold">
+          {unit === "currency"
+            ? new Intl.NumberFormat("en-US", {
+                style: "currency",
+                currency,
+                minimumFractionDigits: 2,
+              }).format(amount)
+            : `${new Intl.NumberFormat("en-US", {
+                maximumFractionDigits: 2,
+              }).format(amount)} credits`}
+        </span>
+      )}
     </div>
   );
 }
