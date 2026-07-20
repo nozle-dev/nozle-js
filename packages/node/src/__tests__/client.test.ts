@@ -386,6 +386,15 @@ describe("Nozle", () => {
           credit_system: "ai_credits",
           credits_required: "2.000000000001",
           available: "500",
+          projected_remaining: "497.999999999999",
+          projected_deductions: [
+            {
+              balance_source_id: "source-1",
+              source_type: "subscription_grant",
+              amount: "2.000000000001",
+              remaining: "247.999999999999",
+            },
+          ],
         }),
       );
       const client = new Nozle({ apiKey: "sk_test" });
@@ -399,6 +408,13 @@ describe("Nozle", () => {
       });
 
       expect(result.advisory).toBe(true);
+      expect(result.projected_remaining).toBe("497.999999999999");
+      expect(result.projected_deductions?.[0]).toEqual({
+        balance_source_id: "source-1",
+        source_type: "subscription_grant",
+        amount: "2.000000000001",
+        remaining: "247.999999999999",
+      });
       const [url, options] = fetchMock.mock.calls[0];
       expect(url).toBe("http://localhost:8080/api/v1/usage/check");
       expect(JSON.parse(options.body)).toEqual({

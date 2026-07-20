@@ -146,6 +146,10 @@ result.min_margin_percent    // Configured margin floor (if set)
 
 `checkAndDeduct` is a legacy Lago-wallet adapter. New product-credit integrations should use `nozle.usage.check()` and `nozle.usage.track()` so metric conversion, source ordering, idempotency, and the immutable ledger remain authoritative.
 
+Advisory checks return exact-decimal `projected_remaining` and ordered
+`projected_deductions`. These fields show the source plan without changing a
+balance and are suitable for shadow comparisons before a metric canary.
+
 ```ts
 const result = await nozle.checkAndDeduct({
   customerId: "cust_123",
