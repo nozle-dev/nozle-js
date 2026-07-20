@@ -71,6 +71,24 @@ Use the Stripe publishable key only when the app mounts embedded Stripe checkout
 
 > **Note:** LLM wrappers (`wrapOpenAI`, `wrapAnthropic`) and server-side methods (`checkAndDeduct`, `customers.upsert`) are only available in `@nozle-js/node`. The React SDK is for client-side billing UI only.
 
+### Fixed-package credit top-ups
+
+Paid product-credit top-ups use catalog packages configured in Core. The browser never submits an arbitrary dollar-to-credit conversion and never receives an organization secret key.
+
+```tsx
+<CreditTopUpButton
+  creditSystemCode="ai_credits"
+  topUpPackageCode="starter_pack"
+  packageName="Starter pack"
+  creditAmount="250"
+  priceLabel="$10.00"
+/>
+```
+
+This component calls `POST /api/v1/credit-top-up-purchases` with an idempotency key and navigates the current page to hosted checkout. Checkout creation does not grant credits; the grant is created only after confirmed payment.
+
+The pre-WP8 arbitrary-amount `/api/v1/credits/purchase` contract is deprecated. Migrate to package identifiers before that compatibility route is removed.
+
 ## Hooks
 
 ### `useCan(feature)`
