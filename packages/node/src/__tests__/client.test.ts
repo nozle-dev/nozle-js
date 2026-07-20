@@ -186,4 +186,188 @@ describe("Nozle", () => {
       expect(url.toString()).toContain("granularity=week");
     });
   });
+
+  describe("credit systems and balances", () => {
+    it("lists active credit systems", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          credit_systems: [
+            {
+              lago_id: "system-1",
+              code: "ai_credits",
+              name: "AI Credits",
+              description: null,
+              unit_name: "credit",
+              status: "active",
+              created_at: "2026-07-20T12:00:00Z",
+              updated_at: "2026-07-20T12:00:00Z",
+            },
+          ],
+          meta: { next_page: null },
+        }),
+      );
+      const client = new Nozle({
+        apiKey: "sk_test",
+        eventsUrl: "https://core.example",
+      });
+
+      const systems = await client.creditSystems.list();
+
+      expect(systems).toEqual([
+        {
+          id: "system-1",
+          code: "ai_credits",
+          name: "AI Credits",
+          description: null,
+          unitName: "credit",
+          status: "active",
+          createdAt: "2026-07-20T12:00:00Z",
+          updatedAt: "2026-07-20T12:00:00Z",
+        },
+      ]);
+      expect(fetchMock.mock.calls[0][0].toString()).toBe(
+        "https://core.example/api/v1/credit-systems?status=active&page=1&per_page=100",
+      );
+    });
+
+    it("reads every Rails-owned credit system page", async () => {
+      const coreSystem = (id: string, code: string) => ({
+        lago_id: id,
+        code,
+        name: code,
+        description: null,
+        unit_name: "credit",
+        status: "active",
+        created_at: "2026-07-20T12:00:00Z",
+        updated_at: "2026-07-20T12:00:00Z",
+      });
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse({ credit_systems: [coreSystem("system-1", "ai")], meta: { next_page: 2 } }),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse({ credit_systems: [coreSystem("system-2", "api")], meta: { next_page: null } }),
+        );
+      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://core.example" });
+
+      const systems = await client.creditSystems.list();
+
+      expect(systems.map(({ code }) => code)).toEqual(["ai", "api"]);
+      expect(fetchMock.mock.calls[1][0].toString()).toContain("page=2");
+    });
+
+    it("reads an exact-decimal customer balance and escapes path identifiers", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          customer_id: "acme/west",
+          credit_system: "ai credits",
+          available: "123456789012345678.123456789012",
+          sources: [{ remaining: "375.000000000001" }],
+        }),
+      );
+      const client = new Nozle({
+        apiKey: "sk_test",
+        baseUrl: "https://engine.example",
+      });
+
+      const balance = await client.credits.getBalance("acme/west", "ai credits");
+
+      expect(balance.available).toBe("123456789012345678.123456789012");
+      expect(balance.sources[0].remaining).toBe("375.000000000001");
+      expect(fetchMock.mock.calls[0][0]).toBe(
+        "https://engine.example/api/v1/customers/acme%2Fwest/credit-systems/ai%20credits/balance",
+      );
+    });
+  });
+
+  describe("usage", () => {
+    it("performs an advisory check with the runtime credit contract", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          advisory: true,
+          allowed: true,
+          metric_amount: "1",
+          credit_system: "ai_credits",
+          credits_required: "2.000000000001",
+          available: "500",
+        }),
+      );
+      const client = new Nozle({ apiKey: "sk_test" });
+
+      const result = await client.usage.check({
+        customerId: "acme",
+        billableMetricCode: "agent_execution",
+        creditSystemCode: "ai_credits",
+        properties: { model: "gpt-5" },
+        occurredAt: "2026-07-20T12:00:00.750Z",
+      });
+
+      expect(result.advisory).toBe(true);
+      const [url, options] = fetchMock.mock.calls[0];
+      expect(url).toBe("http://localhost:8080/api/v1/usage/check");
+      expect(JSON.parse(options.body)).toEqual({
+        customer_id: "acme",
+        billable_metric_code: "agent_execution",
+        credit_system_code: "ai_credits",
+        properties: { model: "gpt-5" },
+        occurred_at: "2026-07-20T12:00:00.750Z",
+      });
+    });
+
+    it("tracks atomically with the caller's idempotency key and millisecond timestamp", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          allowed: true,
+          operation_id: "operation-1",
+          remaining: "498",
+        }),
+      );
+      const client = new Nozle({ apiKey: "sk_test" });
+
+      const result = await client.usage.track(
+        {
+          customerId: "acme",
+          billableMetricCode: "agent_execution",
+          properties: { request: 1 },
+          timestamp: "2026-07-20T12:00:00.750Z",
+        },
+        { idempotencyKey: "execution-1" },
+      );
+
+      expect(result.operation_id).toBe("operation-1");
+      const [url, options] = fetchMock.mock.calls[0];
+      expect(url).toBe("http://localhost:8080/api/v1/usage/track");
+      expect(options.headers["Idempotency-Key"]).toBe("execution-1");
+      expect(JSON.parse(options.body).timestamp).toBe("2026-07-20T12:00:00.750Z");
+    });
+
+    it("rejects publishable-key mutation locally without making a request", async () => {
+      const client = new Nozle({ apiKey: "pk_browser" });
+
+      await expect(
+        client.usage.track(
+          { customerId: "acme", billableMetricCode: "agent_execution" },
+          { idempotencyKey: "execution-1" },
+        ),
+      ).rejects.toThrow("requires a secret key");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects missing or oversized idempotency keys before making a request", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      const params = {
+        customerId: "acme",
+        billableMetricCode: "agent_execution",
+      };
+
+      await expect(client.usage.track(params, { idempotencyKey: "" })).rejects.toThrow("non-empty idempotencyKey");
+      await expect(client.usage.track(params, { idempotencyKey: "x".repeat(256) })).rejects.toThrow(
+        "must not exceed 255 bytes",
+      );
+      await expect(client.usage.track(params, { idempotencyKey: "é".repeat(128) })).rejects.toThrow(
+        "must not exceed 255 bytes",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -86,3 +86,89 @@ export interface CheckAndDeductResult {
   allowed: boolean;
   remaining: number;
 }
+
+export interface CreditSystem {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  unitName: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreditBalanceSource {
+  id: string;
+  type: "subscription_grant" | "top_up" | "manual_grant" | "adjustment";
+  reference: string;
+  subscription_id: string | null;
+  initial: string;
+  remaining: string;
+  valid_from: string;
+  expires_at: string | null;
+  priority: number;
+  status: string;
+  available: boolean;
+}
+
+export interface CreditBalance {
+  customer_id: string;
+  credit_system: string;
+  credit_system_id: string;
+  credit_system_name: string;
+  unit_name: string;
+  system_status: string;
+  available: string;
+  as_of: string;
+  sources: CreditBalanceSource[];
+}
+
+export interface UsageCheckParams {
+  customerId: string;
+  billableMetricCode: string;
+  creditSystemCode?: string;
+  properties?: Record<string, unknown>;
+  occurredAt?: string;
+}
+
+export interface UsageTrackParams {
+  customerId: string;
+  billableMetricCode: string;
+  creditSystemCode?: string;
+  properties?: Record<string, unknown>;
+  timestamp?: string;
+}
+
+export interface UsageTrackOptions {
+  idempotencyKey: string;
+}
+
+export interface UsageDeduction {
+  source_type: string;
+  amount: string;
+  remaining: string;
+}
+
+export interface UsageCheckResult {
+  advisory: true;
+  allowed: boolean;
+  metric_amount: string;
+  credit_system: string;
+  credits_required: string;
+  available: string;
+  reason?: string;
+}
+
+export interface UsageTrackResult {
+  allowed: boolean;
+  operation_id?: string;
+  metric_amount?: string;
+  credit_system?: string;
+  credits_required?: string;
+  credits_consumed?: string;
+  available?: string;
+  remaining?: string;
+  reason?: string;
+  deductions?: UsageDeduction[];
+}

@@ -1,0 +1,61 @@
+name: Node SDK CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - packages/node/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/node-ci.yml
+  push:
+    branches:
+      - main
+    paths:
+      - packages/node/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/node-ci.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - "18.20.8"
+          - "20.x"
+          - "22.x"
+    defaults:
+      run:
+        working-directory: packages/node
+
+    steps:
+      - name: Checkout SDK
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: packages/node/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --workspaces=false
+
+      - name: Run tests
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build package
+        run: npm run build
