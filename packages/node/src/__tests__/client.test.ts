@@ -278,6 +278,87 @@ describe("Nozle", () => {
         "https://engine.example/api/v1/customers/acme%2Fwest/credit-systems/ai%20credits/balance",
       );
     });
+
+    it("lists customer balances and cursor-paginates immutable operations", async () => {
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse({
+            customer_id: "acme/west",
+            as_of: "2026-07-20T12:00:00.750Z",
+            balances: [{ credit_system: "ai_credits", available: "500.000000000001" }],
+          }),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse({
+            customer_id: "acme/west",
+            operations: [{ id: "operation-1", credit_amount: "2.000000000001" }],
+            next_cursor: "next/page",
+          }),
+        );
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+
+      const balances = await client.credits.listBalances("acme/west");
+      const operations = await client.credits.listOperations("acme/west", {
+        creditSystemCode: "ai credits",
+        limit: 25,
+        cursor: "current/page",
+      });
+
+      expect(balances.balances[0].available).toBe("500.000000000001");
+      expect(operations.operations[0].credit_amount).toBe("2.000000000001");
+      expect(fetchMock.mock.calls[0][0]).toBe(
+        "https://engine.example/api/v1/customers/acme%2Fwest/credit-systems",
+      );
+      expect(fetchMock.mock.calls[1][0].toString()).toBe(
+        "https://engine.example/api/v1/customers/acme%2Fwest/credit-operations?credit_system_code=ai+credits&limit=25&cursor=current%2Fpage",
+      );
+    });
+
+    it("rejects invalid operation limits without a request", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      await expect(client.credits.listOperations("acme", { limit: 101 })).rejects.toThrow(
+        "between 1 and 100",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("customer sessions", () => {
+    it("mints a short-lived customer-bound read session with a secret key", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          customer_session: {
+            token: "csess_token",
+            customer_id: "acme/west",
+            expires_at: "2026-07-20T12:15:00Z",
+            scope: ["credits:read"],
+          },
+        }),
+      );
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+
+      const session = await client.customerSessions.create({
+        customerId: "acme/west",
+        expiresInSeconds: 900,
+      });
+
+      expect(session.token).toBe("csess_token");
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://engine.example/api/v1/customer-sessions",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ customer_id: "acme/west", expires_in_seconds: 900 }),
+        }),
+      );
+    });
+
+    it("never mints customer sessions with a publishable key", async () => {
+      const client = new Nozle({ apiKey: "pk_browser" });
+      await expect(
+        client.customerSessions.create({ customerId: "acme" }),
+      ).rejects.toThrow("requires a secret key");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("usage", () => {

@@ -11,30 +11,50 @@ export interface CanResult {
 }
 
 export interface NozleClient {
+  authToken: string;
+  customerSessionToken: string | null;
+  /** @deprecated Use authToken. Kept for compatibility with existing hooks. */
   apiKey: string;
   baseUrl: string;
   fetch(path: string, init?: RequestInit): Promise<Response>;
+  creditFetch(path: string, init?: RequestInit): Promise<Response>;
   can(customerId: string, feature: string, metadata?: Record<string, string>): Promise<CanResult>;
 }
 
-function createClient(apiKey: string, baseUrl: string): NozleClient {
+function createClient(
+  authToken: string,
+  baseUrl: string,
+  customerSessionToken?: string,
+): NozleClient {
   const base = baseUrl.replace(/\/+$/, '');
 
-  async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  async function authenticatedFetch(
+    token: string,
+    path: string,
+    init?: RequestInit,
+  ): Promise<Response> {
     return fetch(`${base}${path}`, {
       ...init,
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         ...init?.headers,
       },
     });
   }
 
+  const apiFetch = (path: string, init?: RequestInit) =>
+    authenticatedFetch(authToken, path, init);
+  const creditFetch = (path: string, init?: RequestInit) =>
+    authenticatedFetch(customerSessionToken ?? authToken, path, init);
+
   return {
-    apiKey,
+    authToken,
+    customerSessionToken: customerSessionToken ?? null,
+    apiKey: authToken,
     baseUrl: base,
     fetch: apiFetch,
+    creditFetch,
     async can(customerId: string, feature: string, metadata?: Record<string, string>): Promise<CanResult> {
       let url = `/api/v1/can?customer_id=${encodeURIComponent(customerId)}&feature=${encodeURIComponent(feature)}`;
       if (metadata) {
@@ -58,6 +78,7 @@ export interface BillingContextValue {
 export const BillingContext = createContext<BillingContextValue | null>(null);
 
 export interface BillingProviderProps {
+  customerSessionToken?: string;
   apiKey?: string;
   publishableKey?: string;
   customerId?: string;
@@ -68,6 +89,7 @@ export interface BillingProviderProps {
 }
 
 export function BillingProvider({
+  customerSessionToken,
   apiKey,
   publishableKey,
   customerId = '',
@@ -76,14 +98,14 @@ export function BillingProvider({
   centrifugoUrl,
   children,
 }: BillingProviderProps): React.ReactElement {
-  const resolvedApiKey = apiKey ?? publishableKey;
-  if (!resolvedApiKey) {
-    throw new Error('BillingProvider requires apiKey or publishableKey');
+  const resolvedAuthToken = apiKey ?? publishableKey ?? customerSessionToken;
+  if (!resolvedAuthToken) {
+    throw new Error('BillingProvider requires customerSessionToken, apiKey, or publishableKey');
   }
 
   const client = useMemo(
-    () => createClient(resolvedApiKey, baseUrl),
-    [resolvedApiKey, baseUrl],
+    () => createClient(resolvedAuthToken, baseUrl, customerSessionToken),
+    [resolvedAuthToken, baseUrl, customerSessionToken],
   );
   const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
 

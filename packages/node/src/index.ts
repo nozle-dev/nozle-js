@@ -2,6 +2,7 @@ export { Nozle } from "./client";
 export { MarginClient } from "./margin";
 export { CreditSystemsNamespace } from "./credit-systems";
 export { CreditsNamespace } from "./credits";
+export { CustomerSessionsNamespace } from "./customer-sessions";
 export { UsageNamespace } from "./usage";
 export { wrapOpenAI } from "./wrap-openai";
 export type { WrapOptions } from "./wrap-openai";
@@ -23,6 +24,13 @@ export type {
   CreditSystem,
   CreditBalanceSource,
   CreditBalance,
+  CreditBalances,
+  CreditOperationAllocation,
+  CreditOperation,
+  CreditOperationPage,
+  CreditOperationQuery,
+  CustomerSessionCreateParams,
+  CustomerSession,
   UsageCheckParams,
   UsageTrackParams,
   UsageTrackOptions,

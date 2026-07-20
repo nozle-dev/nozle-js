@@ -45,6 +45,25 @@ describe("BillingProvider", () => {
     expect(result.current.customerId).toBe("cust_123");
   });
 
+  it("keeps publishable and customer-session credentials separate", () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <BillingProvider
+        customerSessionToken="csess_customer"
+        publishableKey="pk_browser"
+        customerId="cust_123"
+        baseUrl="http://localhost:8080"
+      >
+        {children}
+      </BillingProvider>
+    );
+
+    const { result } = renderHook(() => useBillingContext(), { wrapper });
+
+    expect(result.current.client?.authToken).toBe("pk_browser");
+    expect(result.current.client?.apiKey).toBe("pk_browser");
+    expect(result.current.client?.customerSessionToken).toBe("csess_customer");
+  });
+
   it("throws error when useBillingContext used outside provider", () => {
     expect(() => {
       renderHook(() => useBillingContext());

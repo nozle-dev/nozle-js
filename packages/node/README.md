@@ -144,7 +144,7 @@ result.min_margin_percent    // Configured margin floor (if set)
 
 ## Credit Check & Deduct
 
-Atomically check wallet balance and deduct credits in a single transaction. Uses row-level locking to prevent race conditions.
+`checkAndDeduct` is a legacy Lago-wallet adapter. New product-credit integrations should use `nozle.usage.check()` and `nozle.usage.track()` so metric conversion, source ordering, idempotency, and the immutable ledger remain authoritative.
 
 ```ts
 const result = await nozle.checkAndDeduct({
@@ -170,6 +170,29 @@ const customer = await nozle.customers.upsert({
   email: "billing@acme.com",
 });
 ```
+
+## Product credits and customer sessions
+
+Read exact-decimal balances and immutable operation history from the Phase 1 credit engine:
+
+```ts
+const balance = await nozle.credits.getBalance("cust_123", "ai_credits");
+const page = await nozle.credits.listOperations("cust_123", {
+  creditSystemCode: "ai_credits",
+  limit: 25,
+});
+```
+
+To render customer credit data in React, mint a short-lived token on your server and send only that token to the browser:
+
+```ts
+const session = await nozle.customerSessions.create({
+  customerId: "cust_123",
+  expiresInSeconds: 900,
+});
+```
+
+The session is bound to one organization and customer, carries only `credits:read`, and cannot track usage, purchase credits, or call other secret-key routes.
 
 ## Health Check
 

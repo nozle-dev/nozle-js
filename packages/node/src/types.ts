@@ -124,6 +124,63 @@ export interface CreditBalance {
   sources: CreditBalanceSource[];
 }
 
+export interface CreditBalances {
+  customer_id: string;
+  as_of: string;
+  balances: CreditBalance[];
+}
+
+export interface CreditOperationAllocation {
+  source_id: string;
+  source_type: string;
+  delta: string;
+  before: string;
+  after: string;
+}
+
+export interface CreditOperation {
+  id: string;
+  credit_system: string;
+  credit_system_id: string;
+  credit_system_name: string;
+  unit_name: string;
+  billable_metric_code: string | null;
+  type: "consume" | "grant" | "adjustment" | "expire" | "revoke" | "refund";
+  status: "succeeded" | "denied" | "reversed";
+  metric_amount: string | null;
+  credit_amount: string;
+  rate_id: string | null;
+  rate_metric_amount: string | null;
+  rate_credit_amount: string | null;
+  reason: string | null;
+  occurred_at: string;
+  source_allocations: CreditOperationAllocation[];
+}
+
+export interface CreditOperationPage {
+  customer_id: string;
+  operations: CreditOperation[];
+  next_cursor: string | null;
+}
+
+export interface CreditOperationQuery {
+  creditSystemCode?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface CustomerSessionCreateParams {
+  customerId: string;
+  expiresInSeconds?: number;
+}
+
+export interface CustomerSession {
+  token: string;
+  customer_id: string;
+  expires_at: string;
+  scope: ["credits:read"];
+}
+
 export interface UsageCheckParams {
   customerId: string;
   billableMetricCode: string;

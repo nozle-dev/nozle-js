@@ -15,6 +15,15 @@ export type { UsageState } from './hooks/use-usage.js';
 export { useCredits } from './hooks/use-credits.js';
 export type { CreditsState } from './hooks/use-credits.js';
 
+export { useCreditBalance } from './hooks/use-credit-balance.js';
+export type { CreditBalanceState, UseCreditBalanceOptions } from './hooks/use-credit-balance.js';
+
+export { useCreditBalances } from './hooks/use-credit-balances.js';
+export type { CreditBalancesState } from './hooks/use-credit-balances.js';
+
+export { useCreditOperations } from './hooks/use-credit-operations.js';
+export type { CreditOperationsState, UseCreditOperationsOptions } from './hooks/use-credit-operations.js';
+
 // UI-01: Billing portal wrapper + pricing components
 export {
   BillingPortalProvider,
@@ -96,6 +105,15 @@ export type { UsageAlertProps, UsageAlertFeature } from './components/usage/Usag
 export { CreditBalance } from './components/billing/CreditBalance.js';
 export type { CreditBalanceProps } from './components/billing/CreditBalance.js';
 
+export { CreditBreakdown } from './components/billing/CreditBreakdown.js';
+export type { CreditBreakdownProps } from './components/billing/CreditBreakdown.js';
+
+export { CreditUsageHistory } from './components/billing/CreditUsageHistory.js';
+export type { CreditUsageHistoryProps } from './components/billing/CreditUsageHistory.js';
+
+export { LowCreditWarning } from './components/billing/LowCreditWarning.js';
+export type { LowCreditWarningProps } from './components/billing/LowCreditWarning.js';
+
 export { CreditHistory } from './components/billing/CreditHistory.js';
 export type { CreditHistoryProps, CreditTransaction } from './components/billing/CreditHistory.js';
 
@@ -122,3 +140,12 @@ export {
   CANCEL_REASONS,
 } from './components/billing/CancelSubscriptionButton.js';
 export type { CancelSubscriptionButtonProps } from './components/billing/CancelSubscriptionButton.js';
+
+export type {
+  CreditBalanceSource,
+  CreditBalanceData,
+  CreditBalancesResponse,
+  CreditOperationAllocation,
+  CreditOperation,
+  CreditOperationsResponse,
+} from './types.js';
