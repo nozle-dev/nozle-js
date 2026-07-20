@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { TrackOptions } from "./types";
 
 export async function track(
@@ -10,7 +12,7 @@ export async function track(
   timeout = 10_000,
 ): Promise<void> {
   const body: Record<string, unknown> = {
-    transaction_id: options?.transactionId ?? crypto.randomUUID(),
+    transaction_id: options?.transactionId ?? randomUUID(),
     external_customer_id: customerId,
     code: event,
     properties: metadata ?? {},
