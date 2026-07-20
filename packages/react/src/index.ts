@@ -56,6 +56,7 @@ export type { UpgradeButtonProps } from './components/billing/UpgradeButton.js';
 export { CreditTopUpButton } from './components/billing/CreditTopUpButton.js';
 export type {
   CreditPurchaseCheckout,
+  CreditTopUpPurchase,
   CreditTopUpButtonProps,
 } from './components/billing/CreditTopUpButton.js';
 

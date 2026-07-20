@@ -8,6 +8,12 @@ import { CheckoutButton } from "../components/billing/CheckoutButton";
 import { CreditTopUpButton } from "../components/billing/CreditTopUpButton";
 import { UpgradeModal } from "../components/billing/UpgradeModal";
 
+const navigateToCheckout = vi.hoisted(() => vi.fn());
+
+vi.mock("../components/billing/checkout-navigation.js", () => ({
+  navigateToCheckout,
+}));
+
 const apiBaseUrl = "https://api.example.test";
 const apiKey = "pk_test";
 const customerId = "customer_123";
@@ -237,41 +243,102 @@ describe("billing action API contract", () => {
   it("creates credit checkout without claiming payment success", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
-        type: "stripe",
-        client_secret: "cs_credit",
-        amount_dollars: 10,
-        credits: 250,
+        credit_top_up_purchase: {
+          lago_id: "purchase-1",
+          payment_url: "https://checkout.example.test/top-up",
+          payment_status: "pending",
+          credit_amount: "250.000000000000",
+          amount_cents: 1000,
+          currency: "USD",
+          package_code: "starter_pack",
+          replayed: false,
+        },
       }),
     );
     const onCheckoutCreated = vi.fn();
-    const onStripeClientSecret = vi.fn();
 
     const view = render(
       portal(
         <CreditTopUpButton
+          creditSystemCode="ai_credits"
+          topUpPackageCode="starter_pack"
+          packageName="Starter pack"
+          creditAmount="250"
+          priceLabel="$10.00"
           onCheckoutCreated={onCheckoutCreated}
-          onStripeClientSecret={onStripeClientSecret}
         />,
       ),
     );
     fireEvent.click(view.getByRole("button", { name: "Add Credits" }));
-    fireEvent.click(view.getByRole("button", { name: "Add $10" }));
+    expect(view.getByText("250 credits · $10.00")).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: "Buy Starter pack" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(fetchMock).toHaveBeenCalledWith(
-      `${apiBaseUrl}/api/v1/credits/purchase`,
+      `${apiBaseUrl}/api/v1/credit-top-up-purchases`,
       expect.objectContaining({
         method: "POST",
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${apiKey}`,
+          "Idempotency-Key": expect.any(String),
+        }),
         body: JSON.stringify({
           customer_id: customerId,
-          amount_dollars: 10,
+          credit_system_code: "ai_credits",
+          top_up_package_code: "starter_pack",
         }),
       }),
     );
     expect(onCheckoutCreated).toHaveBeenCalledWith(
-      expect.objectContaining({ credits: 250 }),
+      expect.objectContaining({
+        credit_top_up_purchase: expect.objectContaining({
+          lago_id: "purchase-1",
+          credit_amount: "250.000000000000",
+        }),
+      }),
     );
-    expect(onStripeClientSecret).toHaveBeenCalledWith("cs_credit");
+    expect(navigateToCheckout).toHaveBeenCalledWith(
+      "https://checkout.example.test/top-up",
+    );
+  });
+
+  it("reuses the package purchase idempotency key after a failed response", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("connection lost"))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          credit_top_up_purchase: {
+            lago_id: "purchase-1",
+            payment_url: "https://checkout.example.test/top-up",
+            payment_status: "pending",
+            credit_amount: "250",
+            amount_cents: 1000,
+            currency: "USD",
+            package_code: "starter_pack",
+            replayed: true,
+          },
+        }),
+      );
+    const view = render(
+      portal(
+        <CreditTopUpButton
+          creditSystemCode="ai_credits"
+          topUpPackageCode="starter_pack"
+          packageName="Starter pack"
+        />,
+      ),
+    );
+    fireEvent.click(view.getByRole("button", { name: "Add Credits" }));
+    const buy = view.getByRole("button", { name: "Buy Starter pack" });
+    fireEvent.click(buy);
+    await waitFor(() => expect(view.getByText("connection lost")).toBeTruthy());
+    fireEvent.click(buy);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    const firstHeaders = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    const secondHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
+    expect(secondHeaders["Idempotency-Key"]).toBe(firstHeaders["Idempotency-Key"]);
   });
 
   it("authenticates and scopes cancellation through the configured API", async () => {

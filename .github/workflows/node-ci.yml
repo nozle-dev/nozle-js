@@ -1,4 +1,4 @@
-name: Node SDK CI
+name: SDK CI
 
 on:
   pull_request:
@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - packages/node/**
+      - packages/react/**
       - package.json
       - package-lock.json
       - .github/workflows/node-ci.yml
@@ -14,6 +15,7 @@ on:
       - main
     paths:
       - packages/node/**
+      - packages/react/**
       - package.json
       - package-lock.json
       - .github/workflows/node-ci.yml
@@ -59,3 +61,36 @@ jobs:
 
       - name: Build package
         run: npm run build
+
+  react:
+    name: React ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - "18.20.8"
+          - "20.x"
+          - "22.x"
+    steps:
+      - name: Checkout SDK
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test --workspace=@nozle-js/react -- --no-file-parallelism
+
+      - name: Typecheck
+        run: npm run typecheck --workspace=@nozle-js/react
+
+      - name: Build package
+        run: npm run build --workspace=@nozle-js/react
