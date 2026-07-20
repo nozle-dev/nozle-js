@@ -202,6 +202,7 @@ export interface UsageTrackOptions {
 }
 
 export interface UsageDeduction {
+  balance_source_id?: string;
   source_type: string;
   amount: string;
   remaining: string;
@@ -214,6 +215,8 @@ export interface UsageCheckResult {
   credit_system: string;
   credits_required: string;
   available: string;
+  projected_remaining?: string;
+  projected_deductions?: UsageDeduction[];
   reason?: string;
 }
 
