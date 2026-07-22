@@ -501,6 +501,24 @@ describe("Nozle", () => {
       created_at: "2026-07-20T12:00:00Z",
       updated_at: "2026-07-20T12:00:00Z",
       deleted_at: null,
+      seat_sync: {
+        metric_code: "seats",
+        external_subscription_id: "subscription-1",
+        operation_type: "add",
+        reason: "lifecycle",
+        status: "published",
+        transaction_id: "entity-seat-event-1",
+        attempt_count: 1,
+        last_attempt_at: "2026-07-20T12:00:01Z",
+        published_at: "2026-07-20T12:00:02Z",
+        last_reconciled_at: "2026-07-20T12:01:00Z",
+        last_error: null,
+        reconciliation_status: "in_sync",
+        expected_seat_count: 3,
+        observed_seat_count: 3,
+        reconciliation_checked_at: "2026-07-20T12:01:00Z",
+        last_repair_enqueued_at: null,
+      },
     };
 
     it("lists and upserts Entities with escaped identifiers and exact idempotency", async () => {
@@ -520,6 +538,7 @@ describe("Nozle", () => {
       );
 
       expect(page.next_cursor).toBeNull();
+      expect(page.entities[0].seat_sync?.reconciliation_status).toBe("in_sync");
       expect(result.entity.external_id).toBe("user/42");
       expect(fetchMock.mock.calls[0][0].toString()).toBe(
         "https://engine.example/api/v1/customers/acme%2Fwest/entities?status=active&limit=25",

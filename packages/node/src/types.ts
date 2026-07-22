@@ -190,6 +190,39 @@ export interface CreditOperationQuery {
 
 export type CustomerEntityStatus = "active" | "suspended" | "deleted";
 
+export type CustomerEntitySeatEventStatus =
+  | "pending"
+  | "processing"
+  | "failed"
+  | "published"
+  | "dead_lettered";
+
+export type CustomerEntitySeatReconciliationStatus =
+  | "pending"
+  | "in_sync"
+  | "drift"
+  | "repairing"
+  | "failed";
+
+export interface CustomerEntitySeatSync {
+  metric_code: string;
+  external_subscription_id: string;
+  operation_type: "add" | "remove";
+  reason: "lifecycle" | "reconciliation";
+  status: CustomerEntitySeatEventStatus;
+  transaction_id: string;
+  attempt_count: number;
+  last_attempt_at: string | null;
+  published_at: string | null;
+  last_reconciled_at: string | null;
+  last_error: string | null;
+  reconciliation_status: CustomerEntitySeatReconciliationStatus | null;
+  expected_seat_count: number | null;
+  observed_seat_count: number | null;
+  reconciliation_checked_at: string | null;
+  last_repair_enqueued_at: string | null;
+}
+
 export interface CustomerEntity {
   id: string;
   customer_id: string;
@@ -200,6 +233,7 @@ export interface CustomerEntity {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  seat_sync: CustomerEntitySeatSync | null;
 }
 
 export interface CustomerEntityUpsertData {
