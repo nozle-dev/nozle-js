@@ -40,7 +40,17 @@ export interface CheckoutResult {
 
 export interface CreditBalanceSource {
   id: string;
-  type: "subscription_grant" | "top_up" | "manual_grant" | "adjustment";
+  entity_id?: string | null;
+  parent_source_id?: string | null;
+  scope?: "customer" | "entity";
+  transferable?: boolean;
+  returnable?: boolean;
+  type:
+    | "subscription_grant"
+    | "top_up"
+    | "manual_grant"
+    | "adjustment"
+    | "allocated_top_up";
   reference: string;
   subscription_id: string | null;
   initial: string;
@@ -72,6 +82,7 @@ export interface CreditBalancesResponse {
 
 export interface CreditOperationAllocation {
   source_id: string;
+  source_entity_id?: string | null;
   source_type: string;
   delta: string;
   before: string;
@@ -80,12 +91,20 @@ export interface CreditOperationAllocation {
 
 export interface CreditOperation {
   id: string;
+  entity_id?: string | null;
   credit_system: string;
   credit_system_id: string;
   credit_system_name: string;
   unit_name: string;
   billable_metric_code: string | null;
-  type: "consume" | "grant" | "adjustment" | "expire" | "revoke" | "refund";
+  type:
+    | "consume"
+    | "grant"
+    | "adjustment"
+    | "expire"
+    | "revoke"
+    | "refund"
+    | "transfer";
   status: "succeeded" | "denied" | "reversed";
   metric_amount: string | null;
   credit_amount: string;
@@ -101,4 +120,25 @@ export interface CreditOperationsResponse {
   customer_id: string;
   operations: CreditOperation[];
   next_cursor: string | null;
+}
+
+export type EntityCreditPoolPolicy =
+  | "entity_only"
+  | "entity_then_customer"
+  | "customer_only";
+
+export interface EntityCreditBalanceData
+  extends Omit<CreditBalanceData, "available"> {
+  entity_id: string;
+  entity_status: "active" | "suspended" | "deleted";
+  entity_available: string;
+  shared_available: string;
+  effective_available: string;
+  consumed: string;
+  pool_policy: EntityCreditPoolPolicy | null;
+}
+
+export interface EntityCreditOperationsResponse
+  extends CreditOperationsResponse {
+  entity_id: string;
 }

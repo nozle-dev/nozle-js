@@ -3,6 +3,7 @@ export { MarginClient } from "./margin";
 export { CreditSystemsNamespace } from "./credit-systems";
 export { CreditsNamespace } from "./credits";
 export { CustomerSessionsNamespace } from "./customer-sessions";
+export { EntitiesNamespace } from "./entities";
 export { UsageNamespace } from "./usage";
 export { wrapOpenAI } from "./wrap-openai";
 export type { WrapOptions } from "./wrap-openai";
@@ -29,6 +30,23 @@ export type {
   CreditOperation,
   CreditOperationPage,
   CreditOperationQuery,
+  CustomerEntityStatus,
+  CustomerEntity,
+  CustomerEntityUpsertData,
+  CustomerEntityBulkUpsertItem,
+  IdempotentMutationOptions,
+  CustomerEntityMutationResult,
+  CustomerEntityListQuery,
+  CustomerEntityPage,
+  CustomerEntityBulkMutationCounts,
+  CustomerEntityBulkMutationResult,
+  EntityCreditPoolPolicy,
+  EntityCreditBalance,
+  EntityCreditBalances,
+  EntityCreditOperationPage,
+  EntityCreditTransferParams,
+  EntityCreditTransferSource,
+  EntityCreditTransferResult,
   CustomerSessionCreateParams,
   CustomerSession,
   UsageCheckParams,

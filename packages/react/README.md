@@ -250,6 +250,22 @@ These components use the Phase 1 product-credit ledger, not Lago wallet credits:
 
 Amounts remain decimal strings until display formatting, and operation history paginates without issuing duplicate concurrent requests.
 
+### Entity credit reads
+
+Entity components are explicitly named and do not replace the existing customer-level components:
+
+```tsx
+<EntityProductCreditBalance entityId="user_42" creditSystemCode="ai_credits" />
+<EntityCreditBreakdown entityId="user_42" creditSystemCode="ai_credits" />
+<EntityCreditUsageHistory
+  entityId="user_42"
+  creditSystemCode="ai_credits"
+  pageSize={20}
+/>
+```
+
+They use the same customer-bound session token and ordinary HTTP reads. They expose Entity, shared-customer, and effective totals plus immutable source and operation history. The React SDK does not allocate credits, mutate Entities, or track Entity usage; keep those actions on your backend with `@nozle-js/node` and a secret key.
+
 ### `PricingTable`
 
 Renders plan cards in a responsive grid with monthly/annual toggle, current plan detection, and CSS variable theming. Auto-fetches plans from the API if none are provided.

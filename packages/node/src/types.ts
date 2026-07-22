@@ -100,7 +100,17 @@ export interface CreditSystem {
 
 export interface CreditBalanceSource {
   id: string;
-  type: "subscription_grant" | "top_up" | "manual_grant" | "adjustment";
+  entity_id?: string | null;
+  parent_source_id?: string | null;
+  scope?: "customer" | "entity";
+  transferable?: boolean;
+  returnable?: boolean;
+  type:
+    | "subscription_grant"
+    | "top_up"
+    | "manual_grant"
+    | "adjustment"
+    | "allocated_top_up";
   reference: string;
   subscription_id: string | null;
   initial: string;
@@ -132,6 +142,7 @@ export interface CreditBalances {
 
 export interface CreditOperationAllocation {
   source_id: string;
+  source_entity_id?: string | null;
   source_type: string;
   delta: string;
   before: string;
@@ -140,12 +151,20 @@ export interface CreditOperationAllocation {
 
 export interface CreditOperation {
   id: string;
+  entity_id?: string | null;
   credit_system: string;
   credit_system_id: string;
   credit_system_name: string;
   unit_name: string;
   billable_metric_code: string | null;
-  type: "consume" | "grant" | "adjustment" | "expire" | "revoke" | "refund";
+  type:
+    | "consume"
+    | "grant"
+    | "adjustment"
+    | "expire"
+    | "revoke"
+    | "refund"
+    | "transfer";
   status: "succeeded" | "denied" | "reversed";
   metric_amount: string | null;
   credit_amount: string;
@@ -169,6 +188,136 @@ export interface CreditOperationQuery {
   cursor?: string;
 }
 
+export type CustomerEntityStatus = "active" | "suspended" | "deleted";
+
+export interface CustomerEntity {
+  id: string;
+  customer_id: string;
+  external_id: string;
+  name: string | null;
+  status: CustomerEntityStatus;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface CustomerEntityUpsertData {
+  name?: string | null;
+  status: CustomerEntityStatus;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CustomerEntityBulkUpsertItem extends CustomerEntityUpsertData {
+  externalId: string;
+}
+
+export interface IdempotentMutationOptions {
+  idempotencyKey: string;
+}
+
+export interface CustomerEntityMutationResult {
+  action:
+    | "created"
+    | "updated"
+    | "unchanged"
+    | "activated"
+    | "reactivated"
+    | "suspended"
+    | "deleted";
+  entity: CustomerEntity;
+  replayed: boolean;
+}
+
+export interface CustomerEntityListQuery {
+  status?: CustomerEntityStatus;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface CustomerEntityPage {
+  customer_id: string;
+  entities: CustomerEntity[];
+  next_cursor: string | null;
+}
+
+export interface CustomerEntityBulkMutationCounts {
+  created: number;
+  updated: number;
+  unchanged: number;
+  activated: number;
+  reactivated: number;
+  suspended: number;
+  deleted: number;
+}
+
+export interface CustomerEntityBulkMutationResult {
+  customer_id: string;
+  entities: Array<Omit<CustomerEntityMutationResult, "replayed">>;
+  counts: CustomerEntityBulkMutationCounts;
+  replayed: boolean;
+}
+
+export type EntityCreditPoolPolicy =
+  | "entity_only"
+  | "entity_then_customer"
+  | "customer_only";
+
+export interface EntityCreditBalance
+  extends Omit<CreditBalance, "available"> {
+  entity_id: string;
+  entity_status: CustomerEntityStatus;
+  entity_available: string;
+  shared_available: string;
+  effective_available: string;
+  consumed: string;
+  pool_policy: EntityCreditPoolPolicy | null;
+}
+
+export interface EntityCreditBalances {
+  customer_id: string;
+  entity_id: string;
+  entity_status: CustomerEntityStatus;
+  as_of: string;
+  balances: EntityCreditBalance[];
+}
+
+export interface EntityCreditOperationPage extends CreditOperationPage {
+  entity_id: string;
+}
+
+export interface EntityCreditTransferParams {
+  creditSystemCode: string;
+  amount: string;
+}
+
+export interface EntityCreditTransferSource {
+  source_id: string;
+  parent_source_id?: string | null;
+  source_type: "top_up" | "allocated_top_up";
+  scope: "customer" | "entity";
+  amount: string;
+  before: string;
+  after: string;
+  expires_at: string | null;
+  created?: boolean;
+}
+
+export interface EntityCreditTransferResult {
+  transferred: boolean;
+  operation_id: string;
+  customer_id: string;
+  entity_id: string;
+  credit_system: string;
+  direction: "allocation" | "deallocation";
+  amount: string;
+  available: string;
+  reason?: string | null;
+  parent_sources: EntityCreditTransferSource[];
+  entity_sources: EntityCreditTransferSource[];
+  replayed: boolean;
+}
+
 export interface CustomerSessionCreateParams {
   customerId: string;
   expiresInSeconds?: number;
@@ -183,6 +332,7 @@ export interface CustomerSession {
 
 export interface UsageCheckParams {
   customerId: string;
+  entityId?: string;
   billableMetricCode: string;
   creditSystemCode?: string;
   properties?: Record<string, unknown>;
@@ -191,6 +341,7 @@ export interface UsageCheckParams {
 
 export interface UsageTrackParams {
   customerId: string;
+  entityId?: string;
   billableMetricCode: string;
   creditSystemCode?: string;
   properties?: Record<string, unknown>;

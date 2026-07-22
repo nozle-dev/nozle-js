@@ -198,6 +198,57 @@ const session = await nozle.customerSessions.create({
 
 The session is bound to one organization and customer, carries only `credits:read`, and cannot track usage, purchase credits, or call other secret-key routes.
 
+## Entities and per-user credits
+
+Use Entities for stable customer-owned subjects such as workspace users. Entity mutations require a server-side secret key and a caller-supplied idempotency key.
+
+```ts
+await nozle.entities.upsert(
+  "workspace_123",
+  "user_42",
+  { name: "Asha", status: "active", metadata: { role: "agent" } },
+  { idempotencyKey: "entity-user-42-v1" },
+);
+
+const entities = await nozle.entities.list("workspace_123", {
+  status: "active",
+  limit: 50,
+});
+
+const balance = await nozle.credits.getEntityBalance(
+  "workspace_123",
+  "user_42",
+  "ai_credits",
+);
+
+console.log(balance.entity_available);
+console.log(balance.shared_available);
+console.log(balance.effective_available);
+```
+
+Allocation and deallocation preserve exact decimal strings, source provenance, and expiry. They are backend-only operations and may also be disabled by the Engine's exact organization/Credit System rollout gate.
+
+```ts
+await nozle.credits.allocate(
+  "workspace_123",
+  "user_42",
+  { creditSystemCode: "ai_credits", amount: "100.000000000001" },
+  { idempotencyKey: "allocate-user-42-100" },
+);
+
+await nozle.usage.track(
+  {
+    customerId: "workspace_123",
+    entityId: "user_42",
+    billableMetricCode: "agent_execution",
+    creditSystemCode: "ai_credits",
+  },
+  { idempotencyKey: "execution-0183f" },
+);
+```
+
+Keep the same idempotency key when retrying an uncertain mutation result. Never convert credit amounts to JavaScript numbers.
+
 ## Health Check
 
 ```ts
