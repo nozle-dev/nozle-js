@@ -5,6 +5,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ProductCreditBalance } from "../components/billing/ProductCreditBalance";
 import { CreditBreakdown } from "../components/billing/CreditBreakdown";
 import { CreditUsageHistory } from "../components/billing/CreditUsageHistory";
+import { EntityCreditBreakdown } from "../components/billing/EntityCreditBreakdown";
+import { EntityCreditUsageHistory } from "../components/billing/EntityCreditUsageHistory";
+import { EntityProductCreditBalance } from "../components/billing/EntityProductCreditBalance";
 import { LowCreditWarning } from "../components/billing/LowCreditWarning";
 import { BillingProvider } from "../provider";
 
@@ -207,5 +210,163 @@ describe("customer-session credit components", () => {
     expect(await screen.findByText("Credits granted")).toBeTruthy();
     expect(screen.getAllByText("Used for agent_execution")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
+  it("renders Entity, shared, and effective balances with transfer provenance", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.endsWith("/api/v1/auth/centrifugo-token"))
+          return jsonResponse({}, 404);
+        expect(init?.headers).toEqual(
+          expect.objectContaining({
+            Authorization: `Bearer ${customerSessionToken}`,
+          }),
+        );
+        expect(url).toBe(
+          `${baseUrl}/api/v1/customers/acme%2Fwest/entities/user%2F42/credit-systems/ai%20credits/balance`,
+        );
+        return jsonResponse({
+          ...balanceResponse(),
+          entity_id: "user/42",
+          entity_status: "active",
+          entity_available: "480.000000000001",
+          shared_available: "250",
+          effective_available: "730.000000000001",
+          pool_policy: "entity_then_customer",
+          sources: [
+            {
+              ...balanceResponse().sources[0],
+              entity_id: "user/42",
+              scope: "entity",
+              remaining: "380.000000000001",
+            },
+            {
+              ...balanceResponse().sources[0],
+              id: "allocated-source-1",
+              type: "allocated_top_up",
+              reference: "entity-allocation:operation-1:parent:source-top-up-1",
+              parent_source_id: "source-top-up-1",
+              scope: "entity",
+              remaining: "100",
+            },
+            {
+              ...balanceResponse().sources[0],
+              id: "source-top-up-1",
+              type: "top_up",
+              reference: "top-up:purchase-1",
+              entity_id: null,
+              scope: "customer",
+              transferable: true,
+              remaining: "250",
+            },
+          ],
+        });
+      });
+
+    render(
+      provider(
+        <>
+          <EntityProductCreditBalance
+            entityId="user/42"
+            creditSystemCode="ai credits"
+          />
+          <EntityCreditBreakdown
+            entityId="user/42"
+            creditSystemCode="ai credits"
+          />
+        </>,
+      ),
+    );
+
+    expect(await screen.findByText("730.000000000001")).toBeTruthy();
+    expect(screen.getByText("Entity 480.000000000001")).toBeTruthy();
+    expect(screen.getByText("Shared 250")).toBeTruthy();
+    expect(screen.getByText("entity then customer")).toBeTruthy();
+    expect(await screen.findByText("Allocated top-up")).toBeTruthy();
+    expect(screen.getByText(/parent source-top-up-1/)).toBeTruthy();
+    expect(screen.getByText(/Shared company pool/)).toBeTruthy();
+    expect(
+      fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes("/entities/user%2F42/credit-systems/"),
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("uses the Entity-scoped history endpoint and guards concurrent pagination", async () => {
+    let resolveNextPage: ((response: Response) => void) | undefined;
+    const nextPage = new Promise<Response>((resolve) => {
+      resolveNextPage = resolve;
+    });
+    const operation = {
+      id: "operation-entity-1",
+      entity_id: "user/42",
+      credit_system: "ai_credits",
+      credit_system_id: "system-1",
+      credit_system_name: "AI Credits",
+      unit_name: "credit",
+      billable_metric_code: "agent_execution",
+      type: "consume",
+      status: "succeeded",
+      metric_amount: "1",
+      credit_amount: "2",
+      rate_id: "rate-1",
+      rate_metric_amount: "1",
+      rate_credit_amount: "2",
+      reason: null,
+      occurred_at: "2026-07-20T12:00:00.750Z",
+      source_allocations: [],
+    };
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.endsWith("/api/v1/auth/centrifugo-token"))
+          return jsonResponse({}, 404);
+        if (url.includes("cursor=next-entity-page")) return nextPage;
+        expect(url).toContain(
+          "/api/v1/customers/acme%2Fwest/entities/user%2F42/credit-operations?",
+        );
+        return jsonResponse({
+          customer_id: "acme/west",
+          entity_id: "user/42",
+          operations: [operation],
+          next_cursor: "next-entity-page",
+        });
+      });
+
+    render(
+      provider(
+        <EntityCreditUsageHistory
+          entityId="user/42"
+          creditSystemCode="ai_credits"
+          pageSize={1}
+        />,
+      ),
+    );
+    expect(await screen.findByText("Used for agent_execution")).toBeTruthy();
+    const loadMore = screen.getByRole("button", { name: "Load more" });
+    fireEvent.click(loadMore);
+    fireEvent.click(loadMore);
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.filter(([url]) =>
+          String(url).includes("/entities/user%2F42/credit-operations"),
+        ),
+      ).toHaveLength(2);
+    });
+    resolveNextPage?.(
+      jsonResponse({
+        customer_id: "acme/west",
+        entity_id: "user/42",
+        operations: [operation],
+        next_cursor: null,
+      }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+    });
+    expect(screen.getAllByText("Used for agent_execution")).toHaveLength(1);
   });
 });

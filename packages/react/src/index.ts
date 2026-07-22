@@ -24,6 +24,18 @@ export type { CreditBalancesState } from './hooks/use-credit-balances.js';
 export { useCreditOperations } from './hooks/use-credit-operations.js';
 export type { CreditOperationsState, UseCreditOperationsOptions } from './hooks/use-credit-operations.js';
 
+export { useEntityCreditBalance } from './hooks/use-entity-credit-balance.js';
+export type {
+  EntityCreditBalanceState,
+  UseEntityCreditBalanceOptions,
+} from './hooks/use-entity-credit-balance.js';
+
+export { useEntityCreditOperations } from './hooks/use-entity-credit-operations.js';
+export type {
+  EntityCreditOperationsState,
+  UseEntityCreditOperationsOptions,
+} from './hooks/use-entity-credit-operations.js';
+
 // UI-01: Billing portal wrapper + pricing components
 export {
   BillingPortalProvider,
@@ -108,6 +120,15 @@ export type { CreditBalanceProps } from './components/billing/CreditBalance.js';
 export { ProductCreditBalance } from './components/billing/ProductCreditBalance.js';
 export type { ProductCreditBalanceProps } from './components/billing/ProductCreditBalance.js';
 
+export { EntityProductCreditBalance } from './components/billing/EntityProductCreditBalance.js';
+export type { EntityProductCreditBalanceProps } from './components/billing/EntityProductCreditBalance.js';
+
+export { EntityCreditBreakdown } from './components/billing/EntityCreditBreakdown.js';
+export type { EntityCreditBreakdownProps } from './components/billing/EntityCreditBreakdown.js';
+
+export { EntityCreditUsageHistory } from './components/billing/EntityCreditUsageHistory.js';
+export type { EntityCreditUsageHistoryProps } from './components/billing/EntityCreditUsageHistory.js';
+
 export { CreditBreakdown } from './components/billing/CreditBreakdown.js';
 export type { CreditBreakdownProps } from './components/billing/CreditBreakdown.js';
 
@@ -151,4 +172,7 @@ export type {
   CreditOperationAllocation,
   CreditOperation,
   CreditOperationsResponse,
+  EntityCreditPoolPolicy,
+  EntityCreditBalanceData,
+  EntityCreditOperationsResponse,
 } from './types.js';

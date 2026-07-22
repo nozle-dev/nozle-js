@@ -439,6 +439,7 @@ describe("Nozle", () => {
       const result = await client.usage.track(
         {
           customerId: "acme",
+          entityId: "user/42",
           billableMetricCode: "agent_execution",
           properties: { request: 1 },
           timestamp: "2026-07-20T12:00:00.750Z",
@@ -450,7 +451,13 @@ describe("Nozle", () => {
       const [url, options] = fetchMock.mock.calls[0];
       expect(url).toBe("http://localhost:8080/api/v1/usage/track");
       expect(options.headers["Idempotency-Key"]).toBe("execution-1");
-      expect(JSON.parse(options.body).timestamp).toBe("2026-07-20T12:00:00.750Z");
+      expect(JSON.parse(options.body)).toEqual({
+        customer_id: "acme",
+        entity_id: "user/42",
+        billable_metric_code: "agent_execution",
+        properties: { request: 1 },
+        timestamp: "2026-07-20T12:00:00.750Z",
+      });
     });
 
     it("rejects publishable-key mutation locally without making a request", async () => {
@@ -479,6 +486,233 @@ describe("Nozle", () => {
       await expect(client.usage.track(params, { idempotencyKey: "é".repeat(128) })).rejects.toThrow(
         "must not exceed 255 bytes",
       );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("entities", () => {
+    const entity = {
+      id: "entity-uuid",
+      customer_id: "acme/west",
+      external_id: "user/42",
+      name: "Asha",
+      status: "active",
+      metadata: { role: "admin" },
+      created_at: "2026-07-20T12:00:00Z",
+      updated_at: "2026-07-20T12:00:00Z",
+      deleted_at: null,
+    };
+
+    it("lists and upserts Entities with escaped identifiers and exact idempotency", async () => {
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse({ customer_id: "acme/west", entities: [entity], next_cursor: null }),
+        )
+        .mockResolvedValueOnce(jsonResponse({ action: "updated", entity, replayed: false }));
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+
+      const page = await client.entities.list("acme/west", { status: "active", limit: 25 });
+      const result = await client.entities.upsert(
+        "acme/west",
+        "user/42",
+        { name: "Asha", status: "active", metadata: { role: "admin" } },
+        { idempotencyKey: "entity-user-42-v2" },
+      );
+
+      expect(page.next_cursor).toBeNull();
+      expect(result.entity.external_id).toBe("user/42");
+      expect(fetchMock.mock.calls[0][0].toString()).toBe(
+        "https://engine.example/api/v1/customers/acme%2Fwest/entities?status=active&limit=25",
+      );
+      expect(fetchMock.mock.calls[1][0]).toBe(
+        "https://engine.example/api/v1/customers/acme%2Fwest/entities/user%2F42",
+      );
+      expect(fetchMock.mock.calls[1][1].headers["Idempotency-Key"]).toBe("entity-user-42-v2");
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+        name: "Asha",
+        status: "active",
+        metadata: { role: "admin" },
+      });
+    });
+
+    it("suspends without discarding the current name or metadata", async () => {
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse({ entity }))
+        .mockResolvedValueOnce(
+          jsonResponse({
+            action: "suspended",
+            entity: { ...entity, status: "suspended" },
+            replayed: false,
+          }),
+        );
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+
+      await client.entities.suspend("acme/west", "user/42", {
+        idempotencyKey: "suspend-user-42",
+      });
+
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+        name: "Asha",
+        status: "suspended",
+        metadata: { role: "admin" },
+      });
+    });
+
+    it("bulk upserts Entities and rejects publishable-key mutations locally", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ customer_id: "acme", entities: [], counts: {}, replayed: false }),
+      );
+      const secretClient = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      await secretClient.entities.bulkUpsert(
+        "acme",
+        [{ externalId: "user-1", status: "active" }],
+        { idempotencyKey: "import-1" },
+      );
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+        entities: [{ external_id: "user-1", name: null, status: "active", metadata: {} }],
+      });
+
+      fetchMock.mockReset();
+      const browserClient = new Nozle({ apiKey: "pk_browser" });
+      await expect(
+        browserClient.entities.suspend("acme", "user-1", { idempotencyKey: "suspend-1" }),
+      ).rejects.toThrow("requires a secret key");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects invalid limits, duplicate bulk IDs, and multibyte idempotency keys", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      await expect(client.entities.list("acme", { limit: 101 })).rejects.toThrow(
+        "between 1 and 100",
+      );
+      await expect(
+        client.entities.bulkUpsert(
+          "acme",
+          [
+            { externalId: "user-1", status: "active" },
+            { externalId: "user-1", status: "suspended" },
+          ],
+          { idempotencyKey: "import-1" },
+        ),
+      ).rejects.toThrow("duplicate externalId");
+      await expect(
+        client.entities.upsert(
+          "acme",
+          "user-1",
+          { status: "active" },
+          { idempotencyKey: "é".repeat(128) },
+        ),
+      ).rejects.toThrow("must not exceed 255 bytes");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Entity credit reads and transfers", () => {
+    it("reads separate Entity/shared/effective totals and Entity operation history", async () => {
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse({
+            customer_id: "acme/west",
+            entity_id: "user/42",
+            entity_status: "active",
+            credit_system: "ai credits",
+            entity_available: "480.000000000001",
+            shared_available: "250",
+            effective_available: "730.000000000001",
+            pool_policy: "entity_then_customer",
+            sources: [],
+          }),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse({
+            customer_id: "acme/west",
+            entity_id: "user/42",
+            operations: [{ id: "operation-1", entity_id: "user/42" }],
+            next_cursor: null,
+          }),
+        );
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+
+      const balance = await client.credits.getEntityBalance(
+        "acme/west",
+        "user/42",
+        "ai credits",
+      );
+      const operations = await client.credits.listEntityOperations("acme/west", "user/42", {
+        limit: 25,
+      });
+
+      expect(balance.effective_available).toBe("730.000000000001");
+      expect(operations.next_cursor).toBeNull();
+      expect(fetchMock.mock.calls[0][0]).toBe(
+        "https://engine.example/api/v1/customers/acme%2Fwest/entities/user%2F42/credit-systems/ai%20credits/balance",
+      );
+      expect(fetchMock.mock.calls[1][0].toString()).toBe(
+        "https://engine.example/api/v1/customers/acme%2Fwest/entities/user%2F42/credit-operations?limit=25",
+      );
+    });
+
+    it("allocates and deallocates exact decimal amounts with caller idempotency", async () => {
+      fetchMock
+        .mockResolvedValueOnce(
+          jsonResponse({
+            transferred: true,
+            direction: "allocation",
+            amount: "100.000000000001",
+            replayed: false,
+          }, 201),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse({
+            transferred: true,
+            direction: "deallocation",
+            amount: "25",
+            replayed: false,
+          }),
+        );
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+
+      await client.credits.allocate(
+        "acme",
+        "user-42",
+        { creditSystemCode: "ai_credits", amount: "100.000000000001" },
+        { idempotencyKey: "allocate-1" },
+      );
+      await client.credits.deallocate(
+        "acme",
+        "user-42",
+        { creditSystemCode: "ai_credits", amount: "25" },
+        { idempotencyKey: "deallocate-1" },
+      );
+
+      expect(fetchMock.mock.calls[0][1].headers["Idempotency-Key"]).toBe("allocate-1");
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+        credit_system: "ai_credits",
+        amount: "100.000000000001",
+      });
+      expect(String(fetchMock.mock.calls[1][0])).toContain("credit-deallocations");
+    });
+
+    it("rejects lossy amounts and publishable-key transfers without a request", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      await expect(
+        client.credits.allocate(
+          "acme",
+          "user-1",
+          { creditSystemCode: "ai", amount: "0.0000000000001" },
+          { idempotencyKey: "allocation-1" },
+        ),
+      ).rejects.toThrow("positive decimal string");
+
+      const browserClient = new Nozle({ apiKey: "pk_browser" });
+      await expect(
+        browserClient.credits.deallocate(
+          "acme",
+          "user-1",
+          { creditSystemCode: "ai", amount: "1" },
+          { idempotencyKey: "deallocation-1" },
+        ),
+      ).rejects.toThrow("requires a secret key");
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });
