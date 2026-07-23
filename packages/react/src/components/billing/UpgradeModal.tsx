@@ -22,6 +22,8 @@ export interface UpgradeModalProps {
   targetPlanId: string;
   customerId: string;
   apiBaseUrl?: string;
+  customerSessionToken?: string;
+  /** @deprecated Pass a scoped csess_ token via customerSessionToken. */
   apiKey?: string;
   onStripeClientSecret?: (clientSecret: string) => void;
   onCheckoutStarted?: () => void;
@@ -40,7 +42,8 @@ export function UpgradeModal({
   targetPlanId,
   customerId,
   apiBaseUrl = "https://api.nozle.app",
-  apiKey = "",
+  customerSessionToken,
+  apiKey,
   onStripeClientSecret,
   onCheckoutStarted,
   onCompleted,
@@ -48,6 +51,12 @@ export function UpgradeModal({
   onConfirm,
   onCancel,
 }: UpgradeModalProps): React.ReactElement | null {
+  const sessionToken = customerSessionToken ?? apiKey ?? "";
+  if (isOpen && !sessionToken.startsWith("csess_")) {
+    throw new Error(
+      "UpgradeModal requires a scoped customerSessionToken (csess_)",
+    );
+  }
   const [preview, setPreview] = useState<ProrationPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +80,7 @@ export function UpgradeModal({
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
+              Authorization: `Bearer ${sessionToken}`,
             },
             body: JSON.stringify({
               plan_code: targetPlanId,
@@ -108,7 +117,7 @@ export function UpgradeModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, targetPlanId, customerId, apiBaseUrl, apiKey]);
+  }, [isOpen, targetPlanId, customerId, apiBaseUrl, sessionToken]);
 
   async function handleConfirm(): Promise<void> {
     setConfirming(true);
@@ -117,7 +126,7 @@ export function UpgradeModal({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${sessionToken}`,
         },
         body: JSON.stringify({
           plan_code: targetPlanId,
@@ -136,7 +145,7 @@ export function UpgradeModal({
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
+                Authorization: `Bearer ${sessionToken}`,
               },
               body: JSON.stringify({
                 plan_code: targetPlanId,

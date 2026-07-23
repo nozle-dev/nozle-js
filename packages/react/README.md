@@ -1,6 +1,6 @@
 # @nozle-js/react
 
-React SDK for usage-based billing. Hooks and components for entitlements, real-time usage tracking, plan management, and Stripe checkout.
+React SDK for customer-scoped billing reads and actions, plus a public plan catalog.
 
 ## Install
 
@@ -28,8 +28,6 @@ function App() {
       customerSessionToken={customerSessionToken}
       customerId="cust_123"
       baseUrl="https://api.nozle.app"       // Default: https://api.nozle.app
-      workspaceId="ws_123"                   // Optional: workspace scoping
-      centrifugoUrl="wss://ws.nozle.app/connection/websocket"  // Optional: real-time updates
     >
       <YourApp />
     </BillingProvider>
@@ -39,7 +37,7 @@ function App() {
 
 ### Required customer app config
 
-For product-credit balances and ledger history, keep the Nozle secret key server-side and mint a short-lived customer session. A bare publishable key cannot read a customer's product-credit balance or operations. Customer sessions are used only by the new product-credit hooks and components; the legacy `BillingPortal` still uses its existing publishable-key APIs.
+Keep the Nozle secret key server-side and mint a short-lived customer session for every customer-specific browser read or mutation. A bare publishable key can only read the public plan catalog. `BillingPortalProvider`, checkout, billing status, invoices, plan changes, cancellation, top-ups, entitlements, balances, and operation history all require a scoped customer session.
 
 Example Vite env:
 
@@ -63,6 +61,14 @@ Create the session in your backend with `@nozle-js/node`:
 const session = await nozle.customerSessions.create({
   customerId: currentCustomerId,
   expiresInSeconds: 900,
+  scopes: [
+    "credits:read",
+    "billing:read",
+    "entitlements:read",
+    "checkout:create",
+    "subscriptions:write",
+    "topups:create",
+  ],
 });
 ```
 
@@ -79,9 +85,9 @@ Pass that customer-bound token alongside the provider's existing publishable key
 </BillingProvider>
 ```
 
-Publishable keys remain appropriate for public catalog and checkout components. Never put `sk_` keys in browser code.
+Publishable keys are appropriate only for public plan-catalog reads. Never put `sk_` keys in browser code. Customer sessions are bearer credentials: keep them short-lived and do not persist them in local storage.
 
-Product-credit reads use ordinary HTTP requests. The optional Centrifugo connection remains for the SDK's existing entitlement updates and does not receive customer-credit claims.
+Customer billing and product-credit data use ordinary authenticated HTTP requests. Customer sessions do not mint Centrifugo tokens or carry realtime credit claims.
 
 Use the Stripe publishable key only when the app mounts embedded Stripe checkout. If you only redirect to a hosted checkout URL, the host app does not need to mount Stripe Elements.
 
@@ -126,7 +132,7 @@ function MyFeature() {
 
 ### `useUsage(metric)`
 
-Get real-time usage data for a metric. Updates automatically via WebSocket.
+Get current usage data for a metric over customer-scoped HTTP.
 
 ```tsx
 import { useUsage } from "@nozle-js/react";

@@ -409,7 +409,7 @@ export function PricingTable({
   useEffect(() => {
     if (propPlans) { setPlans(propPlans); return; }
     let cancelled = false;
-    client.fetch('/api/v1/plans').then(async (res) => {
+    client.catalogFetch('/api/v1/plans').then(async (res) => {
       if (!cancelled && res.ok) {
         const data = await res.json();
         setPlans(data.plans || []);
@@ -425,7 +425,7 @@ export function PricingTable({
     }
     if (!customerId) return;
     let cancelled = false;
-    client.fetch(`/api/v1/billing/status?customer_id=${encodeURIComponent(customerId)}`)
+    client.customerFetch(`/api/v1/billing/status?customer_id=${encodeURIComponent(customerId)}`)
       .then(async (res) => {
         if (!cancelled && res.ok) {
           const data = await res.json();

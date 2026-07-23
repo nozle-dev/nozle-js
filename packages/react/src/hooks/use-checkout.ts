@@ -24,7 +24,7 @@ export function useCheckout(): UseCheckoutResult {
         if (!client || !customerId) {
           throw new Error("BillingProvider customerId is required");
         }
-        const response = await client.fetch("/api/v1/checkout", {
+        const response = await client.customerFetch("/api/v1/checkout", {
           method: "POST",
           body: JSON.stringify({
             plan_code: planCode,

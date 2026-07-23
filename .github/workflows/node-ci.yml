@@ -62,6 +62,9 @@ jobs:
       - name: Build package
         run: npm run build
 
+      - name: Verify package contents
+        run: npm pack --dry-run
+
   react:
     name: React ${{ matrix.node-version }}
     runs-on: ubuntu-latest
@@ -94,3 +97,6 @@ jobs:
 
       - name: Build package
         run: npm run build --workspace=@nozle-js/react
+
+      - name: Verify package contents
+        run: npm pack --dry-run --workspace=@nozle-js/react

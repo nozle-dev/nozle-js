@@ -105,7 +105,7 @@ export function CheckoutButton({
   onComplete,
 }: CheckoutButtonProps): React.ReactElement {
   const portal = useBillingPortal();
-  const { customerId, apiKey } = portal;
+  const { customerId, customerSessionToken } = portal;
   const baseUrl = apiBaseUrl ?? portal.apiBaseUrl;
   const [loading, setLoading] = useState(false);
 
@@ -116,7 +116,7 @@ export function CheckoutButton({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${customerSessionToken}`,
         },
         body: JSON.stringify({ plan_code: planId, customer_id: customerId }),
       });

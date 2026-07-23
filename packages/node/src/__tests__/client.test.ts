@@ -346,7 +346,7 @@ describe("Nozle", () => {
             token: "csess_token",
             customer_id: "acme/west",
             expires_at: "2026-07-20T12:15:00Z",
-            scope: ["credits:read"],
+            scope: ["credits:read", "billing:read", "checkout:create"],
           },
         }),
       );
@@ -355,6 +355,7 @@ describe("Nozle", () => {
       const session = await client.customerSessions.create({
         customerId: "acme/west",
         expiresInSeconds: 900,
+        scopes: ["credits:read", "billing:read", "checkout:create"],
       });
 
       expect(session.token).toBe("csess_token");
@@ -362,7 +363,11 @@ describe("Nozle", () => {
         "https://engine.example/api/v1/customer-sessions",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ customer_id: "acme/west", expires_in_seconds: 900 }),
+          body: JSON.stringify({
+            customer_id: "acme/west",
+            expires_in_seconds: 900,
+            scopes: ["credits:read", "billing:read", "checkout:create"],
+          }),
         }),
       );
     });
@@ -372,6 +377,14 @@ describe("Nozle", () => {
       await expect(
         client.customerSessions.create({ customerId: "acme" }),
       ).rejects.toThrow("requires a secret key");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects an explicitly empty scope set before making a request", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      await expect(
+        client.customerSessions.create({ customerId: "acme", scopes: [] }),
+      ).rejects.toThrow("scopes cannot be empty");
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });

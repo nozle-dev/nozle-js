@@ -15,7 +15,7 @@ vi.mock("../components/billing/checkout-navigation.js", () => ({
 }));
 
 const apiBaseUrl = "https://api.example.test";
-const apiKey = "pk_test";
+const customerSessionToken = "csess_customer_123";
 const customerId = "customer_123";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -29,7 +29,7 @@ function jsonResponse(body: unknown, status = 200) {
 function portal(children: React.ReactNode) {
   return (
     <BillingPortalProvider
-      apiKey={apiKey}
+      customerSessionToken={customerSessionToken}
       customerId={customerId}
       apiBaseUrl={apiBaseUrl}
     >
@@ -43,6 +43,23 @@ afterEach(() => {
 });
 
 describe("billing action API contract", () => {
+  it("rejects publishable and secret keys as portal customer credentials", () => {
+    expect(() =>
+      render(
+        <BillingPortalProvider customerId={customerId} apiKey="pk_browser">
+          <div />
+        </BillingPortalProvider>,
+      ),
+    ).toThrow("requires a scoped customerSessionToken");
+    expect(() =>
+      render(
+        <BillingPortalProvider customerId={customerId} apiKey="sk_server">
+          <div />
+        </BillingPortalProvider>,
+      ),
+    ).toThrow("requires a scoped customerSessionToken");
+  });
+
   it("sends canonical checkout fields", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
@@ -126,7 +143,7 @@ describe("billing action API contract", () => {
         targetPlanId="max"
         customerId={customerId}
         apiBaseUrl={apiBaseUrl}
-        apiKey={apiKey}
+        customerSessionToken={customerSessionToken}
         onStripeClientSecret={onStripeClientSecret}
         onConfirm={onConfirm}
       />,
@@ -164,7 +181,7 @@ describe("billing action API contract", () => {
         targetPlanId="max"
         customerId={customerId}
         apiBaseUrl={apiBaseUrl}
-        apiKey={apiKey}
+        customerSessionToken={customerSessionToken}
         onConfirm={onConfirm}
       />,
     );
@@ -190,7 +207,7 @@ describe("billing action API contract", () => {
         targetPlanId="max"
         customerId={customerId}
         apiBaseUrl={apiBaseUrl}
-        apiKey={apiKey}
+        customerSessionToken={customerSessionToken}
         onCompleted={onCompleted}
         onStripeClientSecret={onStripeClientSecret}
       />,
@@ -225,7 +242,7 @@ describe("billing action API contract", () => {
         targetPlanId="pro-annual"
         customerId={customerId}
         apiBaseUrl={apiBaseUrl}
-        apiKey={apiKey}
+        customerSessionToken={customerSessionToken}
         onScheduled={onScheduled}
       />,
     );
@@ -279,7 +296,7 @@ describe("billing action API contract", () => {
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${customerSessionToken}`,
           "Idempotency-Key": expect.any(String),
         }),
         body: JSON.stringify({
@@ -364,7 +381,11 @@ describe("billing action API contract", () => {
       expect.objectContaining({
         method: "DELETE",
         headers: expect.objectContaining({
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${customerSessionToken}`,
+        }),
+        body: JSON.stringify({
+          reason: "Too expensive",
+          customer_id: customerId,
         }),
       }),
     );

@@ -51,6 +51,7 @@ export type {
   EntityCreditTransferSource,
   EntityCreditTransferResult,
   CustomerSessionCreateParams,
+  CustomerSessionScope,
   CustomerSession,
   UsageCheckParams,
   UsageTrackParams,

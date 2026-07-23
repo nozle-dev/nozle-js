@@ -20,7 +20,7 @@ export function useSubscribe(): UseSubscribeResult {
         if (!client || !customerId) {
           throw new Error("BillingProvider customerId is required");
         }
-        const res = await client.fetch(`/api/v1/subscribe`, {
+        const res = await client.customerFetch(`/api/v1/subscribe`, {
           method: "POST",
           body: JSON.stringify({
             plan_code: planCode,
