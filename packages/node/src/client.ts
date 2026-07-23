@@ -95,6 +95,9 @@ export class Nozle {
   }
 
   async subscribe(customerId: string, planCode: string): Promise<SubscribeResult> {
+    if (!this.apiKey.startsWith("sk_")) {
+      throw new Error("subscribe requires a secret key");
+    }
     const res = await fetch(`${this.baseUrl}/api/v1/subscribe`, {
       method: "POST",
       headers: {

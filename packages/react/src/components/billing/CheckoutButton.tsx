@@ -32,6 +32,8 @@ export interface CheckoutButtonProps {
   onSuccess?: (paymentId: string) => void;
   /** Called when Nozle completes the plan change using credits without external payment. */
   onComplete?: (result: CompletedCheckoutResult) => void;
+  /** Called when Nozle schedules a no-payment plan transition. */
+  onScheduled?: (result: ScheduledCheckoutResult) => void;
 }
 
 export interface CompletedCheckoutResult {
@@ -43,6 +45,13 @@ export interface CompletedCheckoutResult {
   invoice_id?: string;
   amount_cents?: number;
   currency?: string;
+}
+
+export interface ScheduledCheckoutResult {
+  type: "scheduled";
+  status: string;
+  subscription_id?: string;
+  plan_code?: string;
 }
 
 interface RazorpayOptions {
@@ -61,10 +70,21 @@ declare global {
 }
 
 type CheckoutResponse =
-  | { type: "stripe"; url: string; clientSecret?: string; client_secret?: string }
-  | { type: "stripe"; clientSecret?: string; client_secret?: string; url?: string }
+  | {
+      type: "stripe";
+      url: string;
+      clientSecret?: string;
+      client_secret?: string;
+    }
+  | {
+      type: "stripe";
+      clientSecret?: string;
+      client_secret?: string;
+      url?: string;
+    }
   | { type: "razorpay"; orderId: string }
   | CompletedCheckoutResult
+  | ScheduledCheckoutResult
   | { url: string }; // legacy — no type field
 
 /**
@@ -103,9 +123,10 @@ export function CheckoutButton({
   onStripeClientSecret,
   onSuccess,
   onComplete,
+  onScheduled,
 }: CheckoutButtonProps): React.ReactElement {
   const portal = useBillingPortal();
-  const { customerId, apiKey } = portal;
+  const { customerId, customerSessionToken } = portal;
   const baseUrl = apiBaseUrl ?? portal.apiBaseUrl;
   const [loading, setLoading] = useState(false);
 
@@ -116,7 +137,7 @@ export function CheckoutButton({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${customerSessionToken}`,
         },
         body: JSON.stringify({ plan_code: planId, customer_id: customerId }),
       });
@@ -127,7 +148,9 @@ export function CheckoutButton({
 
       const data = (await response.json()) as CheckoutResponse;
 
-      if ("type" in data && data.type === "completed") {
+      if ("type" in data && data.type === "scheduled") {
+        onScheduled?.(data);
+      } else if ("type" in data && data.type === "completed") {
         onComplete?.(data);
       } else if ("type" in data && data.type === "razorpay") {
         // Razorpay checkout path
@@ -158,7 +181,9 @@ export function CheckoutButton({
           onStripeClientSecret(clientSecret);
         } else if (clientSecret) {
           onError?.(
-            new Error("onStripeClientSecret is required for embedded Stripe checkout"),
+            new Error(
+              "onStripeClientSecret is required for embedded Stripe checkout",
+            ),
           );
         } else {
           onError?.(

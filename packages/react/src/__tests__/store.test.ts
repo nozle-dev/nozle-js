@@ -3,11 +3,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BillingStore } from "../store";
 
 const baseUrl = "https://api.example.test";
-const apiKey = "pk_test";
+const publishableKey = "pk_test";
+const customerSessionToken = "csess_customer";
 const customerId = "cust_123";
 
 function createStore() {
-  return new BillingStore(baseUrl, apiKey, customerId);
+  return new BillingStore(
+    baseUrl,
+    publishableKey,
+    customerSessionToken,
+    customerId,
+  );
 }
 
 function jsonResponse(body: unknown, ok = true) {
@@ -55,7 +61,7 @@ describe("BillingStore", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       `${baseUrl}/api/v1/can?customer_id=${customerId}&feature=agent_execution`,
-      { headers: { Authorization: `Bearer ${apiKey}` } },
+      { headers: { Authorization: `Bearer ${customerSessionToken}` } },
     );
     expect(store.getSnapshot().usage.agent_execution).toEqual({
       used: 2,
@@ -96,25 +102,35 @@ describe("BillingStore", () => {
   });
 
   it("fetches plans through the authenticated organization", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        jsonResponse({
-          plans: [
-            {
-              code: "pro",
-              name: "Pro",
-              amount_cents: 1499,
-              amount_currency: "USD",
-              interval: "monthly",
-            },
-          ],
-        }),
-      ),
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        plans: [
+          {
+            code: "pro",
+            name: "Pro",
+            amount_cents: 1499,
+            amount_currency: "USD",
+            interval: "monthly",
+          },
+        ],
+      }),
     );
+    vi.stubGlobal("fetch", fetchMock);
     const plans = await createStore().fetchPlans();
     expect(plans).toHaveLength(1);
     expect(plans[0]?.code).toBe("pro");
+    expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/api/v1/plans`, {
+      headers: { Authorization: `Bearer ${publishableKey}` },
+    });
+  });
+
+  it("rejects publishable or secret credentials in the customer-session slot", () => {
+    expect(
+      () => new BillingStore(baseUrl, publishableKey, publishableKey, customerId),
+    ).toThrow("customerSessionToken must start with csess_");
+    expect(
+      () => new BillingStore(baseUrl, publishableKey, "sk_server", customerId),
+    ).toThrow("customerSessionToken must start with csess_");
   });
 
   it("applies real-time usage updates", () => {

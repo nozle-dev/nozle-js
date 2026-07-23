@@ -32,10 +32,16 @@ export interface UsePlanResult {
 }
 
 export interface CheckoutResult {
-  client_secret: string;
-  invoice_id: string;
-  amount_cents: number;
-  currency: string;
+  type?: "stripe" | "completed" | "scheduled";
+  client_secret?: string;
+  clientSecret?: string;
+  url?: string;
+  invoice_id?: string;
+  subscription_id?: string;
+  plan_code?: string;
+  status?: string;
+  amount_cents?: number;
+  currency?: string;
 }
 
 export interface CreditBalanceSource {
@@ -123,12 +129,12 @@ export interface CreditOperationsResponse {
 }
 
 export type EntityCreditPoolPolicy =
-  | "entity_only"
-  | "entity_then_customer"
-  | "customer_only";
+  "entity_only" | "entity_then_customer" | "customer_only";
 
-export interface EntityCreditBalanceData
-  extends Omit<CreditBalanceData, "available"> {
+export interface EntityCreditBalanceData extends Omit<
+  CreditBalanceData,
+  "available"
+> {
   entity_id: string;
   entity_status: "active" | "suspended" | "deleted";
   entity_available: string;
@@ -138,7 +144,6 @@ export interface EntityCreditBalanceData
   pool_policy: EntityCreditPoolPolicy | null;
 }
 
-export interface EntityCreditOperationsResponse
-  extends CreditOperationsResponse {
+export interface EntityCreditOperationsResponse extends CreditOperationsResponse {
   entity_id: string;
 }

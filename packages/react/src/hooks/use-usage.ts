@@ -37,32 +37,18 @@ export function useUsage(customerId: string, metricKey: string): UsageState {
       setState({ value: null, loading: false, error: "No client in context" });
       return;
     }
+    const currentClient = client;
 
     let cancelled = false;
 
     async function fetchUsage(): Promise<void> {
       try {
-        const clientInternal = client as unknown as {
-          apiKey?: string;
-          baseUrl?: string;
-          timeout?: number;
-        };
-        const apiKey = clientInternal.apiKey ?? "";
-        const baseUrl = clientInternal.baseUrl ?? "https://api.nozle.app";
-        const timeout = clientInternal.timeout ?? 5000;
-
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        const response = await fetch(
-          `${baseUrl}/api/v1/usage/${customerId}/${metricKey}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-            },
-            signal: controller.signal,
-          },
+        const response = await currentClient.customerFetch(
+          `/api/v1/usage/${encodeURIComponent(customerId)}/${encodeURIComponent(metricKey)}`,
+          { method: "GET", signal: controller.signal },
         );
 
         clearTimeout(timeoutId);

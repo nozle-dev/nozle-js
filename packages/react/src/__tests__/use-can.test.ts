@@ -26,12 +26,6 @@ vi.mock("centrifuge", () => {
 let fetchResponses: Record<string, unknown> = {};
 
 const mockFetch = vi.fn().mockImplementation((url: string) => {
-  if (url.includes("/auth/centrifugo-token")) {
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ token: "fake-token" }),
-    });
-  }
   const feature = new URL(url).searchParams.get("feature");
   return Promise.resolve({
     ok: true,
@@ -49,7 +43,8 @@ global.fetch = mockFetch;
 
 function wrapper({ children }: { children: ReactNode }) {
   return createElement(BillingProvider, {
-    publishableKey: "bsr_pub_test",
+    publishableKey: "pk_browser",
+    customerSessionToken: "csess_customer",
     customerId: "cust_123",
     baseUrl: "http://localhost:8080",
     children,

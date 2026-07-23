@@ -58,7 +58,7 @@ export function CreditTopUpButton({
   onError,
 }: CreditTopUpButtonProps): React.ReactElement {
   const portal = useBillingPortal();
-  const { customerId, apiKey } = portal;
+  const { customerId, customerSessionToken } = portal;
   const baseUrl = apiBaseUrl ?? portal.apiBaseUrl;
   const idempotencyKeyRef = useRef<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -81,7 +81,7 @@ export function CreditTopUpButton({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${customerSessionToken}`,
           "Idempotency-Key": idempotencyKey,
         },
         body: JSON.stringify({

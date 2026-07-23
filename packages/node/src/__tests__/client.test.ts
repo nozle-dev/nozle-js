@@ -158,6 +158,16 @@ describe("Nozle", () => {
       expect(result.subscription_id).toBe("sub_1");
       expect(result.status).toBe("active");
     });
+
+    it("rejects publishable and customer-session subscription attempts before network I/O", async () => {
+      for (const apiKey of ["pk_browser", "csess_browser"]) {
+        const client = new Nozle({ apiKey });
+        await expect(client.subscribe("cust_1", "pro")).rejects.toThrow(
+          "subscribe requires a secret key",
+        );
+      }
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("margin", () => {
@@ -346,7 +356,7 @@ describe("Nozle", () => {
             token: "csess_token",
             customer_id: "acme/west",
             expires_at: "2026-07-20T12:15:00Z",
-            scope: ["credits:read"],
+            scope: ["billing:read", "checkout:create"],
           },
         }),
       );
@@ -355,6 +365,7 @@ describe("Nozle", () => {
       const session = await client.customerSessions.create({
         customerId: "acme/west",
         expiresInSeconds: 900,
+        scopes: ["billing:read", "checkout:create"],
       });
 
       expect(session.token).toBe("csess_token");
@@ -362,7 +373,11 @@ describe("Nozle", () => {
         "https://engine.example/api/v1/customer-sessions",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ customer_id: "acme/west", expires_in_seconds: 900 }),
+          body: JSON.stringify({
+            customer_id: "acme/west",
+            expires_in_seconds: 900,
+            scopes: ["billing:read", "checkout:create"],
+          }),
         }),
       );
     });
