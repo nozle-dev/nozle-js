@@ -27,7 +27,7 @@ function App() {
       publishableKey="pk_live_..."
       customerSessionToken={customerSessionToken}
       customerId="cust_123"
-      baseUrl="https://api.nozle.app"       // Default: https://api.nozle.app
+      baseUrl="https://api.nozle.app" // Default: https://api.nozle.app
     >
       <YourApp />
     </BillingProvider>
@@ -194,19 +194,23 @@ function PlanList() {
 }
 ```
 
-### `useCheckout()`
+### `useCheckoutSession()`
 
 Create a Stripe checkout session and render embedded checkout.
 
 ```tsx
-import { useCheckout } from "@nozle-js/react";
+import { useCheckoutSession } from "@nozle-js/react";
 
 function UpgradeButton({ planCode }: { planCode: string }) {
-  const { fetchClientSecret, isLoading } = useCheckout();
+  const { fetchClientSecret, checkout, isLoading } = useCheckoutSession();
 
   const handleUpgrade = async () => {
     const clientSecret = await fetchClientSecret(planCode);
-    // Use clientSecret with Stripe EmbeddedCheckout
+    if (clientSecret) {
+      // Use clientSecret with Stripe EmbeddedCheckout.
+    } else if (checkout?.type === "scheduled") {
+      // Refresh billing state; the transition is scheduled.
+    }
   };
 
   return (
@@ -217,27 +221,9 @@ function UpgradeButton({ planCode }: { planCode: string }) {
 }
 ```
 
-### `useSubscribe()`
+### Direct subscribe migration
 
-Create a subscription after successful payment.
-
-```tsx
-import { useSubscribe } from "@nozle-js/react";
-
-function AfterPayment({ planCode }: { planCode: string }) {
-  const { subscribe, isLoading } = useSubscribe();
-
-  const handleComplete = async () => {
-    await subscribe(planCode);
-  };
-
-  return (
-    <button onClick={handleComplete} disabled={isLoading}>
-      Activate Subscription
-    </button>
-  );
-}
-```
+The browser no longer calls `POST /api/v1/subscribe`. Paid plan selection must use `useCheckout`, `CheckoutButton`, or `UpgradeModal`; Core activates the paid subscription from the verified payment flow. The legacy internal `useSubscribe` hook is deprecated and now starts checkout instead of calling the direct subscription endpoint.
 
 ## Components
 
@@ -305,17 +291,17 @@ import { PricingTable } from "@nozle-js/react";
 />
 ```
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `customerId` | `string` | -- | Customer ID for auto-detecting current plan |
-| `currentPlanCode` | `string` | -- | Explicitly set current plan (overrides auto-detect) |
-| `plans` | `PricingPlan[]` | -- | Plans to display (auto-fetched from API if omitted) |
-| `features` | `string[][]` | -- | Feature lists per plan (index-matched to plans array) |
-| `onSelect` | `(plan: PricingPlan) => void` | -- | Called when a plan's CTA is clicked |
-| `highlightPlan` | `string` | -- | Plan code to highlight as "Most Popular" |
-| `enterpriseEmail` | `string` | -- | Email for enterprise plan "Contact Sales" button |
-| `showToggle` | `boolean` | `true` | Show monthly/annual toggle (only when annual plans exist) |
-| `className` | `string` | -- | CSS class for the outer wrapper |
+| Prop              | Type                          | Default | Description                                               |
+| ----------------- | ----------------------------- | ------- | --------------------------------------------------------- |
+| `customerId`      | `string`                      | --      | Customer ID for auto-detecting current plan               |
+| `currentPlanCode` | `string`                      | --      | Explicitly set current plan (overrides auto-detect)       |
+| `plans`           | `PricingPlan[]`               | --      | Plans to display (auto-fetched from API if omitted)       |
+| `features`        | `string[][]`                  | --      | Feature lists per plan (index-matched to plans array)     |
+| `onSelect`        | `(plan: PricingPlan) => void` | --      | Called when a plan's CTA is clicked                       |
+| `highlightPlan`   | `string`                      | --      | Plan code to highlight as "Most Popular"                  |
+| `enterpriseEmail` | `string`                      | --      | Email for enterprise plan "Contact Sales" button          |
+| `showToggle`      | `boolean`                     | `true`  | Show monthly/annual toggle (only when annual plans exist) |
+| `className`       | `string`                      | --      | CSS class for the outer wrapper                           |
 
 #### PricingPlan type
 

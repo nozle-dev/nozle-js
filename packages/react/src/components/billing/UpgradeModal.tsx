@@ -135,33 +135,6 @@ export function UpgradeModal({
       });
 
       if (!response.ok) {
-        const errorBody = (await response.json().catch(() => ({}))) as {
-          code?: string;
-        };
-        if (errorBody.code === "checkout_not_required_for_downgrade") {
-          const changeResponse = await fetch(
-            `${apiBaseUrl}/api/v1/subscriptions/change`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${sessionToken}`,
-              },
-              body: JSON.stringify({
-                plan_code: targetPlanId,
-                customer_id: customerId,
-              }),
-            },
-          );
-          if (!changeResponse.ok) {
-            throw new Error(`HTTP ${changeResponse.status}: Plan change failed`);
-          }
-
-          onScheduled?.();
-          onConfirm?.();
-          return;
-        }
-
         throw new Error(`HTTP ${response.status}: Checkout failed`);
       }
 
@@ -173,15 +146,23 @@ export function UpgradeModal({
       };
       const clientSecret = data.clientSecret ?? data.client_secret;
 
-      if (data.type === "completed") {
+      if (data.type === "scheduled") {
+        onScheduled?.();
+      } else if (data.type === "completed") {
         onCompleted?.();
       } else if (data.url) {
         window.location.href = data.url;
-      } else if (data.type === "stripe" && clientSecret && onStripeClientSecret) {
+      } else if (
+        data.type === "stripe" &&
+        clientSecret &&
+        onStripeClientSecret
+      ) {
         onStripeClientSecret(clientSecret);
         onCheckoutStarted?.();
       } else if (data.type === "stripe" && clientSecret) {
-        throw new Error("onStripeClientSecret is required for embedded Stripe checkout");
+        throw new Error(
+          "onStripeClientSecret is required for embedded Stripe checkout",
+        );
       } else {
         throw new Error("Unknown checkout response format");
       }
@@ -293,8 +274,7 @@ export function UpgradeModal({
             <p
               style={{
                 fontSize: "0.875rem",
-                color:
-                  "var(--nozle-muted-foreground, var(--muted-foreground))",
+                color: "var(--nozle-muted-foreground, var(--muted-foreground))",
                 marginTop: "0.75rem",
               }}
             >

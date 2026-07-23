@@ -37,15 +37,41 @@ export class Nozle {
 
   constructor(config: NozleConfig) {
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl ?? "http://localhost:8080").replace(/\/+$/, "");
-    this.eventsUrl = (config.eventsUrl ?? "http://localhost:3000").replace(/\/+$/, "");
+    this.baseUrl = (config.baseUrl ?? "http://localhost:8080").replace(
+      /\/+$/,
+      "",
+    );
+    this.eventsUrl = (config.eventsUrl ?? "http://localhost:3000").replace(
+      /\/+$/,
+      "",
+    );
     this.timeout = config.timeout ?? 10_000;
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.timeout);
-    this.customers = new CustomersNamespace(this.baseUrl, this.apiKey, this.timeout);
-    this.customerSessions = new CustomerSessionsNamespace(this.baseUrl, this.apiKey, this.timeout);
-    this.creditSystems = new CreditSystemsNamespace(this.eventsUrl, this.apiKey, this.timeout);
-    this.entities = new EntitiesNamespace(this.baseUrl, this.apiKey, this.timeout);
-    this.credits = new CreditsNamespace(this.baseUrl, this.apiKey, this.timeout);
+    this.customers = new CustomersNamespace(
+      this.baseUrl,
+      this.apiKey,
+      this.timeout,
+    );
+    this.customerSessions = new CustomerSessionsNamespace(
+      this.baseUrl,
+      this.apiKey,
+      this.timeout,
+    );
+    this.creditSystems = new CreditSystemsNamespace(
+      this.eventsUrl,
+      this.apiKey,
+      this.timeout,
+    );
+    this.entities = new EntitiesNamespace(
+      this.baseUrl,
+      this.apiKey,
+      this.timeout,
+    );
+    this.credits = new CreditsNamespace(
+      this.baseUrl,
+      this.apiKey,
+      this.timeout,
+    );
     this.usage = new UsageNamespace(this.baseUrl, this.apiKey, this.timeout);
   }
 
@@ -59,11 +85,30 @@ export class Nozle {
     if (!opts.subscriptionId) {
       opts.subscriptionId = await this.resolveSubscription(customerId);
     }
-    return _track(this.eventsUrl, this.apiKey, customerId, event, metadata, opts, this.timeout);
+    return _track(
+      this.eventsUrl,
+      this.apiKey,
+      customerId,
+      event,
+      metadata,
+      opts,
+      this.timeout,
+    );
   }
 
-  async can(customerId: string, feature: string, metadata?: Record<string, string>): Promise<CanResult> {
-    return _can(this.baseUrl, this.apiKey, customerId, feature, metadata, this.timeout);
+  async can(
+    customerId: string,
+    feature: string,
+    metadata?: Record<string, string>,
+  ): Promise<CanResult> {
+    return _can(
+      this.baseUrl,
+      this.apiKey,
+      customerId,
+      feature,
+      metadata,
+      this.timeout,
+    );
   }
 
   async plans(): Promise<Plan[]> {
@@ -71,12 +116,17 @@ export class Nozle {
       headers: { Authorization: `Bearer ${this.apiKey}` },
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`plans failed: ${res.status} ${res.statusText}`);
+    if (!res.ok)
+      throw new Error(`plans failed: ${res.status} ${res.statusText}`);
     const data = await res.json();
     return data.plans ?? [];
   }
 
-  async checkout(customerId: string, planCode: string, successUrl?: string): Promise<CheckoutResult> {
+  async checkout(
+    customerId: string,
+    planCode: string,
+    successUrl?: string,
+  ): Promise<CheckoutResult> {
     const res = await fetch(`${this.baseUrl}/api/v1/checkout`, {
       method: "POST",
       headers: {
@@ -90,11 +140,18 @@ export class Nozle {
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`checkout failed: ${res.status} ${res.statusText}`);
+    if (!res.ok)
+      throw new Error(`checkout failed: ${res.status} ${res.statusText}`);
     return res.json();
   }
 
-  async subscribe(customerId: string, planCode: string): Promise<SubscribeResult> {
+  async subscribe(
+    customerId: string,
+    planCode: string,
+  ): Promise<SubscribeResult> {
+    if (!this.apiKey.startsWith("sk_")) {
+      throw new Error("subscribe requires a secret key");
+    }
     const res = await fetch(`${this.baseUrl}/api/v1/subscribe`, {
       method: "POST",
       headers: {
@@ -107,7 +164,8 @@ export class Nozle {
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`subscribe failed: ${res.status} ${res.statusText}`);
+    if (!res.ok)
+      throw new Error(`subscribe failed: ${res.status} ${res.statusText}`);
     return res.json();
   }
 
@@ -116,11 +174,14 @@ export class Nozle {
       headers: { Authorization: `Bearer ${this.apiKey}` },
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`ping failed: ${res.status} ${res.statusText}`);
+    if (!res.ok)
+      throw new Error(`ping failed: ${res.status} ${res.statusText}`);
     return res.json();
   }
 
-  async checkAndDeduct(params: CheckAndDeductParams): Promise<CheckAndDeductResult> {
+  async checkAndDeduct(
+    params: CheckAndDeductParams,
+  ): Promise<CheckAndDeductResult> {
     const res = await fetch(`${this.baseUrl}/api/v1/check-and-deduct`, {
       method: "POST",
       headers: {
@@ -134,7 +195,8 @@ export class Nozle {
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`checkAndDeduct failed: ${res.status} ${res.statusText}`);
+    if (!res.ok)
+      throw new Error(`checkAndDeduct failed: ${res.status} ${res.statusText}`);
     return res.json();
   }
 
@@ -190,7 +252,10 @@ class CustomersNamespace {
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`customers.upsert failed: ${res.status} ${res.statusText}`);
+    if (!res.ok)
+      throw new Error(
+        `customers.upsert failed: ${res.status} ${res.statusText}`,
+      );
     return res.json();
   }
 }

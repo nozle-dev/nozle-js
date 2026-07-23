@@ -63,7 +63,9 @@ describe("billing action API contract", () => {
   it("sends canonical checkout fields", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(jsonResponse({ type: "stripe", clientSecret: "cs_123" }));
+      .mockResolvedValue(
+        jsonResponse({ type: "stripe", clientSecret: "cs_123" }),
+      );
     const onStripeClientSecret = vi.fn();
 
     const view = render(
@@ -111,13 +113,40 @@ describe("billing action API contract", () => {
         />,
       ),
     );
-    fireEvent.click(view.getByRole("button", {name: "Get Started"}));
+    fireEvent.click(view.getByRole("button", { name: "Get Started" }));
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
     expect(onComplete).toHaveBeenCalledWith(
-      expect.objectContaining({type: "completed", plan_code: "pro"}),
+      expect.objectContaining({ type: "completed", plan_code: "pro" }),
     );
     expect(onStripeClientSecret).not.toHaveBeenCalled();
+  });
+
+  it("reports a scheduled plan transition without calling a direct mutation", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        type: "scheduled",
+        status: "pending",
+        subscription_id: "subscription-next",
+        plan_code: "pro",
+      }),
+    );
+    const onScheduled = vi.fn();
+
+    const view = render(
+      portal(<CheckoutButton planId="pro" onScheduled={onScheduled} />),
+    );
+    fireEvent.click(view.getByRole("button", { name: "Get Started" }));
+
+    await waitFor(() => expect(onScheduled).toHaveBeenCalledOnce());
+    expect(onScheduled).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "scheduled", plan_code: "pro" }),
+    );
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).endsWith("/api/v1/subscriptions/change"),
+      ),
+    ).toBe(false);
   });
 
   it("previews the change and starts payment checkout on confirmation", async () => {
@@ -150,9 +179,7 @@ describe("billing action API contract", () => {
     );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    fireEvent.click(
-      view.getByRole("button", { name: "Confirm Upgrade" }),
-    );
+    fireEvent.click(view.getByRole("button", { name: "Confirm Upgrade" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
@@ -160,9 +187,11 @@ describe("billing action API contract", () => {
     );
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${apiBaseUrl}/api/v1/checkout`);
     for (const call of fetchMock.mock.calls) {
-      expect(call[1]).toEqual(expect.objectContaining({
-        body: JSON.stringify({plan_code: "max", customer_id: customerId}),
-      }));
+      expect(call[1]).toEqual(
+        expect.objectContaining({
+          body: JSON.stringify({ plan_code: "max", customer_id: customerId }),
+        }),
+      );
     }
     expect(onStripeClientSecret).toHaveBeenCalledWith("cs_upgrade");
     expect(onConfirm).toHaveBeenCalledOnce();
@@ -171,8 +200,17 @@ describe("billing action API contract", () => {
   it("does not report an upgrade when embedded checkout cannot be mounted", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse({credit: 0, debit: 10, net: 10, nextBillingDate: "2026-08-10"}))
-      .mockResolvedValueOnce(jsonResponse({type: "stripe", client_secret: "cs_upgrade"}));
+      .mockResolvedValueOnce(
+        jsonResponse({
+          credit: 0,
+          debit: 10,
+          net: 10,
+          nextBillingDate: "2026-08-10",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ type: "stripe", client_secret: "cs_upgrade" }),
+      );
     const onConfirm = vi.fn();
 
     const view = render(
@@ -187,17 +225,30 @@ describe("billing action API contract", () => {
     );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    fireEvent.click(view.getByRole("button", {name: "Confirm Upgrade"}));
+    fireEvent.click(view.getByRole("button", { name: "Confirm Upgrade" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(await view.findByText("onStripeClientSecret is required for embedded Stripe checkout")).toBeTruthy();
+    expect(
+      await view.findByText(
+        "onStripeClientSecret is required for embedded Stripe checkout",
+      ),
+    ).toBeTruthy();
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
   it("reports a credit-funded modal upgrade as completed", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse({credit: 5, debit: 5, net: 0, nextBillingDate: "2026-08-10"}))
-      .mockResolvedValueOnce(jsonResponse({type: "completed", status: "succeeded"}));
+      .mockResolvedValueOnce(
+        jsonResponse({
+          credit: 5,
+          debit: 5,
+          net: 0,
+          nextBillingDate: "2026-08-10",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ type: "completed", status: "succeeded" }),
+      );
     const onCompleted = vi.fn();
     const onStripeClientSecret = vi.fn();
 
@@ -215,25 +266,25 @@ describe("billing action API contract", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(await view.findByText("Credits applied")).toBeTruthy();
-    fireEvent.click(view.getByRole("button", {name: "Confirm Upgrade"}));
+    fireEvent.click(view.getByRole("button", { name: "Confirm Upgrade" }));
     await waitFor(() => expect(onCompleted).toHaveBeenCalledOnce());
     expect(onStripeClientSecret).not.toHaveBeenCalled();
   });
 
-  it("schedules a Lago downgrade when checkout says payment is not required", async () => {
+  it("keeps paid downgrade scheduling inside the checkout endpoint", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(jsonResponse({credit: 0, debit: 0, net: 0, nextBillingDate: "2026-08-10"}))
       .mockResolvedValueOnce(
-        jsonResponse(
-          {
-            error: "checkout_not_required_for_downgrade",
-            code: "checkout_not_required_for_downgrade",
-          },
-          422,
-        ),
+        jsonResponse({
+          credit: 0,
+          debit: 0,
+          net: 0,
+          nextBillingDate: "2026-08-10",
+        }),
       )
-      .mockResolvedValueOnce(jsonResponse({subscription: {status: "pending"}}));
+      .mockResolvedValueOnce(
+        jsonResponse({ type: "scheduled", status: "pending" }),
+      );
     const onScheduled = vi.fn();
 
     const view = render(
@@ -248,12 +299,14 @@ describe("billing action API contract", () => {
     );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    fireEvent.click(view.getByRole("button", {name: "Confirm Upgrade"}));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    fireEvent.click(view.getByRole("button", { name: "Confirm Upgrade" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${apiBaseUrl}/api/v1/checkout`);
-    expect(fetchMock.mock.calls[2]?.[0]).toBe(
-      `${apiBaseUrl}/api/v1/subscriptions/change`,
-    );
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).endsWith("/api/v1/subscriptions/change"),
+      ),
+    ).toBe(false);
     expect(onScheduled).toHaveBeenCalledOnce();
   });
 
@@ -353,27 +406,33 @@ describe("billing action API contract", () => {
     fireEvent.click(buy);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
-    const firstHeaders = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
-    const secondHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
-    expect(secondHeaders["Idempotency-Key"]).toBe(firstHeaders["Idempotency-Key"]);
+    const firstHeaders = fetchMock.mock.calls[0]?.[1]?.headers as Record<
+      string,
+      string
+    >;
+    const secondHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Record<
+      string,
+      string
+    >;
+    expect(secondHeaders["Idempotency-Key"]).toBe(
+      firstHeaders["Idempotency-Key"],
+    );
   });
 
   it("authenticates and scopes cancellation through the configured API", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(jsonResponse({ subscription: { status: "terminated" } }));
+      .mockResolvedValue(
+        jsonResponse({ subscription: { status: "terminated" } }),
+      );
 
     const view = render(
       portal(<CancelSubscriptionButton subscriptionId="sub/customer" />),
     );
-    fireEvent.click(
-      view.getByRole("button", { name: "Cancel Subscription" }),
-    );
+    fireEvent.click(view.getByRole("button", { name: "Cancel Subscription" }));
     fireEvent.click(view.getByRole("button", { name: "Confirm Cancel" }));
     fireEvent.click(view.getByRole("radio", { name: "Too expensive" }));
-    fireEvent.click(
-      view.getByRole("button", { name: "Submit Cancellation" }),
-    );
+    fireEvent.click(view.getByRole("button", { name: "Submit Cancellation" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(fetchMock).toHaveBeenCalledWith(

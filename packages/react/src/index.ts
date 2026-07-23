@@ -15,6 +15,17 @@ export type { UsageState } from './hooks/use-usage.js';
 export { useCredits } from './hooks/use-credits.js';
 export type { CreditsState } from './hooks/use-credits.js';
 
+export { usePlan } from './hooks/use-plan.js';
+export { usePlans } from './hooks/use-plans.js';
+export type { Plan as CatalogPlan } from './hooks/use-plans.js';
+
+export { useCheckout as useCheckoutSession } from './hooks/use-checkout.js';
+export type { UseCheckoutResult as UseCheckoutSessionResult } from './hooks/use-checkout.js';
+
+/** @deprecated Browser plan changes must use checkout. */
+export { useSubscribe } from './hooks/use-subscribe.js';
+export type { UseSubscribeResult } from './hooks/use-subscribe.js';
+
 export { useCreditBalance } from './hooks/use-credit-balance.js';
 export type { CreditBalanceState, UseCreditBalanceOptions } from './hooks/use-credit-balance.js';
 
@@ -65,6 +76,7 @@ export { CheckoutButton } from './components/billing/CheckoutButton.js';
 export type {
   CheckoutButtonProps,
   CompletedCheckoutResult,
+  ScheduledCheckoutResult,
 } from './components/billing/CheckoutButton.js';
 
 // UI-CHECKOUT: Stripe Elements drop-in checkout component

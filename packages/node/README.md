@@ -292,7 +292,9 @@ const plans = await nozle.plans();
 // Create checkout session (returns Stripe client_secret)
 const { client_secret, session_id } = await nozle.checkout("cust_123", "pro");
 
-// Create subscription after payment
+// Trusted-backend direct provisioning only. This requires an sk_ key with
+// subscription:write and must never be called from browser code. Browser paid
+// plan changes use checkout instead.
 const { subscription_id, status } = await nozle.subscribe("cust_123", "pro");
 ```
 
