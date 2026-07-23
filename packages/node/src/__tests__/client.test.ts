@@ -35,6 +35,18 @@ describe("Nozle", () => {
     expect(client.eventsUrl).toBe("https://events.example.com");
   });
 
+  it("strips long trailing-slash input in linear time", () => {
+    const suffix = "/".repeat(100_000);
+    const client = new Nozle({
+      apiKey: "sk_test",
+      baseUrl: `https://api.example.com${suffix}`,
+      eventsUrl: `https://events.example.com${suffix}`,
+    });
+
+    expect(client.baseUrl).toBe("https://api.example.com");
+    expect(client.eventsUrl).toBe("https://events.example.com");
+  });
+
   describe("track", () => {
     it("sends event with explicit subscriptionId", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({}));

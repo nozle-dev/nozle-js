@@ -20,6 +20,14 @@ import type {
   CheckAndDeductResult,
 } from "./types";
 
+function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
 export class Nozle {
   readonly apiKey: string;
   readonly baseUrl: string;
@@ -37,13 +45,11 @@ export class Nozle {
 
   constructor(config: NozleConfig) {
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl ?? "http://localhost:8080").replace(
-      /\/+$/,
-      "",
+    this.baseUrl = stripTrailingSlashes(
+      config.baseUrl ?? "http://localhost:8080",
     );
-    this.eventsUrl = (config.eventsUrl ?? "http://localhost:3000").replace(
-      /\/+$/,
-      "",
+    this.eventsUrl = stripTrailingSlashes(
+      config.eventsUrl ?? "http://localhost:3000",
     );
     this.timeout = config.timeout ?? 10_000;
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.timeout);
