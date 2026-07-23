@@ -27,7 +27,10 @@ export const CANCEL_REASONS = [
 
 export interface CancelSubscriptionButtonProps {
   subscriptionId: string;
+  customerId?: string;
   apiBaseUrl?: string;
+  customerSessionToken?: string;
+  /** @deprecated Pass a scoped csess_ token via customerSessionToken. */
   apiKey?: string;
   onCancelled?: () => void;
   onError?: (error: Error) => void;
@@ -35,7 +38,9 @@ export interface CancelSubscriptionButtonProps {
 
 export function CancelSubscriptionButton({
   subscriptionId,
+  customerId,
   apiBaseUrl,
+  customerSessionToken,
   apiKey,
   onCancelled,
   onError,
@@ -59,12 +64,22 @@ export function CancelSubscriptionButton({
 
   const handleSubmitCancellation = async () => {
     const reason = selectedReason === "Other" ? otherText : selectedReason;
-    const effectiveApiKey = apiKey ?? portal?.apiKey;
+    const effectiveSessionToken =
+      customerSessionToken ?? apiKey ?? portal?.customerSessionToken;
+    const effectiveCustomerId = customerId ?? portal?.customerId;
     const effectiveBaseUrl = apiBaseUrl ?? portal?.apiBaseUrl ?? "https://api.nozle.app";
 
-    if (!effectiveApiKey) {
+    if (!effectiveSessionToken?.startsWith("csess_")) {
       const cancellationError = new Error(
-        "CancelSubscriptionButton requires apiKey or BillingPortalProvider",
+        "CancelSubscriptionButton requires a scoped customerSessionToken (csess_)",
+      );
+      setError(cancellationError.message);
+      onError?.(cancellationError);
+      return;
+    }
+    if (!effectiveCustomerId) {
+      const cancellationError = new Error(
+        "CancelSubscriptionButton requires customerId or BillingPortalProvider",
       );
       setError(cancellationError.message);
       onError?.(cancellationError);
@@ -79,10 +94,10 @@ export function CancelSubscriptionButton({
         {
           method: "DELETE",
           headers: {
-            Authorization: `Bearer ${effectiveApiKey}`,
+            Authorization: `Bearer ${effectiveSessionToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ reason }),
+          body: JSON.stringify({ reason, customer_id: effectiveCustomerId }),
         },
       );
       if (!response.ok) {

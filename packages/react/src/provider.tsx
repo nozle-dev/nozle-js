@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from 'react';
+import React, { createContext, useContext, useMemo, type ReactNode } from 'react';
 
 export interface CanResult {
   allowed: boolean;
@@ -12,21 +12,29 @@ export interface CanResult {
 
 export interface NozleClient {
   authToken: string;
+  publishableKey: string | null;
   customerSessionToken: string | null;
-  /** @deprecated Use authToken. Kept for compatibility with existing hooks. */
+  /** @deprecated Browser customer operations must use customerSessionToken. */
   apiKey: string;
   baseUrl: string;
+  catalogFetch(path: string, init?: RequestInit): Promise<Response>;
+  customerFetch(path: string, init?: RequestInit): Promise<Response>;
+  /** @deprecated Alias for customerFetch; it never falls back to a publishable key. */
   fetch(path: string, init?: RequestInit): Promise<Response>;
   creditFetch(path: string, init?: RequestInit): Promise<Response>;
   can(customerId: string, feature: string, metadata?: Record<string, string>): Promise<CanResult>;
 }
 
 function createClient(
-  authToken: string,
+  publishableKey: string | undefined,
   baseUrl: string,
   customerSessionToken?: string,
 ): NozleClient {
   const base = baseUrl.replace(/\/+$/, '');
+  const authToken = publishableKey ?? customerSessionToken;
+  if (!authToken) {
+    throw new Error('BillingProvider requires publishableKey or customerSessionToken');
+  }
 
   async function authenticatedFetch(
     token: string,
@@ -43,24 +51,39 @@ function createClient(
     });
   }
 
-  const apiFetch = (path: string, init?: RequestInit) =>
-    authenticatedFetch(authToken, path, init);
-  const creditFetch = (path: string, init?: RequestInit) =>
-    authenticatedFetch(customerSessionToken ?? authToken, path, init);
+  const catalogFetch = (path: string, init?: RequestInit) => {
+    if (!publishableKey) {
+      return Promise.reject(
+        new Error('The public plan catalog requires a publishable key'),
+      );
+    }
+    return authenticatedFetch(publishableKey, path, init);
+  };
+  const customerFetch = (path: string, init?: RequestInit) => {
+    if (!customerSessionToken) {
+      return Promise.reject(
+        new Error('This customer operation requires a scoped customer session token'),
+      );
+    }
+    return authenticatedFetch(customerSessionToken, path, init);
+  };
 
   return {
     authToken,
+    publishableKey: publishableKey ?? null,
     customerSessionToken: customerSessionToken ?? null,
-    apiKey: authToken,
+    apiKey: customerSessionToken ?? '',
     baseUrl: base,
-    fetch: apiFetch,
-    creditFetch,
+    catalogFetch,
+    customerFetch,
+    fetch: customerFetch,
+    creditFetch: customerFetch,
     async can(customerId: string, feature: string, metadata?: Record<string, string>): Promise<CanResult> {
       let url = `/api/v1/can?customer_id=${encodeURIComponent(customerId)}&feature=${encodeURIComponent(feature)}`;
       if (metadata) {
         url += `&metadata=${encodeURIComponent(JSON.stringify(metadata))}`;
       }
-      const res = await apiFetch(url);
+      const res = await customerFetch(url);
       if (!res.ok) return { allowed: false, remaining: null, limit: null, used: 0 };
       return res.json();
     },
@@ -98,47 +121,35 @@ export function BillingProvider({
   centrifugoUrl,
   children,
 }: BillingProviderProps): React.ReactElement {
-  const resolvedAuthToken = apiKey ?? publishableKey;
-  if (!resolvedAuthToken) {
-    throw new Error('BillingProvider requires apiKey or publishableKey');
+  const legacySessionToken = apiKey?.startsWith('csess_') ? apiKey : undefined;
+  const legacyPublishableKey = apiKey && !legacySessionToken ? apiKey : undefined;
+  const resolvedSessionToken = customerSessionToken ?? legacySessionToken;
+  const resolvedPublishableKey = publishableKey ?? legacyPublishableKey;
+  if (resolvedPublishableKey && !resolvedPublishableKey.startsWith('pk_')) {
+    throw new Error('BillingProvider publishableKey must be a publishable key (pk_)');
+  }
+  if (resolvedSessionToken && !resolvedSessionToken.startsWith('csess_')) {
+    throw new Error('BillingProvider customerSessionToken must be a customer session (csess_)');
+  }
+  if (!resolvedPublishableKey && !resolvedSessionToken) {
+    throw new Error('BillingProvider requires publishableKey or customerSessionToken');
   }
 
   const client = useMemo(
-    () => createClient(resolvedAuthToken, baseUrl, customerSessionToken),
-    [resolvedAuthToken, baseUrl, customerSessionToken],
+    () => createClient(resolvedPublishableKey, baseUrl, resolvedSessionToken),
+    [resolvedPublishableKey, baseUrl, resolvedSessionToken],
   );
-  const [centrifugoToken, setCentrifugoToken] = useState<string | null>(null);
 
   const resolvedCentrifugoUrl =
     centrifugoUrl ??
     (typeof process !== 'undefined' ? (process.env['NEXT_PUBLIC_CENTRIFUGO_URL'] ?? '') : '');
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchCentrifugoToken(): Promise<void> {
-      try {
-        const response = await client.fetch('/api/v1/auth/centrifugo-token');
-        if (!response.ok) return;
-        const data = await response.json();
-        if (!cancelled && data.token) {
-          setCentrifugoToken(data.token);
-        }
-      } catch {
-        // Best-effort: centrifugo is optional for real-time updates
-      }
-    }
-
-    void fetchCentrifugoToken();
-    return () => { cancelled = true; };
-  }, [client]);
 
   const contextValue: BillingContextValue = {
     client,
     customerId,
     workspaceId,
     centrifugoUrl: resolvedCentrifugoUrl,
-    centrifugoToken,
+    centrifugoToken: null,
   };
 
   return React.createElement(BillingContext.Provider, { value: contextValue }, children);

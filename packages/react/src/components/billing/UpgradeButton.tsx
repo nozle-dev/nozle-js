@@ -40,7 +40,7 @@ export function UpgradeButton({
   onUpgraded,
 }: UpgradeButtonProps): React.ReactElement {
   const portal = useBillingPortal();
-  const { customerId, apiKey } = portal;
+  const { customerId, customerSessionToken } = portal;
   const baseUrl = apiBaseUrl ?? portal.apiBaseUrl;
   const [isOpen, setIsOpen] = useState(false);
 
@@ -68,7 +68,7 @@ export function UpgradeButton({
         targetPlanId={targetPlanId}
         customerId={customerId}
         apiBaseUrl={baseUrl}
-        apiKey={apiKey}
+        customerSessionToken={customerSessionToken}
         onStripeClientSecret={onStripeClientSecret}
         onCheckoutStarted={() => {
           setIsOpen(false);

@@ -86,29 +86,18 @@ export function CreditHistory({
       setLoading(false);
       return;
     }
+    const currentClient = client;
 
     let cancelled = false;
 
     async function fetchHistory(): Promise<void> {
       try {
-        const clientInternal = client as unknown as {
-          apiKey?: string;
-          baseUrl?: string;
-          timeout?: number;
-        };
-        const apiKey = clientInternal.apiKey ?? "";
-        const baseUrl = clientInternal.baseUrl ?? "https://api.nozle.app";
-        const timeout = clientInternal.timeout ?? 5000;
-
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        const response = await fetch(
-          `${baseUrl}/api/v1/credits/${customerId}/transactions`,
-          {
-            headers: { Authorization: `Bearer ${apiKey}` },
-            signal: controller.signal,
-          },
+        const response = await currentClient.customerFetch(
+          `/api/v1/credits/${encodeURIComponent(customerId)}/transactions`,
+          { signal: controller.signal },
         );
         clearTimeout(timeoutId);
 

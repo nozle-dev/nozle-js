@@ -2,7 +2,8 @@ import type { BillingState, CheckoutResult } from "./types";
 
 export class BillingStore {
   readonly baseUrl: string;
-  readonly apiKey: string;
+  readonly publishableKey: string;
+  readonly customerSessionToken: string;
   readonly customerId: string;
 
   private state: BillingState = {
@@ -15,9 +16,21 @@ export class BillingStore {
 
   private listeners = new Set<() => void>();
 
-  constructor(baseUrl: string, apiKey: string, customerId: string) {
+  constructor(
+    baseUrl: string,
+    publishableKey: string,
+    customerSessionToken: string,
+    customerId: string,
+  ) {
+    if (!publishableKey.startsWith("pk_")) {
+      throw new Error("BillingStore publishableKey must start with pk_");
+    }
+    if (!customerSessionToken.startsWith("csess_")) {
+      throw new Error("BillingStore customerSessionToken must start with csess_");
+    }
     this.baseUrl = baseUrl;
-    this.apiKey = apiKey;
+    this.publishableKey = publishableKey;
+    this.customerSessionToken = customerSessionToken;
     this.customerId = customerId;
   }
 
@@ -61,8 +74,8 @@ export class BillingStore {
   async fetchUsage(feature: string): Promise<void> {
     try {
       const res = await fetch(
-        `${this.baseUrl}/api/v1/can?customer_id=${this.customerId}&feature=${feature}`,
-        { headers: { Authorization: `Bearer ${this.apiKey}` } }
+        `${this.baseUrl}/api/v1/can?customer_id=${encodeURIComponent(this.customerId)}&feature=${encodeURIComponent(feature)}`,
+        { headers: { Authorization: `Bearer ${this.customerSessionToken}` } }
       );
       if (!res.ok) return;
       const data = await res.json();
@@ -91,7 +104,7 @@ export class BillingStore {
     const res = await fetch(`${this.baseUrl}/api/v1/checkout`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${this.customerSessionToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -109,7 +122,7 @@ export class BillingStore {
 
   async fetchPlans(): Promise<Array<{ code: string; name: string; amount_cents: number; amount_currency: string; interval: string }>> {
     const res = await fetch(`${this.baseUrl}/api/v1/plans`, {
-      headers: { Authorization: `Bearer ${this.apiKey}` },
+      headers: { Authorization: `Bearer ${this.publishableKey}` },
     });
     if (!res.ok) return [];
     const data = await res.json();

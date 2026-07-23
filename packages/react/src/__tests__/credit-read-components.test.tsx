@@ -74,12 +74,6 @@ describe("customer-session credit components", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input, init) => {
         const url = String(input);
-        if (url.endsWith("/api/v1/auth/centrifugo-token")) {
-          expect(init?.headers).toEqual(
-            expect.objectContaining({ Authorization: "Bearer pk_browser" }),
-          );
-          return jsonResponse({}, 404);
-        }
         expect(init?.headers).toEqual(
           expect.objectContaining({
             Authorization: `Bearer ${customerSessionToken}`,
@@ -113,9 +107,7 @@ describe("customer-session credit components", () => {
   });
 
   it("compares low-balance thresholds without floating-point coercion", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      if (String(input).endsWith("/api/v1/auth/centrifugo-token"))
-        return jsonResponse({}, 404);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       return jsonResponse({
         ...balanceResponse(),
         available: "0.000000000001",
@@ -172,8 +164,6 @@ describe("customer-session credit components", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input) => {
         const url = String(input);
-        if (url.endsWith("/api/v1/auth/centrifugo-token"))
-          return jsonResponse({}, 404);
         if (url.includes("cursor=next-page")) return nextPage;
         return jsonResponse({
           customer_id: "acme/west",
@@ -217,8 +207,6 @@ describe("customer-session credit components", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input, init) => {
         const url = String(input);
-        if (url.endsWith("/api/v1/auth/centrifugo-token"))
-          return jsonResponse({}, 404);
         expect(init?.headers).toEqual(
           expect.objectContaining({
             Authorization: `Bearer ${customerSessionToken}`,
@@ -322,8 +310,6 @@ describe("customer-session credit components", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input) => {
         const url = String(input);
-        if (url.endsWith("/api/v1/auth/centrifugo-token"))
-          return jsonResponse({}, 404);
         if (url.includes("cursor=next-entity-page")) return nextPage;
         expect(url).toContain(
           "/api/v1/customers/acme%2Fwest/entities/user%2F42/credit-operations?",

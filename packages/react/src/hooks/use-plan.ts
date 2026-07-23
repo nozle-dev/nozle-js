@@ -22,7 +22,7 @@ export function usePlan(): UsePlanResult {
     }
 
     void client
-      .fetch(
+      .customerFetch(
         `/api/v1/subscriptions/current?customer_id=${encodeURIComponent(customerId)}`,
       )
       .then(async (response) => {

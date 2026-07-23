@@ -22,6 +22,9 @@ export class CustomerSessionsNamespace {
         "customerSessions.create expiresInSeconds must be between 60 and 3600",
       );
     }
+    if (params.scopes?.length === 0) {
+      throw new Error("customerSessions.create scopes cannot be empty");
+    }
 
     const response = await fetch(`${this.baseUrl}/api/v1/customer-sessions`, {
       method: "POST",
@@ -34,6 +37,7 @@ export class CustomerSessionsNamespace {
         ...(params.expiresInSeconds !== undefined && {
           expires_in_seconds: params.expiresInSeconds,
         }),
+        ...(params.scopes !== undefined && { scopes: params.scopes }),
       }),
       signal: AbortSignal.timeout(this.timeout),
     });

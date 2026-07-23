@@ -193,10 +193,18 @@ To render customer credit data in React, mint a short-lived token on your server
 const session = await nozle.customerSessions.create({
   customerId: "cust_123",
   expiresInSeconds: 900,
+  scopes: [
+    "credits:read",
+    "billing:read",
+    "entitlements:read",
+    "checkout:create",
+    "subscriptions:write",
+    "topups:create",
+  ],
 });
 ```
 
-The session is bound to one organization and customer, carries only `credits:read`, and cannot track usage, purchase credits, or call other secret-key routes.
+The session is bound to one organization and customer. Grant only the scopes the browser needs. It can never track server usage, create customers or Entities, read cost/margin data, or call other secret-key routes. A publishable key is catalog-only and a secret key must never be sent to a browser.
 
 ## Entities and per-user credits
 
@@ -284,7 +292,9 @@ const plans = await nozle.plans();
 // Create checkout session (returns Stripe client_secret)
 const { client_secret, session_id } = await nozle.checkout("cust_123", "pro");
 
-// Create subscription after payment
+// Trusted-backend direct provisioning only. This requires an sk_ key with
+// subscription:write and must never be called from browser code. Browser paid
+// plan changes use checkout instead.
 const { subscription_id, status } = await nozle.subscribe("cust_123", "pro");
 ```
 

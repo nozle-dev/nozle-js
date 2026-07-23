@@ -352,16 +352,25 @@ export interface EntityCreditTransferResult {
   replayed: boolean;
 }
 
+export type CustomerSessionScope =
+  | "credits:read"
+  | "billing:read"
+  | "entitlements:read"
+  | "checkout:create"
+  | "subscriptions:write"
+  | "topups:create";
+
 export interface CustomerSessionCreateParams {
   customerId: string;
   expiresInSeconds?: number;
+  scopes?: CustomerSessionScope[];
 }
 
 export interface CustomerSession {
   token: string;
   customer_id: string;
   expires_at: string;
-  scope: ["credits:read"];
+  scope: CustomerSessionScope[];
 }
 
 export interface UsageCheckParams {

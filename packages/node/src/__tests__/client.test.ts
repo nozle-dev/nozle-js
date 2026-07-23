@@ -35,11 +35,28 @@ describe("Nozle", () => {
     expect(client.eventsUrl).toBe("https://events.example.com");
   });
 
+  it("strips long trailing-slash input in linear time", () => {
+    const suffix = "/".repeat(100_000);
+    const client = new Nozle({
+      apiKey: "sk_test",
+      baseUrl: `https://api.example.com${suffix}`,
+      eventsUrl: `https://events.example.com${suffix}`,
+    });
+
+    expect(client.baseUrl).toBe("https://api.example.com");
+    expect(client.eventsUrl).toBe("https://events.example.com");
+  });
+
   describe("track", () => {
     it("sends event with explicit subscriptionId", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({}));
       const client = new Nozle({ apiKey: "sk_test" });
-      await client.track("cust_1", "api_call", { tokens: 100 }, { subscriptionId: "sub_1" });
+      await client.track(
+        "cust_1",
+        "api_call",
+        { tokens: 100 },
+        { subscriptionId: "sub_1" },
+      );
 
       expect(fetchMock).toHaveBeenCalledOnce();
       const [url, opts] = fetchMock.mock.calls[0];
@@ -54,7 +71,9 @@ describe("Nozle", () => {
     it("generates transaction_id when not provided", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({}));
       const client = new Nozle({ apiKey: "sk_test" });
-      await client.track("cust_1", "api_call", undefined, { subscriptionId: "sub_1" });
+      await client.track("cust_1", "api_call", undefined, {
+        subscriptionId: "sub_1",
+      });
 
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
       expect(body.event.transaction_id).toHaveLength(36);
@@ -62,7 +81,9 @@ describe("Nozle", () => {
 
     it("auto-resolves subscription when not provided", async () => {
       fetchMock
-        .mockResolvedValueOnce(jsonResponse({ subscriptions: [{ external_id: "sub_auto" }] }))
+        .mockResolvedValueOnce(
+          jsonResponse({ subscriptions: [{ external_id: "sub_auto" }] }),
+        )
         .mockResolvedValueOnce(jsonResponse({}));
 
       const client = new Nozle({ apiKey: "sk_test" });
@@ -75,7 +96,9 @@ describe("Nozle", () => {
 
     it("caches resolved subscription", async () => {
       fetchMock
-        .mockResolvedValueOnce(jsonResponse({ subscriptions: [{ external_id: "sub_cached" }] }))
+        .mockResolvedValueOnce(
+          jsonResponse({ subscriptions: [{ external_id: "sub_cached" }] }),
+        )
         .mockResolvedValueOnce(jsonResponse({}))
         .mockResolvedValueOnce(jsonResponse({}));
 
@@ -90,15 +113,21 @@ describe("Nozle", () => {
     it("throws when no active subscription found", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ subscriptions: [] }));
       const client = new Nozle({ apiKey: "sk_test" });
-      await expect(client.track("cust_1", "event")).rejects.toThrow("No active subscription");
+      await expect(client.track("cust_1", "event")).rejects.toThrow(
+        "No active subscription",
+      );
     });
 
     it("throws when multiple subscriptions found", async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse({ subscriptions: [{ external_id: "a" }, { external_id: "b" }] }),
+        jsonResponse({
+          subscriptions: [{ external_id: "a" }, { external_id: "b" }],
+        }),
       );
       const client = new Nozle({ apiKey: "sk_test" });
-      await expect(client.track("cust_1", "event")).rejects.toThrow("2 active subscriptions");
+      await expect(client.track("cust_1", "event")).rejects.toThrow(
+        "2 active subscriptions",
+      );
     });
   });
 
@@ -122,7 +151,9 @@ describe("Nozle", () => {
   describe("plans", () => {
     it("fetches available plans", async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse({ plans: [{ code: "pro", name: "Pro", amount_cents: 4900 }] }),
+        jsonResponse({
+          plans: [{ code: "pro", name: "Pro", amount_cents: 4900 }],
+        }),
       );
       const client = new Nozle({ apiKey: "sk_test" });
       const plans = await client.plans();
@@ -135,7 +166,11 @@ describe("Nozle", () => {
   describe("checkout", () => {
     it("creates checkout session", async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse({ client_secret: "cs_test", session_id: "sess_1", plan_code: "pro" }),
+        jsonResponse({
+          client_secret: "cs_test",
+          session_id: "sess_1",
+          plan_code: "pro",
+        }),
       );
       const client = new Nozle({ apiKey: "sk_test" });
       const result = await client.checkout("cust_1", "pro");
@@ -157,6 +192,15 @@ describe("Nozle", () => {
 
       expect(result.subscription_id).toBe("sub_1");
       expect(result.status).toBe("active");
+    });
+
+    it("rejects direct browser-key subscription attempts before the network", async () => {
+      const client = new Nozle({ apiKey: "pk_browser" });
+
+      await expect(client.subscribe("cust_1", "pro")).rejects.toThrow(
+        "subscribe requires a secret key",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
@@ -243,12 +287,21 @@ describe("Nozle", () => {
       });
       fetchMock
         .mockResolvedValueOnce(
-          jsonResponse({ credit_systems: [coreSystem("system-1", "ai")], meta: { next_page: 2 } }),
+          jsonResponse({
+            credit_systems: [coreSystem("system-1", "ai")],
+            meta: { next_page: 2 },
+          }),
         )
         .mockResolvedValueOnce(
-          jsonResponse({ credit_systems: [coreSystem("system-2", "api")], meta: { next_page: null } }),
+          jsonResponse({
+            credit_systems: [coreSystem("system-2", "api")],
+            meta: { next_page: null },
+          }),
         );
-      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://core.example" });
+      const client = new Nozle({
+        apiKey: "sk_test",
+        eventsUrl: "https://core.example",
+      });
 
       const systems = await client.creditSystems.list();
 
@@ -270,7 +323,10 @@ describe("Nozle", () => {
         baseUrl: "https://engine.example",
       });
 
-      const balance = await client.credits.getBalance("acme/west", "ai credits");
+      const balance = await client.credits.getBalance(
+        "acme/west",
+        "ai credits",
+      );
 
       expect(balance.available).toBe("123456789012345678.123456789012");
       expect(balance.sources[0].remaining).toBe("375.000000000001");
@@ -285,17 +341,24 @@ describe("Nozle", () => {
           jsonResponse({
             customer_id: "acme/west",
             as_of: "2026-07-20T12:00:00.750Z",
-            balances: [{ credit_system: "ai_credits", available: "500.000000000001" }],
+            balances: [
+              { credit_system: "ai_credits", available: "500.000000000001" },
+            ],
           }),
         )
         .mockResolvedValueOnce(
           jsonResponse({
             customer_id: "acme/west",
-            operations: [{ id: "operation-1", credit_amount: "2.000000000001" }],
+            operations: [
+              { id: "operation-1", credit_amount: "2.000000000001" },
+            ],
             next_cursor: "next/page",
           }),
         );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({
+        apiKey: "sk_test",
+        baseUrl: "https://engine.example",
+      });
 
       const balances = await client.credits.listBalances("acme/west");
       const operations = await client.credits.listOperations("acme/west", {
@@ -322,7 +385,10 @@ describe("Nozle", () => {
           next_cursor: null,
         }),
       );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({
+        apiKey: "sk_test",
+        baseUrl: "https://engine.example",
+      });
 
       const operations = await client.credits.listOperations("acme");
 
@@ -331,9 +397,9 @@ describe("Nozle", () => {
 
     it("rejects invalid operation limits without a request", async () => {
       const client = new Nozle({ apiKey: "sk_test" });
-      await expect(client.credits.listOperations("acme", { limit: 101 })).rejects.toThrow(
-        "between 1 and 100",
-      );
+      await expect(
+        client.credits.listOperations("acme", { limit: 101 }),
+      ).rejects.toThrow("between 1 and 100");
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });
@@ -346,15 +412,19 @@ describe("Nozle", () => {
             token: "csess_token",
             customer_id: "acme/west",
             expires_at: "2026-07-20T12:15:00Z",
-            scope: ["credits:read"],
+            scope: ["credits:read", "billing:read", "checkout:create"],
           },
         }),
       );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({
+        apiKey: "sk_test",
+        baseUrl: "https://engine.example",
+      });
 
       const session = await client.customerSessions.create({
         customerId: "acme/west",
         expiresInSeconds: 900,
+        scopes: ["credits:read", "billing:read", "checkout:create"],
       });
 
       expect(session.token).toBe("csess_token");
@@ -362,7 +432,11 @@ describe("Nozle", () => {
         "https://engine.example/api/v1/customer-sessions",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ customer_id: "acme/west", expires_in_seconds: 900 }),
+          body: JSON.stringify({
+            customer_id: "acme/west",
+            expires_in_seconds: 900,
+            scopes: ["credits:read", "billing:read", "checkout:create"],
+          }),
         }),
       );
     });
@@ -372,6 +446,14 @@ describe("Nozle", () => {
       await expect(
         client.customerSessions.create({ customerId: "acme" }),
       ).rejects.toThrow("requires a secret key");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects an explicitly empty scope set before making a request", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      await expect(
+        client.customerSessions.create({ customerId: "acme", scopes: [] }),
+      ).rejects.toThrow("scopes cannot be empty");
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });
@@ -479,13 +561,15 @@ describe("Nozle", () => {
         billableMetricCode: "agent_execution",
       };
 
-      await expect(client.usage.track(params, { idempotencyKey: "" })).rejects.toThrow("non-empty idempotencyKey");
-      await expect(client.usage.track(params, { idempotencyKey: "x".repeat(256) })).rejects.toThrow(
-        "must not exceed 255 bytes",
-      );
-      await expect(client.usage.track(params, { idempotencyKey: "é".repeat(128) })).rejects.toThrow(
-        "must not exceed 255 bytes",
-      );
+      await expect(
+        client.usage.track(params, { idempotencyKey: "" }),
+      ).rejects.toThrow("non-empty idempotencyKey");
+      await expect(
+        client.usage.track(params, { idempotencyKey: "x".repeat(256) }),
+      ).rejects.toThrow("must not exceed 255 bytes");
+      await expect(
+        client.usage.track(params, { idempotencyKey: "é".repeat(128) }),
+      ).rejects.toThrow("must not exceed 255 bytes");
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });
@@ -524,12 +608,24 @@ describe("Nozle", () => {
     it("lists and upserts Entities with escaped identifiers and exact idempotency", async () => {
       fetchMock
         .mockResolvedValueOnce(
-          jsonResponse({ customer_id: "acme/west", entities: [entity], next_cursor: null }),
+          jsonResponse({
+            customer_id: "acme/west",
+            entities: [entity],
+            next_cursor: null,
+          }),
         )
-        .mockResolvedValueOnce(jsonResponse({ action: "updated", entity, replayed: false }));
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+        .mockResolvedValueOnce(
+          jsonResponse({ action: "updated", entity, replayed: false }),
+        );
+      const client = new Nozle({
+        apiKey: "sk_test",
+        baseUrl: "https://engine.example",
+      });
 
-      const page = await client.entities.list("acme/west", { status: "active", limit: 25 });
+      const page = await client.entities.list("acme/west", {
+        status: "active",
+        limit: 25,
+      });
       const result = await client.entities.upsert(
         "acme/west",
         "user/42",
@@ -546,7 +642,9 @@ describe("Nozle", () => {
       expect(fetchMock.mock.calls[1][0]).toBe(
         "https://engine.example/api/v1/customers/acme%2Fwest/entities/user%2F42",
       );
-      expect(fetchMock.mock.calls[1][1].headers["Idempotency-Key"]).toBe("entity-user-42-v2");
+      expect(fetchMock.mock.calls[1][1].headers["Idempotency-Key"]).toBe(
+        "entity-user-42-v2",
+      );
       expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
         name: "Asha",
         status: "active",
@@ -564,7 +662,10 @@ describe("Nozle", () => {
             replayed: false,
           }),
         );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({
+        apiKey: "sk_test",
+        baseUrl: "https://engine.example",
+      });
 
       await client.entities.suspend("acme/west", "user/42", {
         idempotencyKey: "suspend-user-42",
@@ -579,31 +680,43 @@ describe("Nozle", () => {
 
     it("bulk upserts Entities and rejects publishable-key mutations locally", async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse({ customer_id: "acme", entities: [], counts: {}, replayed: false }),
+        jsonResponse({
+          customer_id: "acme",
+          entities: [],
+          counts: {},
+          replayed: false,
+        }),
       );
-      const secretClient = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const secretClient = new Nozle({
+        apiKey: "sk_test",
+        baseUrl: "https://engine.example",
+      });
       await secretClient.entities.bulkUpsert(
         "acme",
         [{ externalId: "user-1", status: "active" }],
         { idempotencyKey: "import-1" },
       );
       expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-        entities: [{ external_id: "user-1", name: null, status: "active", metadata: {} }],
+        entities: [
+          { external_id: "user-1", name: null, status: "active", metadata: {} },
+        ],
       });
 
       fetchMock.mockReset();
       const browserClient = new Nozle({ apiKey: "pk_browser" });
       await expect(
-        browserClient.entities.suspend("acme", "user-1", { idempotencyKey: "suspend-1" }),
+        browserClient.entities.suspend("acme", "user-1", {
+          idempotencyKey: "suspend-1",
+        }),
       ).rejects.toThrow("requires a secret key");
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it("rejects invalid limits, duplicate bulk IDs, and multibyte idempotency keys", async () => {
       const client = new Nozle({ apiKey: "sk_test" });
-      await expect(client.entities.list("acme", { limit: 101 })).rejects.toThrow(
-        "between 1 and 100",
-      );
+      await expect(
+        client.entities.list("acme", { limit: 101 }),
+      ).rejects.toThrow("between 1 and 100");
       await expect(
         client.entities.bulkUpsert(
           "acme",
@@ -650,16 +763,23 @@ describe("Nozle", () => {
             next_cursor: null,
           }),
         );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({
+        apiKey: "sk_test",
+        baseUrl: "https://engine.example",
+      });
 
       const balance = await client.credits.getEntityBalance(
         "acme/west",
         "user/42",
         "ai credits",
       );
-      const operations = await client.credits.listEntityOperations("acme/west", "user/42", {
-        limit: 25,
-      });
+      const operations = await client.credits.listEntityOperations(
+        "acme/west",
+        "user/42",
+        {
+          limit: 25,
+        },
+      );
 
       expect(balance.effective_available).toBe("730.000000000001");
       expect(operations.next_cursor).toBeNull();
@@ -674,12 +794,15 @@ describe("Nozle", () => {
     it("allocates and deallocates exact decimal amounts with caller idempotency", async () => {
       fetchMock
         .mockResolvedValueOnce(
-          jsonResponse({
-            transferred: true,
-            direction: "allocation",
-            amount: "100.000000000001",
-            replayed: false,
-          }, 201),
+          jsonResponse(
+            {
+              transferred: true,
+              direction: "allocation",
+              amount: "100.000000000001",
+              replayed: false,
+            },
+            201,
+          ),
         )
         .mockResolvedValueOnce(
           jsonResponse({
@@ -689,7 +812,10 @@ describe("Nozle", () => {
             replayed: false,
           }),
         );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({
+        apiKey: "sk_test",
+        baseUrl: "https://engine.example",
+      });
 
       await client.credits.allocate(
         "acme",
@@ -704,12 +830,16 @@ describe("Nozle", () => {
         { idempotencyKey: "deallocate-1" },
       );
 
-      expect(fetchMock.mock.calls[0][1].headers["Idempotency-Key"]).toBe("allocate-1");
+      expect(fetchMock.mock.calls[0][1].headers["Idempotency-Key"]).toBe(
+        "allocate-1",
+      );
       expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
         credit_system: "ai_credits",
         amount: "100.000000000001",
       });
-      expect(String(fetchMock.mock.calls[1][0])).toContain("credit-deallocations");
+      expect(String(fetchMock.mock.calls[1][0])).toContain(
+        "credit-deallocations",
+      );
     });
 
     it("rejects lossy amounts and publishable-key transfers without a request", async () => {
