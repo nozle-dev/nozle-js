@@ -102,6 +102,7 @@ export const BillingContext = createContext<BillingContextValue | null>(null);
 
 export interface BillingProviderProps {
   customerSessionToken?: string;
+  /** @deprecated Use customerSessionToken. This alias accepts only csess_ tokens. */
   apiKey?: string;
   publishableKey?: string;
   customerId?: string;
@@ -121,10 +122,11 @@ export function BillingProvider({
   centrifugoUrl,
   children,
 }: BillingProviderProps): React.ReactElement {
-  const legacySessionToken = apiKey?.startsWith('csess_') ? apiKey : undefined;
-  const legacyPublishableKey = apiKey && !legacySessionToken ? apiKey : undefined;
-  const resolvedSessionToken = customerSessionToken ?? legacySessionToken;
-  const resolvedPublishableKey = publishableKey ?? legacyPublishableKey;
+  if (apiKey && !apiKey.startsWith('csess_')) {
+    throw new Error('BillingProvider apiKey alias accepts only customer sessions (csess_)');
+  }
+  const resolvedSessionToken = customerSessionToken ?? apiKey;
+  const resolvedPublishableKey = publishableKey;
   if (resolvedPublishableKey && !resolvedPublishableKey.startsWith('pk_')) {
     throw new Error('BillingProvider publishableKey must be a publishable key (pk_)');
   }

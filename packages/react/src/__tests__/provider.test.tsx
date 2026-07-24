@@ -115,14 +115,34 @@ describe("BillingProvider", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("rejects browser secret keys", () => {
-    expect(() =>
-      renderHook(() => useBillingContext(), {
-        wrapper: ({ children }: { children: React.ReactNode }) => (
-          <BillingProvider apiKey="sk_server_only">{children}</BillingProvider>
-        ),
+  it.each(["pk_browser", "sk_server_only"])(
+    "rejects %s through the deprecated apiKey alias",
+    (credential) => {
+      expect(() =>
+        renderHook(() => useBillingContext(), {
+          wrapper: ({ children }: { children: React.ReactNode }) => (
+            <BillingProvider apiKey={credential}>{children}</BillingProvider>
+          ),
+        }),
+      ).toThrow("apiKey alias accepts only customer sessions");
+    },
+  );
+
+  it("keeps the deprecated apiKey alias customer-session-only", async () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <BillingProvider apiKey="csess_customer">{children}</BillingProvider>
+    );
+    const { result } = renderHook(() => useBillingContext(), { wrapper });
+
+    await result.current.client?.customerFetch("/api/v1/billing/status");
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      "https://api.nozle.app/api/v1/billing/status",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer csess_customer",
+        }),
       }),
-    ).toThrow("publishableKey must be a publishable key");
+    );
   });
 
   it("throws error when useBillingContext used outside provider", () => {
