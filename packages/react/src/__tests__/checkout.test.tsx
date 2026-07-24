@@ -1,6 +1,10 @@
 import React from "react";
 import {describe, expect, it, vi} from "vitest";
-import {render} from "@testing-library/react";
+import {fireEvent, render, waitFor} from "@testing-library/react";
+
+const stripe = vi.hoisted(() => ({
+  confirmPayment: vi.fn(),
+}));
 
 vi.mock("@stripe/stripe-js", () => ({
   loadStripe: vi.fn(() => Promise.resolve(null)),
@@ -13,8 +17,8 @@ vi.mock("@stripe/react-stripe-js", () => ({
   EmbeddedCheckout: () => <div data-testid="embedded-checkout" />,
   Elements: ({children}: {children: React.ReactNode}) => <div data-testid="elements-provider">{children}</div>,
   PaymentElement: () => <div data-testid="payment-element" />,
-  useStripe: () => null,
-  useElements: () => null,
+  useStripe: () => ({confirmPayment: stripe.confirmPayment}),
+  useElements: () => ({}),
 }));
 
 import {Checkout} from "../components/billing/Checkout";
@@ -40,5 +44,28 @@ describe("Checkout secret routing", () => {
     expect(view.getByTestId("elements-provider")).toBeTruthy();
     expect(view.getByTestId("payment-element")).toBeTruthy();
     expect(view.queryByTestId("embedded-checkout")).toBeNull();
+  });
+
+  it("uses the caller return URL when confirming a PaymentElement payment", async () => {
+    stripe.confirmPayment.mockResolvedValueOnce({
+      paymentIntent: {id: "pi_test", status: "succeeded"},
+    });
+    const view = render(
+      <Checkout
+        clientSecret="pi_test_secret_123"
+        publishableKey="pk_test"
+        returnUrl="https://merchant.example/billing/complete"
+      />,
+    );
+
+    fireEvent.click(view.getByRole("button", {name: "Pay now"}));
+
+    await waitFor(() =>
+      expect(stripe.confirmPayment).toHaveBeenCalledWith({
+        elements: {},
+        confirmParams: {return_url: "https://merchant.example/billing/complete"},
+        redirect: "if_required",
+      }),
+    );
   });
 });
