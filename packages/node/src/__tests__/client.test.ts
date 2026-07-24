@@ -138,12 +138,26 @@ describe("Nozle", () => {
         jsonResponse({ client_secret: "cs_test", session_id: "sess_1", plan_code: "pro" }),
       );
       const client = new Nozle({ apiKey: "sk_test" });
-      const result = await client.checkout("cust_1", "pro");
+      const result = await client.checkout(
+        "cust_1",
+        "pro",
+        "https://merchant.example/billing/complete",
+      );
 
-      expect(result.client_secret).toBe("cs_test");
+      expect(result).toMatchObject({ client_secret: "cs_test" });
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
       expect(body.plan_code).toBe("pro");
       expect(body.customer_id).toBe("cust_1");
+      expect(body.return_url).toBe("https://merchant.example/billing/complete");
+    });
+
+    it("rejects publishable-key checkout before network I/O", async () => {
+      const client = new Nozle({ apiKey: "pk_browser" });
+
+      await expect(client.checkout("cust_1", "pro")).rejects.toThrow(
+        "checkout requires a secret key",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
@@ -159,13 +173,11 @@ describe("Nozle", () => {
       expect(result.status).toBe("active");
     });
 
-    it("rejects publishable and customer-session subscription attempts before network I/O", async () => {
-      for (const apiKey of ["pk_browser", "csess_browser"]) {
-        const client = new Nozle({ apiKey });
-        await expect(client.subscribe("cust_1", "pro")).rejects.toThrow(
-          "subscribe requires a secret key",
-        );
-      }
+    it("rejects publishable-key subscription attempts before network I/O", async () => {
+      const client = new Nozle({ apiKey: "pk_browser" });
+      await expect(client.subscribe("cust_1", "pro")).rejects.toThrow(
+        "subscribe requires a secret key",
+      );
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });
@@ -344,49 +356,6 @@ describe("Nozle", () => {
       await expect(client.credits.listOperations("acme", { limit: 101 })).rejects.toThrow(
         "between 1 and 100",
       );
-      expect(fetchMock).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("customer sessions", () => {
-    it("mints a short-lived customer-bound read session with a secret key", async () => {
-      fetchMock.mockResolvedValueOnce(
-        jsonResponse({
-          customer_session: {
-            token: "csess_token",
-            customer_id: "acme/west",
-            expires_at: "2026-07-20T12:15:00Z",
-            scope: ["billing:read", "checkout:create"],
-          },
-        }),
-      );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
-
-      const session = await client.customerSessions.create({
-        customerId: "acme/west",
-        expiresInSeconds: 900,
-        scopes: ["billing:read", "checkout:create"],
-      });
-
-      expect(session.token).toBe("csess_token");
-      expect(fetchMock).toHaveBeenCalledWith(
-        "https://engine.example/api/v1/customer-sessions",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({
-            customer_id: "acme/west",
-            expires_in_seconds: 900,
-            scopes: ["billing:read", "checkout:create"],
-          }),
-        }),
-      );
-    });
-
-    it("never mints customer sessions with a publishable key", async () => {
-      const client = new Nozle({ apiKey: "pk_browser" });
-      await expect(
-        client.customerSessions.create({ customerId: "acme" }),
-      ).rejects.toThrow("requires a secret key");
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });

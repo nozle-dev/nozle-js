@@ -1,7 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, type CSSProperties } from 'react';
-import { useNozleClient } from '../../provider.js';
+import {
+  useOptionalBillingContext,
+  type CheckoutResult,
+} from '../../provider.js';
+import { handleCheckoutResult } from '../billing/CheckoutButton.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -15,11 +19,14 @@ export interface PricingPlan {
 }
 
 export interface PricingTableProps {
-  customerId?: string;
   currentPlanCode?: string;
   plans?: PricingPlan[];
   features?: string[][];
   onSelect?: (plan: PricingPlan) => void;
+  returnUrl?: string;
+  onStripeClientSecret?: (clientSecret: string) => void;
+  onCheckoutResult?: (result: CheckoutResult) => void;
+  onCheckoutError?: (error: Error) => void;
   showToggle?: boolean;
   highlightPlan?: string;
   className?: string;
@@ -390,24 +397,34 @@ function Skeleton(): React.ReactElement {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function PricingTable({
-  customerId,
   currentPlanCode,
   plans: propPlans,
   features,
   onSelect,
+  returnUrl,
+  onStripeClientSecret,
+  onCheckoutResult,
+  onCheckoutError,
   showToggle = true,
   highlightPlan,
   className,
   enterpriseEmail,
 }: PricingTableProps): React.ReactElement {
-  const client = useNozleClient();
+  const billing = useOptionalBillingContext();
+  const client = billing?.client;
   const [plans, setPlans] = useState<PricingPlan[]>(propPlans ?? []);
   const [currentPlan, setCurrentPlan] = useState<string | null>(currentPlanCode ?? null);
   const [isAnnual, setIsAnnual] = useState(false);
   const [loading, setLoading] = useState(!propPlans);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     if (propPlans) { setPlans(propPlans); return; }
+    if (!client) {
+      setLoading(false);
+      setCheckoutError('BillingProvider with a publishableKey is required to load plans');
+      return;
+    }
     let cancelled = false;
     client.catalogFetch('/api/v1/plans').then(async (res) => {
       if (!cancelled && res.ok) {
@@ -419,21 +436,31 @@ export function PricingTable({
   }, [client, propPlans]);
 
   useEffect(() => {
-    if (currentPlanCode !== undefined) {
-      setCurrentPlan(currentPlanCode);
+    if (currentPlanCode !== undefined) setCurrentPlan(currentPlanCode);
+  }, [currentPlanCode]);
+
+  async function selectPlan(plan: PricingPlan): Promise<void> {
+    setCheckoutError(null);
+    if (onSelect) {
+      onSelect(plan);
       return;
     }
-    if (!customerId) return;
-    let cancelled = false;
-    client.customerFetch(`/api/v1/billing/status?customer_id=${encodeURIComponent(customerId)}`)
-      .then(async (res) => {
-        if (!cancelled && res.ok) {
-          const data = await res.json();
-          setCurrentPlan(data.plan ?? data.planName ?? null);
-        }
-      }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [client, customerId, currentPlanCode]);
+    try {
+      if (!billing?.createCheckout) {
+        throw new Error('BillingProvider createCheckout callback is required for checkout');
+      }
+      const result = await billing.createCheckout({
+        planCode: plan.code,
+        returnUrl: returnUrl ?? window.location.href,
+      });
+      onCheckoutResult?.(result);
+      await handleCheckoutResult(result, { onStripeClientSecret });
+    } catch (cause) {
+      const error = cause instanceof Error ? cause : new Error('Checkout failed');
+      setCheckoutError(error.message);
+      onCheckoutError?.(error);
+    }
+  }
 
   const hasAnnual = plans.some(p => p.interval === 'yearly');
   const filtered = showToggle && hasAnnual
@@ -452,6 +479,8 @@ export function PricingTable({
         <Toggle isAnnual={isAnnual} onChange={setIsAnnual} />
       )}
 
+      {checkoutError && <p role="alert">{checkoutError}</p>}
+
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -466,7 +495,7 @@ export function PricingTable({
             isHighlighted={highlightPlan === plan.code}
             isEnt={isEnterprise(plan)}
             enterpriseEmail={enterpriseEmail}
-            onSelect={onSelect ? () => onSelect(plan) : undefined}
+            onSelect={() => void selectPlan(plan)}
           />
         ))}
       </div>

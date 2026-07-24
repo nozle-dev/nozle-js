@@ -1,7 +1,6 @@
 import { can as _can } from "./can";
 import { CreditsNamespace } from "./credits";
 import { CreditSystemsNamespace } from "./credit-systems";
-import { CustomerSessionsNamespace } from "./customer-sessions";
 import { EntitiesNamespace } from "./entities";
 import { MarginClient } from "./margin";
 import { track as _track } from "./track";
@@ -26,7 +25,6 @@ export class Nozle {
   readonly eventsUrl: string;
   readonly margin: MarginClient;
   readonly customers: CustomersNamespace;
-  readonly customerSessions: CustomerSessionsNamespace;
   readonly creditSystems: CreditSystemsNamespace;
   readonly entities: EntitiesNamespace;
   readonly credits: CreditsNamespace;
@@ -42,7 +40,6 @@ export class Nozle {
     this.timeout = config.timeout ?? 10_000;
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.timeout);
     this.customers = new CustomersNamespace(this.baseUrl, this.apiKey, this.timeout);
-    this.customerSessions = new CustomerSessionsNamespace(this.baseUrl, this.apiKey, this.timeout);
     this.creditSystems = new CreditSystemsNamespace(this.eventsUrl, this.apiKey, this.timeout);
     this.entities = new EntitiesNamespace(this.baseUrl, this.apiKey, this.timeout);
     this.credits = new CreditsNamespace(this.baseUrl, this.apiKey, this.timeout);
@@ -76,7 +73,10 @@ export class Nozle {
     return data.plans ?? [];
   }
 
-  async checkout(customerId: string, planCode: string, successUrl?: string): Promise<CheckoutResult> {
+  async checkout(customerId: string, planCode: string, returnUrl?: string): Promise<CheckoutResult> {
+    if (!this.apiKey.startsWith("sk_")) {
+      throw new Error("checkout requires a secret key");
+    }
     const res = await fetch(`${this.baseUrl}/api/v1/checkout`, {
       method: "POST",
       headers: {
@@ -86,7 +86,7 @@ export class Nozle {
       body: JSON.stringify({
         plan_code: planCode,
         customer_id: customerId,
-        ...(successUrl && { success_url: successUrl }),
+        ...(returnUrl && { return_url: returnUrl }),
       }),
       signal: AbortSignal.timeout(this.timeout),
     });

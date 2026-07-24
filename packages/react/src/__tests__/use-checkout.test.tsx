@@ -1,49 +1,40 @@
-import React, { type ReactNode } from "react";
-import { act, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import React from 'react';
+import { act, renderHook } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { BillingProvider } from '../provider.js';
+import { useCheckout } from '../hooks/use-checkout.js';
 
-import { navigateToCheckout } from "../components/billing/checkout-navigation.js";
-import { useCheckout } from "../hooks/use-checkout";
-import { BillingProvider } from "../provider";
-
-vi.mock("../components/billing/checkout-navigation.js", () => ({
-  navigateToCheckout: vi.fn(),
-}));
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-describe("useCheckout", () => {
-  it("uses same-page navigation for hosted Stripe checkout URLs", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        type: "stripe",
-        url: "https://checkout.example.test/session",
-      }),
-    } as Response);
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <BillingProvider
-        customerId="customer-1"
-        customerSessionToken="csess_customer-1"
-        baseUrl="https://api.example.test"
-      >
+describe('useCheckout', () => {
+  it('passes only planCode and returnUrl to the merchant callback', async () => {
+    const createCheckout = vi.fn().mockResolvedValue({ type: 'stripe', client_secret: 'cs_test' });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <BillingProvider publishableKey="pk_browser" createCheckout={createCheckout}>
         {children}
       </BillingProvider>
     );
     const { result } = renderHook(() => useCheckout(), { wrapper });
 
+    let secret: string | null = null;
     await act(async () => {
-      await expect(result.current.fetchClientSecret("pro")).resolves.toBeNull();
+      secret = await result.current.fetchClientSecret('pro', 'https://merchant.example/complete');
     });
 
-    expect(navigateToCheckout).toHaveBeenCalledWith(
-      "https://checkout.example.test/session",
-    );
-    expect(result.current.checkout).toEqual({
-      type: "stripe",
-      url: "https://checkout.example.test/session",
+    expect(secret).toBe('cs_test');
+    expect(createCheckout).toHaveBeenCalledWith({
+      planCode: 'pro',
+      returnUrl: 'https://merchant.example/complete',
     });
+    expect(createCheckout.mock.calls[0][0]).not.toHaveProperty('customerId');
+  });
+
+  it('returns a clear error when the callback is missing', async () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <BillingProvider publishableKey="pk_browser">{children}</BillingProvider>
+    );
+    const { result } = renderHook(() => useCheckout(), { wrapper });
+
+    await expect(
+      act(async () => result.current.fetchClientSecret('pro')),
+    ).rejects.toThrow('createCheckout callback is required');
   });
 });

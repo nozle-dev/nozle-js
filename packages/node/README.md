@@ -175,7 +175,7 @@ const customer = await nozle.customers.upsert({
 });
 ```
 
-## Product credits and customer sessions
+## Product credits
 
 Read exact-decimal balances and immutable operation history from the Phase 1 credit engine:
 
@@ -187,24 +187,7 @@ const page = await nozle.credits.listOperations("cust_123", {
 });
 ```
 
-To render customer credit data in React, mint a short-lived token on your server and send only that token to the browser:
-
-```ts
-const session = await nozle.customerSessions.create({
-  customerId: "cust_123",
-  expiresInSeconds: 900,
-  scopes: [
-    "billing:read",
-    "entitlements:read",
-    "credits:read",
-    "checkout:create",
-    "subscriptions:write",
-    "topups:create",
-  ],
-});
-```
-
-The session is bound to one organization and exactly one customer. Requested scopes must be a subset of the secret key's API permissions. It cannot track usage, call `/subscribe`, or read or mutate another customer.
+Keep these reads on the merchant backend. Return only the fields your authenticated browser route needs, and derive the customer from the logged-in user or team instead of trusting a browser customer ID.
 
 ## Entities and per-user credits
 
@@ -289,8 +272,12 @@ const q1 = await nozle.margin.summary({
 // List available plans
 const plans = await nozle.plans();
 
-// Create checkout session (returns Stripe client_secret)
-const { client_secret, session_id } = await nozle.checkout("cust_123", "pro");
+// Create checkout from an authenticated merchant route.
+const checkout = await nozle.checkout(
+  "cust_123",
+  "pro",
+  "https://merchant.example/billing/complete",
+);
 
 // Create subscription after payment
 const { subscription_id, status } = await nozle.subscribe("cust_123", "pro");

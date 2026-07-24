@@ -1,61 +1,50 @@
-/**
- * UpgradeButton — Opens UpgradeModal on click.
- * UI-02: Triggers plan upgrade flow with proration preview.
- * Uses CSS variable theming with --nozle-* namespace.
- */
+'use client';
 
-"use client";
-import React from "react";
-
-import { useState } from "react";
-import { UpgradeModal } from "./UpgradeModal.js";
-import { useBillingPortal } from "./BillingPortalProvider.js";
+import React, { useState } from 'react';
+import { UpgradeModal, type ProrationPreview } from './UpgradeModal.js';
 
 export interface UpgradeButtonProps {
-  targetPlanId: string;
+  planCode: string;
+  returnUrl?: string;
+  preview?: ProrationPreview;
   label?: string;
-  apiBaseUrl?: string;
   className?: string;
   style?: React.CSSProperties;
   onStripeClientSecret?: (clientSecret: string) => void;
   onCheckoutStarted?: () => void;
   onDowngradeScheduled?: () => void;
-  /** Called when prepaid credits complete the upgrade without external payment. */
   onUpgraded?: () => void;
+  onError?: (error: Error) => void;
 }
 
-/**
- * UpgradeButton opens an UpgradeModal with live proration preview.
- * Must be used inside a BillingPortalProvider.
- */
 export function UpgradeButton({
-  targetPlanId,
-  label = "Upgrade",
-  apiBaseUrl,
+  planCode,
+  returnUrl,
+  preview,
+  label = 'Upgrade',
   className,
   style,
   onStripeClientSecret,
   onCheckoutStarted,
   onDowngradeScheduled,
   onUpgraded,
+  onError,
 }: UpgradeButtonProps): React.ReactElement {
-  const portal = useBillingPortal();
-  const { customerId, customerSessionToken } = portal;
-  const baseUrl = apiBaseUrl ?? portal.apiBaseUrl;
   const [isOpen, setIsOpen] = useState(false);
 
   return (
     <>
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
         className={className}
         style={{
-          padding: "0.75rem 1.5rem",
-          borderRadius: "var(--nozle-radius, 0.5rem)",
-          border: "none",
-          background: "var(--nozle-primary, var(--primary))",
-          color: "var(--nozle-primary-foreground, var(--primary-foreground))",
-          cursor: "pointer",
+          padding: '0.75rem 1.5rem',
+          borderRadius: 'var(--nozle-radius, 0.5rem)',
+          border: 'none',
+          background: 'var(--nozle-primary, var(--primary))',
+          color: 'var(--nozle-primary-foreground, var(--primary-foreground))',
+          cursor: 'pointer',
           fontWeight: 500,
           ...style,
         }}
@@ -65,10 +54,9 @@ export function UpgradeButton({
 
       <UpgradeModal
         isOpen={isOpen}
-        targetPlanId={targetPlanId}
-        customerId={customerId}
-        apiBaseUrl={baseUrl}
-        customerSessionToken={customerSessionToken}
+        planCode={planCode}
+        returnUrl={returnUrl}
+        preview={preview}
         onStripeClientSecret={onStripeClientSecret}
         onCheckoutStarted={() => {
           setIsOpen(false);
@@ -82,6 +70,7 @@ export function UpgradeButton({
           setIsOpen(false);
           onDowngradeScheduled?.();
         }}
+        onError={onError}
         onCancel={() => setIsOpen(false)}
       />
     </>

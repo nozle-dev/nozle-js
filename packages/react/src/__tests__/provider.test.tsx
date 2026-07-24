@@ -1,153 +1,54 @@
-import { beforeEach, describe, it, expect, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
-import { BillingProvider, useBillingContext } from "../provider";
+import React from 'react';
+import { renderHook } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  BillingProvider,
+  useBillingContext,
+  useNozleClient,
+  type CreateCheckout,
+} from '../provider.js';
 
-// Mock centrifuge module to avoid actual WebSocket connections
-vi.mock("centrifuge", () => {
-  const mockSub = {
-    on: vi.fn(),
-    subscribe: vi.fn(),
-    unsubscribe: vi.fn(),
-  };
-  const mockCentrifuge = {
-    on: vi.fn(),
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-    newSubscription: vi.fn(() => mockSub),
-  };
-  return {
-    Centrifuge: vi.fn(() => mockCentrifuge),
-  };
-});
+describe('BillingProvider', () => {
+  it('uses the publishable key only for catalog requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <BillingProvider publishableKey="pk_browser" baseUrl="https://api.example.test">
+        {children}
+      </BillingProvider>
+    );
 
-// Mock fetch for store.fetchInitialState
-const mockFetch = vi.fn().mockResolvedValue({
-  ok: true,
-  json: () => Promise.resolve({ plan_slug: "free", features: {}, limits: {}, credits: 0, subscription_status: "active", balance: 0, currency: "USD" }),
-});
-global.fetch = mockFetch;
+    const { result } = renderHook(() => useNozleClient(), { wrapper });
+    await result.current.catalogFetch('/api/v1/plans');
 
-describe("BillingProvider", () => {
-  beforeEach(() => {
-    mockFetch.mockClear();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.test/api/v1/plans',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer pk_browser' }),
+      }),
+    );
   });
 
-  it("renders children", () => {
+  it('rejects secret credentials in browser configuration', () => {
+    expect(() =>
+      renderHook(() => useBillingContext(), {
+        wrapper: ({ children }) => (
+          <BillingProvider publishableKey="sk_server">{children}</BillingProvider>
+        ),
+      }),
+    ).toThrow('publishableKey must be a publishable key');
+  });
+
+  it('exposes the merchant checkout callback without adding customer identity', () => {
+    const createCheckout: CreateCheckout = vi.fn();
     const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <BillingProvider
-        publishableKey="pk_browser"
-        customerId="cust_123"
-        baseUrl="http://localhost:8080"
-      >
+      <BillingProvider publishableKey="pk_browser" createCheckout={createCheckout}>
         {children}
       </BillingProvider>
     );
 
     const { result } = renderHook(() => useBillingContext(), { wrapper });
-
-    expect(result.current.client).toBeDefined();
-    expect(result.current.customerId).toBe("cust_123");
-  });
-
-  it("keeps publishable and customer-session credentials separate", async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <BillingProvider
-        customerSessionToken="csess_customer"
-        publishableKey="pk_browser"
-        customerId="cust_123"
-        baseUrl="http://localhost:8080"
-      >
-        {children}
-      </BillingProvider>
-    );
-
-    const { result } = renderHook(() => useBillingContext(), { wrapper });
-
-    expect(result.current.client?.authToken).toBe("pk_browser");
-    expect(result.current.client?.apiKey).toBe("csess_customer");
-    expect(result.current.client?.customerSessionToken).toBe("csess_customer");
-
-    await result.current.client?.catalogFetch("/api/v1/plans");
-    expect(mockFetch).toHaveBeenLastCalledWith(
-      "http://localhost:8080/api/v1/plans",
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: "Bearer pk_browser" }),
-      }),
-    );
-    await result.current.client?.creditFetch(
-      "/api/v1/customers/cust_123/credit-systems",
-    );
-    expect(mockFetch).toHaveBeenLastCalledWith(
-      "http://localhost:8080/api/v1/customers/cust_123/credit-systems",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bearer csess_customer",
-        }),
-      }),
-    );
-  });
-
-  it("supports session-only providers for customer billing but not catalog", async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <BillingProvider customerSessionToken="csess_customer">
-        {children}
-      </BillingProvider>
-    );
-
-    const { result } = renderHook(() => useBillingContext(), { wrapper });
-    expect(result.current.client?.authToken).toBe("csess_customer");
-    expect(result.current.client?.customerSessionToken).toBe("csess_customer");
-    await expect(result.current.client?.catalogFetch("/api/v1/plans")).rejects.toThrow(
-      "requires a publishable key",
-    );
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
-
-  it("never uses a publishable key for customer operations", async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <BillingProvider publishableKey="pk_browser">{children}</BillingProvider>
-    );
-    const { result } = renderHook(() => useBillingContext(), { wrapper });
-
-    await expect(
-      result.current.client?.customerFetch("/api/v1/billing/status"),
-    ).rejects.toThrow("requires a scoped customer session token");
-    expect(mockFetch).not.toHaveBeenCalled();
-  });
-
-  it.each(["pk_browser", "sk_server_only"])(
-    "rejects %s through the deprecated apiKey alias",
-    (credential) => {
-      expect(() =>
-        renderHook(() => useBillingContext(), {
-          wrapper: ({ children }: { children: React.ReactNode }) => (
-            <BillingProvider apiKey={credential}>{children}</BillingProvider>
-          ),
-        }),
-      ).toThrow("apiKey alias accepts only customer sessions");
-    },
-  );
-
-  it("keeps the deprecated apiKey alias customer-session-only", async () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <BillingProvider apiKey="csess_customer">{children}</BillingProvider>
-    );
-    const { result } = renderHook(() => useBillingContext(), { wrapper });
-
-    await result.current.client?.customerFetch("/api/v1/billing/status");
-    expect(mockFetch).toHaveBeenLastCalledWith(
-      "https://api.nozle.app/api/v1/billing/status",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bearer csess_customer",
-        }),
-      }),
-    );
-  });
-
-  it("throws error when useBillingContext used outside provider", () => {
-    expect(() => {
-      renderHook(() => useBillingContext());
-    }).toThrow("useBillingContext must be used within a BillingProvider");
+    expect(result.current.createCheckout).toBe(createCheckout);
+    expect(result.current).not.toHaveProperty('customerId');
   });
 });
