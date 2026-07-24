@@ -21,6 +21,8 @@ export interface CheckoutProps {
   publishableKey: string;
   /** Optional Stripe Connect account ID */
   stripeAccount?: string;
+  /** Where Stripe should return the buyer after a redirect-required payment. */
+  returnUrl?: string;
   /** Custom label for the submit button (default: "Pay now") */
   submitLabel?: string;
   /** Called with the paymentIntentId when payment succeeds without redirect */
@@ -95,7 +97,7 @@ function buildStripeAppearance(): Appearance {
 
 type CheckoutInnerProps = Pick<
   CheckoutProps,
-  'submitLabel' | 'onSuccess' | 'onError' | 'onReady' | 'className' | 'style'
+  'submitLabel' | 'onSuccess' | 'onError' | 'onReady' | 'className' | 'style' | 'returnUrl'
 > & {children?: React.ReactNode};
 
 function CheckoutInner({
@@ -105,6 +107,7 @@ function CheckoutInner({
   onReady,
   className,
   style,
+  returnUrl,
   children,
 }: CheckoutInnerProps) {
   const stripe = useStripe();
@@ -122,7 +125,7 @@ function CheckoutInner({
 
     const result = await stripe.confirmPayment({
       elements,
-      confirmParams: { return_url: window.location.href },
+      confirmParams: { return_url: returnUrl ?? window.location.href },
       redirect: 'if_required',
     });
 
@@ -201,6 +204,7 @@ export function Checkout({
   clientSecret,
   publishableKey,
   stripeAccount,
+  returnUrl,
   submitLabel,
   onSuccess,
   onComplete,
@@ -243,6 +247,7 @@ export function Checkout({
         onReady={onReady}
         className={className}
         style={style}
+        returnUrl={returnUrl}
         children={children}
       />
     </Elements>
