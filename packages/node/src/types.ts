@@ -36,12 +36,22 @@ export interface Plan {
   interval: string;
 }
 
-export interface CheckoutResult {
-  client_secret: string;
-  invoice_id: string;
-  amount_cents: number;
-  currency: string;
-}
+export type CheckoutResult =
+  | {
+      type: "stripe";
+      client_secret?: string;
+      clientSecret?: string;
+      url?: string;
+      invoice_id?: string;
+      amount_cents?: number;
+      currency?: string;
+    }
+  | {
+      type: "completed" | "scheduled";
+      status: string;
+      subscription_id?: string;
+      plan_code?: string;
+    };
 
 export interface SubscribeResult {
   subscription_id: string;
@@ -350,18 +360,6 @@ export interface EntityCreditTransferResult {
   parent_sources: EntityCreditTransferSource[];
   entity_sources: EntityCreditTransferSource[];
   replayed: boolean;
-}
-
-export interface CustomerSessionCreateParams {
-  customerId: string;
-  expiresInSeconds?: number;
-}
-
-export interface CustomerSession {
-  token: string;
-  customer_id: string;
-  expires_at: string;
-  scope: ["credits:read"];
 }
 
 export interface UsageCheckParams {

@@ -1,426 +1,59 @@
 # @nozle-js/react
 
-React SDK for usage-based billing. Hooks and components for entitlements, real-time usage tracking, plan management, and Stripe checkout.
+Browser-safe React components for Nozle's public plan catalog and merchant-controlled checkout.
+
+## Credential boundary
+
+- `pk_` is used only for `GET /api/v1/plans`.
+- Secret keys stay on the merchant backend.
+- The React package does not fetch customer billing, invoice, subscription, entitlement, or credit data.
+- The React package never sends a customer ID.
 
 ## Install
 
 ```bash
-npm install @nozle-js/react
+npm install @nozle-js/react react react-dom @stripe/stripe-js @stripe/react-stripe-js
 ```
 
-Peer dependencies:
-
-```bash
-npm install react react-dom @stripe/stripe-js @stripe/react-stripe-js
-```
-
-## Quick Start
-
-Wrap your app with `BillingProvider`:
+## Merchant-backed checkout
 
 ```tsx
-import { BillingProvider, ProductCreditBalance } from "@nozle-js/react";
+import { BillingProvider, PricingTable } from "@nozle-js/react";
 
-function App() {
+export function BillingPage({ csrfToken }: { csrfToken: string }) {
   return (
     <BillingProvider
-      publishableKey="pk_live_..."
-      customerSessionToken={customerSessionToken}
-      customerId="cust_123"
-      baseUrl="https://api.nozle.app"       // Default: https://api.nozle.app
-      workspaceId="ws_123"                   // Optional: workspace scoping
-      centrifugoUrl="wss://ws.nozle.app/connection/websocket"  // Optional: real-time updates
+      publishableKey={import.meta.env.VITE_NOZLE_PUBLISHABLE_KEY}
+      createCheckout={async ({ planCode, returnUrl }) => {
+        const response = await fetch("/api/billing/checkout", {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfToken,
+          },
+          body: JSON.stringify({ planCode, returnUrl }),
+        });
+
+        if (!response.ok) throw new Error("Checkout failed");
+        return response.json();
+      }}
     >
-      <YourApp />
+      <PricingTable returnUrl={window.location.href} highlightPlan="pro" />
     </BillingProvider>
   );
 }
 ```
 
-### Required customer app config
+The merchant endpoint authenticates the user, derives the Nozle customer from the authenticated user or team, validates the plan and HTTPS return URL, and calls Nozle with a restricted server-side `sk_`. Any browser-supplied customer identifier must be ignored or rejected.
 
-For product-credit balances and ledger history, keep the Nozle secret key server-side and mint a short-lived customer session. A bare publishable key cannot read a customer's product-credit balance or operations. Customer sessions are used only by the new product-credit hooks and components; the legacy `BillingPortal` still uses its existing publishable-key APIs.
-
-Example Vite env:
-
-```bash
-VITE_NOZLE_PUBLISHABLE_KEY=pk_nozle_...
-VITE_NOZLE_API_URL=https://api.nozle.app
-VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...
-```
-
-Example Next.js env:
-
-```bash
-NEXT_PUBLIC_NOZLE_PUBLISHABLE_KEY=pk_nozle_...
-NEXT_PUBLIC_NOZLE_API_URL=https://api.nozle.app
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
-```
-
-Create the session in your backend with `@nozle-js/node`:
-
-```ts
-const session = await nozle.customerSessions.create({
-  customerId: currentCustomerId,
-  expiresInSeconds: 900,
-});
-```
-
-Pass that customer-bound token alongside the provider's existing publishable key:
-
-```tsx
-<BillingProvider
-  publishableKey={import.meta.env.VITE_NOZLE_PUBLISHABLE_KEY}
-  customerSessionToken={session.token}
-  baseUrl={import.meta.env.VITE_NOZLE_API_URL}
-  customerId={currentCustomerId}
->
-  <ProductCreditBalance creditSystemCode="ai_credits" />
-</BillingProvider>
-```
-
-Publishable keys remain appropriate for public catalog and checkout components. Never put `sk_` keys in browser code.
-
-Product-credit reads use ordinary HTTP requests. The optional Centrifugo connection remains for the SDK's existing entitlement updates and does not receive customer-credit claims.
-
-Use the Stripe publishable key only when the app mounts embedded Stripe checkout. If you only redirect to a hosted checkout URL, the host app does not need to mount Stripe Elements.
-
-> **Note:** LLM wrappers (`wrapOpenAI`, `wrapAnthropic`) and server-side methods (`checkAndDeduct`, `customers.upsert`) are only available in `@nozle-js/node`. The React SDK is for client-side billing UI only.
-
-### Fixed-package credit top-ups
-
-Paid product-credit top-ups use catalog packages configured in Core. The browser never submits an arbitrary dollar-to-credit conversion and never receives an organization secret key.
-
-```tsx
-<CreditTopUpButton
-  creditSystemCode="ai_credits"
-  topUpPackageCode="starter_pack"
-  packageName="Starter pack"
-  creditAmount="250"
-  priceLabel="$10.00"
-/>
-```
-
-This component calls `POST /api/v1/credit-top-up-purchases` with an idempotency key and navigates the current page to hosted checkout. Checkout creation does not grant credits; the grant is created only after confirmed payment.
-
-The pre-WP8 arbitrary-amount `/api/v1/credits/purchase` contract is deprecated. Migrate to package identifiers before that compatibility route is removed.
-
-## Hooks
-
-### `useCan(feature)`
-
-Check if a customer has access to a feature.
-
-```tsx
-import { useCan } from "@nozle-js/react";
-
-function MyFeature() {
-  const { allowed, isLoading, error } = useCan("advanced_analytics");
-
-  if (isLoading) return <p>Loading...</p>;
-  if (!allowed) return <p>Upgrade to access this feature.</p>;
-
-  return <div>Feature content here</div>;
-}
-```
-
-### `useUsage(metric)`
-
-Get real-time usage data for a metric. Updates automatically via WebSocket.
-
-```tsx
-import { useUsage } from "@nozle-js/react";
-
-function TokenCounter() {
-  const { data, isLoading } = useUsage("tokens_used");
-
-  if (isLoading || !data) return null;
-
-  return (
-    <p>
-      {data.used.toLocaleString()} / {data.limit.toLocaleString()} tokens used
-    </p>
-  );
-}
-```
-
-### `usePlan()`
-
-Get the customer's current plan and subscription status.
-
-```tsx
-import { usePlan } from "@nozle-js/react";
-
-function CurrentPlan() {
-  const { data } = usePlan();
-
-  if (!data) return null;
-
-  return (
-    <p>
-      Plan: {data.plan_slug} ({data.subscription_status})
-    </p>
-  );
-}
-```
-
-### `usePlans()`
-
-Fetch all available plans.
-
-```tsx
-import { usePlans } from "@nozle-js/react";
-
-function PlanList() {
-  const { plans, isLoading } = usePlans();
-
-  if (isLoading) return <p>Loading plans...</p>;
-
-  return (
-    <ul>
-      {plans.map((plan) => (
-        <li key={plan.code}>
-          {plan.name} — ${(plan.amount_cents / 100).toFixed(2)}/{plan.interval}
-        </li>
-      ))}
-    </ul>
-  );
-}
-```
-
-### `useCheckout()`
-
-Create a Stripe checkout session and render embedded checkout.
-
-```tsx
-import { useCheckout } from "@nozle-js/react";
-
-function UpgradeButton({ planCode }: { planCode: string }) {
-  const { fetchClientSecret, isLoading } = useCheckout();
-
-  const handleUpgrade = async () => {
-    const clientSecret = await fetchClientSecret(planCode);
-    // Use clientSecret with Stripe EmbeddedCheckout
-  };
-
-  return (
-    <button onClick={handleUpgrade} disabled={isLoading}>
-      Upgrade
-    </button>
-  );
-}
-```
-
-### `useSubscribe()`
-
-Create a subscription after successful payment.
-
-```tsx
-import { useSubscribe } from "@nozle-js/react";
-
-function AfterPayment({ planCode }: { planCode: string }) {
-  const { subscribe, isLoading } = useSubscribe();
-
-  const handleComplete = async () => {
-    await subscribe(planCode);
-  };
-
-  return (
-    <button onClick={handleComplete} disabled={isLoading}>
-      Activate Subscription
-    </button>
-  );
-}
-```
+`createCheckout` may return a hosted URL, an embedded Stripe client secret, `type: "completed"`, or `type: "scheduled"`. Paid plans activate only after Nozle processes verified Stripe success; a browser redirect is not proof of payment.
 
 ## Components
 
-Pre-built UI components with built-in styling. No CSS imports needed.
+- `PricingTable` and `usePlans` read the public catalog with the publishable key.
+- `CheckoutButton`, `UpgradeButton`, `UpgradeModal`, and the default `PricingTable` CTA call the merchant's `createCheckout` callback.
+- `Checkout` renders Stripe hosted/embedded checkout results supplied by the merchant.
+- Gates, usage displays, `PlanBadge`, and `PaymentMethodDisplay` are presentational and consume caller-supplied data.
 
-### Credit system reads
-
-These components use the Phase 1 product-credit ledger, not Lago wallet credits:
-
-```tsx
-<ProductCreditBalance creditSystemCode="ai_credits" />
-<LowCreditWarning creditSystemCode="ai_credits" threshold="100" />
-<CreditBreakdown creditSystemCode="ai_credits" />
-<CreditUsageHistory creditSystemCode="ai_credits" pageSize={20} />
-```
-
-Amounts remain decimal strings until display formatting, and operation history paginates without issuing duplicate concurrent requests.
-
-### Entity credit reads
-
-Entity components are explicitly named and do not replace the existing customer-level components:
-
-```tsx
-<EntityProductCreditBalance entityId="user_42" creditSystemCode="ai_credits" />
-<EntityCreditBreakdown entityId="user_42" creditSystemCode="ai_credits" />
-<EntityCreditUsageHistory
-  entityId="user_42"
-  creditSystemCode="ai_credits"
-  pageSize={20}
-/>
-```
-
-They use the same customer-bound session token and ordinary HTTP reads. They expose Entity, shared-customer, and effective totals plus immutable source and operation history. The React SDK does not allocate credits, mutate Entities, or track Entity usage; keep those actions on your backend with `@nozle-js/node` and a secret key.
-
-### `PricingTable`
-
-Renders plan cards in a responsive grid with monthly/annual toggle, current plan detection, and CSS variable theming. Auto-fetches plans from the API if none are provided.
-
-```tsx
-import { PricingTable } from "@nozle-js/react";
-
-// Auto-fetch plans from API
-<PricingTable
-  customerId="cust_123"
-  highlightPlan="pro"
-  onSelect={(plan) => handleUpgrade(plan)}
-/>
-
-// Or pass plans explicitly
-<PricingTable
-  plans={[
-    { code: "starter", name: "Starter", amount_cents: 2900, amount_currency: "USD", interval: "monthly" },
-    { code: "pro", name: "Pro", amount_cents: 9900, amount_currency: "USD", interval: "monthly" },
-  ]}
-  features={[
-    ["10K API calls", "Email support"],
-    ["100K API calls", "Priority support", "Analytics"],
-  ]}
-  currentPlanCode="starter"
-  highlightPlan="pro"
-  onSelect={(plan) => console.log("Selected:", plan.code)}
-  showToggle={true}
-  enterpriseEmail="sales@example.com"
-  className="my-pricing"
-/>
-```
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `customerId` | `string` | -- | Customer ID for auto-detecting current plan |
-| `currentPlanCode` | `string` | -- | Explicitly set current plan (overrides auto-detect) |
-| `plans` | `PricingPlan[]` | -- | Plans to display (auto-fetched from API if omitted) |
-| `features` | `string[][]` | -- | Feature lists per plan (index-matched to plans array) |
-| `onSelect` | `(plan: PricingPlan) => void` | -- | Called when a plan's CTA is clicked |
-| `highlightPlan` | `string` | -- | Plan code to highlight as "Most Popular" |
-| `enterpriseEmail` | `string` | -- | Email for enterprise plan "Contact Sales" button |
-| `showToggle` | `boolean` | `true` | Show monthly/annual toggle (only when annual plans exist) |
-| `className` | `string` | -- | CSS class for the outer wrapper |
-
-#### PricingPlan type
-
-```ts
-interface PricingPlan {
-  code: string;
-  name: string;
-  amount_cents: number;
-  amount_currency: string;
-  interval: string;
-  description?: string;
-}
-```
-
-#### CSS Variable Theming
-
-PricingTable uses CSS custom properties for full theming control. Set these on a parent element or `:root`:
-
-```css
-:root {
-  /* Component-specific overrides */
-  --nozle-pricing-bg: #ffffff;
-  --nozle-pricing-card-bg: #ffffff;
-  --nozle-pricing-highlight: #6366f1;
-  --nozle-pricing-border: #e5e7eb;
-  --nozle-pricing-radius: 12px;
-
-  /* Or use global Nozle variables (PricingTable falls back to these) */
-  --nozle-background: #ffffff;
-  --nozle-card: #ffffff;
-  --nozle-primary: #6366f1;
-  --nozle-border: #e5e7eb;
-  --nozle-radius: 12px;
-  --nozle-foreground: #111827;
-  --nozle-muted-foreground: #6b7280;
-  --nozle-muted: #f3f4f6;
-  --nozle-primary-foreground: #ffffff;
-}
-```
-
-The component-specific variables (`--nozle-pricing-*`) take precedence over the global ones (`--nozle-*`), which fall back to sensible defaults.
-
-### `UsageMeter`
-
-Displays usage with bar, ring, or minimal variants.
-
-```tsx
-import { UsageMeter } from "@nozle-js/react";
-
-<UsageMeter metric="tokens_used" variant="bar" />
-<UsageMeter metric="tokens_used" variant="ring" />
-<UsageMeter metric="tokens_used" variant="minimal" />
-```
-
-### `PlanBadge`
-
-Shows the current plan with status indicator.
-
-```tsx
-import { PlanBadge } from "@nozle-js/react";
-
-<PlanBadge variant="pill" />
-<PlanBadge variant="text" />
-<PlanBadge variant="icon" />
-```
-
-### `UpgradePrompt`
-
-Conditionally renders an upgrade prompt when a feature is gated.
-
-```tsx
-import { UpgradePrompt } from "@nozle-js/react";
-
-<UpgradePrompt feature="advanced_analytics" variant="card" upgradeUrl="/upgrade" />
-<UpgradePrompt feature="advanced_analytics" variant="banner" />
-<UpgradePrompt feature="advanced_analytics" variant="inline" />
-```
-
-## Tailwind CSS Preset
-
-Optional Tailwind preset for styling the `data-nozle` attributes on components.
-
-```ts
-// tailwind.config.ts
-import { nozlePreset } from "@nozle-js/react/styles/preset";
-
-export default {
-  presets: [nozlePreset],
-};
-```
-
-## TypeScript
-
-All hooks and components are fully typed. Exported types:
-
-```ts
-import type {
-  BillingState,
-  UseCanResult,
-  UseUsageResult,
-  UsePlanResult,
-  UseCheckoutResult,
-  Plan,
-  PricingPlan,
-  PricingTableProps,
-  UsageMeterProps,
-  PlanBadgeProps,
-  UpgradePromptProps,
-} from "@nozle-js/react";
-```
-
-## License
-
-Proprietary
+Customer billing, invoices, cancellation, top-ups, subscriptions, entitlements, and credits belong behind authenticated merchant endpoints. Never put an `sk_`, master key, or internal credential in browser code.

@@ -22,7 +22,7 @@ export function usePlans() {
     }
 
     void client
-      .fetch("/api/v1/plans")
+      .catalogFetch("/api/v1/plans")
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = (await response.json()) as { plans?: Plan[] };

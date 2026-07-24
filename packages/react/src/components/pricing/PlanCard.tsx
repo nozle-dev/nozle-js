@@ -8,6 +8,7 @@
 import React from "react";
 
 import type { ReactNode } from "react";
+import type { CreateCheckoutInput } from "../../provider.js";
 
 export interface Plan {
   id: string;
@@ -21,7 +22,8 @@ export interface Plan {
 export interface PlanCardProps extends Plan {
   isAnnual: boolean;
   isCurrent: boolean;
-  onSelect?: () => void;
+  returnUrl?: string;
+  onSelect?: (input: CreateCheckoutInput) => void;
   children?: ReactNode;
 }
 
@@ -38,6 +40,7 @@ export function PlanCard({
   description,
   isAnnual,
   isCurrent,
+  returnUrl,
   onSelect,
 }: PlanCardProps): React.ReactElement {
   const price = isAnnual ? annualPrice : monthlyPrice;
@@ -139,7 +142,12 @@ export function PlanCard({
 
       {onSelect && (
         <button
-          onClick={onSelect}
+          onClick={() =>
+            onSelect?.({
+              planCode: id,
+              returnUrl: returnUrl ?? window.location.href,
+            })
+          }
           style={{
             background: isCurrent
               ? "var(--nozle-muted, var(--muted))"

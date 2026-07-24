@@ -2,7 +2,6 @@ export { Nozle } from "./client";
 export { MarginClient } from "./margin";
 export { CreditSystemsNamespace } from "./credit-systems";
 export { CreditsNamespace } from "./credits";
-export { CustomerSessionsNamespace } from "./customer-sessions";
 export { EntitiesNamespace } from "./entities";
 export { UsageNamespace } from "./usage";
 export { wrapOpenAI } from "./wrap-openai";
@@ -50,8 +49,6 @@ export type {
   EntityCreditTransferParams,
   EntityCreditTransferSource,
   EntityCreditTransferResult,
-  CustomerSessionCreateParams,
-  CustomerSession,
   UsageCheckParams,
   UsageTrackParams,
   UsageTrackOptions,
