@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Nozle } from "../client";
+import type { CancellationPolicy } from "../types";
 
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
@@ -178,6 +179,65 @@ describe("Nozle", () => {
       await expect(client.subscribe("cust_1", "pro")).rejects.toThrow(
         "subscribe requires a secret key",
       );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("cancelSubscription", () => {
+    it("schedules end-of-period cancellation by default", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          subscription: {
+            external_id: "sub/1",
+            status: "active",
+            ending_at: "2026-08-14T18:30:00Z",
+          },
+        }),
+      );
+      const client = new Nozle({ apiKey: "sk_test" });
+
+      const result = await client.cancelSubscription("customer 1", "sub/1");
+
+      expect(result.subscription.status).toBe("active");
+      expect(result.subscription.ending_at).toBe("2026-08-14T18:30:00Z");
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url.toString()).toContain("/api/v1/subscriptions/sub%2F1?");
+      expect(url.toString()).toContain("customer_id=customer+1");
+      expect(url.toString()).toContain("cancellation_policy=end_of_period");
+      expect(init.method).toBe("DELETE");
+    });
+
+    it("can request explicit immediate termination", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          subscription: { external_id: "sub_1", status: "terminated", ending_at: null },
+        }),
+      );
+      const client = new Nozle({ apiKey: "sk_test" });
+
+      await client.cancelSubscription("cust_1", "sub_1", "immediate");
+
+      expect(fetchMock.mock.calls[0][0].toString()).toContain("cancellation_policy=immediate");
+    });
+
+    it("rejects publishable-key cancellation before network I/O", async () => {
+      const client = new Nozle({ apiKey: "pk_browser" });
+
+      await expect(client.cancelSubscription("cust_1", "sub_1")).rejects.toThrow(
+        "cancelSubscription requires a secret key",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects invalid input before network I/O", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+
+      await expect(client.cancelSubscription("", "sub_1")).rejects.toThrow(
+        "requires customerId and subscriptionId",
+      );
+      await expect(
+        client.cancelSubscription("cust_1", "sub_1", "whenever" as CancellationPolicy),
+      ).rejects.toThrow("policy must be end_of_period or immediate");
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });
