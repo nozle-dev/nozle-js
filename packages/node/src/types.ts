@@ -58,6 +58,17 @@ export interface SubscribeResult {
   status: string;
 }
 
+export type CancellationPolicy = "end_of_period" | "immediate";
+
+export interface CancelSubscriptionResult {
+  subscription: {
+    external_id: string;
+    status: string;
+    ending_at: string | null;
+    terminated_at?: string | null;
+  };
+}
+
 export interface MarginQueryParams {
   from?: string;
   to?: string;

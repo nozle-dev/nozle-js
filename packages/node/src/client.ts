@@ -12,6 +12,8 @@ import type {
   Plan,
   CheckoutResult,
   SubscribeResult,
+  CancellationPolicy,
+  CancelSubscriptionResult,
   PingResult,
   CustomerUpsertParams,
   CustomerUpsertResult,
@@ -111,6 +113,38 @@ export class Nozle {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!res.ok) throw new Error(`subscribe failed: ${res.status} ${res.statusText}`);
+    return res.json();
+  }
+
+  async cancelSubscription(
+    customerId: string,
+    subscriptionId: string,
+    policy: CancellationPolicy = "end_of_period",
+  ): Promise<CancelSubscriptionResult> {
+    if (!this.apiKey.startsWith("sk_")) {
+      throw new Error("cancelSubscription requires a secret key");
+    }
+    if (!customerId.trim() || !subscriptionId.trim()) {
+      throw new Error("cancelSubscription requires customerId and subscriptionId");
+    }
+    if (policy !== "end_of_period" && policy !== "immediate") {
+      throw new Error("cancelSubscription policy must be end_of_period or immediate");
+    }
+    const query = new URLSearchParams({
+      customer_id: customerId,
+      cancellation_policy: policy,
+    });
+    const res = await fetch(
+      `${this.baseUrl}/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}?${query}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${this.apiKey}` },
+        signal: AbortSignal.timeout(this.timeout),
+      },
+    );
+    if (!res.ok) {
+      throw new Error(`cancelSubscription failed: ${res.status} ${res.statusText}`);
+    }
     return res.json();
   }
 

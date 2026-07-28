@@ -283,6 +283,24 @@ const checkout = await nozle.checkout(
 const { subscription_id, status } = await nozle.subscribe("cust_123", "pro");
 ```
 
+### Cancel a subscription
+
+Cancellation is server-only and requires an `sk_` key. The SDK defaults to
+end-of-period cancellation, so access remains active until Nozle's authoritative
+billing boundary:
+
+```ts
+const result = await nozle.cancelSubscription("cust_123", "sub_123");
+// result.subscription.status === "active"
+// result.subscription.ending_at === "2026-08-15T00:00:00Z"
+```
+
+Immediate termination must be requested explicitly:
+
+```ts
+await nozle.cancelSubscription("cust_123", "sub_123", "immediate");
+```
+
 ## TypeScript
 
 All methods and responses are fully typed. Exported types:

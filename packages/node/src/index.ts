@@ -14,6 +14,8 @@ export type {
   Plan,
   CheckoutResult,
   SubscribeResult,
+  CancellationPolicy,
+  CancelSubscriptionResult,
   MarginQueryParams,
   TrendParams,
   PingResult,
