@@ -265,8 +265,6 @@ describe("Nozle", () => {
         subscription_id: "sub-1",
         operation: "cancel",
         timing: "end_of_period",
-        credit_action: "none",
-        final_invoice_action: "generate",
       });
     });
 
@@ -286,6 +284,7 @@ describe("Nozle", () => {
           timing: "immediate",
           targetPlanCode: "starter",
           creditAction: "refund",
+          refundMode: "full",
           finalInvoiceAction: "generate",
         },
         "downgrade-1",
@@ -310,6 +309,27 @@ describe("Nozle", () => {
         ),
       ).rejects.toThrow("targetPlanCode is forbidden");
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("uncancels without inventing settlement defaults", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      fetchMock.mockResolvedValueOnce(jsonResponse({ subscription_transition: { id: "t-2" } }));
+
+      await client.applySubscriptionTransition(
+        {
+          customerId: "customer-1",
+          subscriptionId: "sub-1",
+          operation: "uncancel",
+        },
+        "uncancel-1",
+      );
+
+      const [, init] = fetchMock.mock.calls[0];
+      expect(JSON.parse(init?.body as string)).toEqual({
+        customer_id: "customer-1",
+        subscription_id: "sub-1",
+        operation: "uncancel",
+      });
     });
   });
 

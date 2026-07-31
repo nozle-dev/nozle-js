@@ -201,14 +201,28 @@ export class Nozle {
     if (!params.customerId.trim() || !params.subscriptionId.trim()) {
       throw new Error("subscription transitions require customerId and subscriptionId");
     }
-    if (params.operation === "cancel" && params.targetPlanCode) {
-      throw new Error("targetPlanCode is forbidden for cancellation");
+    if ((params.operation === "cancel" || params.operation === "uncancel") && params.targetPlanCode) {
+      throw new Error("targetPlanCode is forbidden for cancellation and uncancel");
     }
     if (params.operation === "downgrade" && !params.targetPlanCode?.trim()) {
       throw new Error("targetPlanCode is required for downgrade");
     }
-    if (params.timing === "end_of_period" && (params.creditAction ?? "none") !== "none") {
+    if (params.timing === "end_of_period" && params.creditAction && params.creditAction !== "none") {
       throw new Error("end_of_period transitions require creditAction none");
+    }
+    if (params.refundMode === "full" && params.creditAction !== "refund") {
+      throw new Error("full refundMode requires creditAction refund");
+    }
+    if (
+      params.operation === "uncancel" &&
+      (params.timing ||
+        params.billingAnchor ||
+        params.prorationBehavior ||
+        params.creditAction ||
+        params.refundMode ||
+        params.finalInvoiceAction)
+    ) {
+      throw new Error("uncancel does not accept settlement options");
     }
   }
 
@@ -219,8 +233,11 @@ export class Nozle {
       operation: params.operation,
       timing: params.timing,
       target_plan_code: params.targetPlanCode,
-      credit_action: params.creditAction ?? "none",
-      final_invoice_action: params.finalInvoiceAction ?? "generate",
+      billing_anchor: params.billingAnchor,
+      proration_behavior: params.prorationBehavior,
+      credit_action: params.creditAction,
+      refund_mode: params.refundMode,
+      final_invoice_action: params.finalInvoiceAction,
     };
   }
 

@@ -69,18 +69,24 @@ export interface CancelSubscriptionResult {
   };
 }
 
-export type SubscriptionTransitionOperation = "cancel" | "downgrade";
+export type SubscriptionTransitionOperation = "cancel" | "downgrade" | "uncancel";
 export type SubscriptionTransitionTiming = "end_of_period" | "immediate";
+export type SubscriptionTransitionBillingAnchor = "keep_anchor" | "reset_anchor";
+export type SubscriptionTransitionProrationBehavior = "prorate_immediately" | "none";
 export type SubscriptionTransitionCreditAction = "credit" | "refund" | "offset" | "none";
+export type SubscriptionTransitionRefundMode = "prorated" | "full";
 export type SubscriptionTransitionFinalInvoiceAction = "generate" | "skip";
 
 export interface SubscriptionTransitionParams {
   customerId: string;
   subscriptionId: string;
   operation: SubscriptionTransitionOperation;
-  timing: SubscriptionTransitionTiming;
+  timing?: SubscriptionTransitionTiming;
   targetPlanCode?: string;
+  billingAnchor?: SubscriptionTransitionBillingAnchor;
+  prorationBehavior?: SubscriptionTransitionProrationBehavior;
   creditAction?: SubscriptionTransitionCreditAction;
+  refundMode?: SubscriptionTransitionRefundMode;
   finalInvoiceAction?: SubscriptionTransitionFinalInvoiceAction;
 }
 
@@ -88,7 +94,10 @@ export interface SubscriptionTransitionPreview {
   subscription_transition: {
     operation: SubscriptionTransitionOperation;
     timing: SubscriptionTransitionTiming;
+    billing_anchor: SubscriptionTransitionBillingAnchor;
+    proration_behavior: SubscriptionTransitionProrationBehavior;
     credit_action: SubscriptionTransitionCreditAction;
+    refund_mode: SubscriptionTransitionRefundMode;
     final_invoice_action: SubscriptionTransitionFinalInvoiceAction;
     effective_at: string;
     renewal_at?: string | null;
@@ -106,7 +115,10 @@ export interface SubscriptionTransitionResult {
     replayed: boolean;
     operation: SubscriptionTransitionOperation;
     timing: SubscriptionTransitionTiming;
+    billing_anchor: SubscriptionTransitionBillingAnchor;
+    proration_behavior: SubscriptionTransitionProrationBehavior;
     credit_action: SubscriptionTransitionCreditAction;
+    refund_mode: SubscriptionTransitionRefundMode;
     final_invoice_action: SubscriptionTransitionFinalInvoiceAction;
     effective_at: string;
     subscription_id?: string;
