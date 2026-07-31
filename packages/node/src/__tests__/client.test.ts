@@ -242,6 +242,77 @@ describe("Nozle", () => {
     });
   });
 
+  describe("subscription transition settlements", () => {
+    it("previews the explicit merchant contract", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ subscription_transition: { amount_due_cents: 0 } }), {
+          status: 200,
+        }),
+      );
+
+      await client.previewSubscriptionTransition({
+        customerId: "customer-1",
+        subscriptionId: "sub-1",
+        operation: "cancel",
+        timing: "end_of_period",
+      });
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url.toString()).toContain("/api/v1/subscriptions/transitions/preview");
+      expect(JSON.parse(init?.body as string)).toEqual({
+        customer_id: "customer-1",
+        subscription_id: "sub-1",
+        operation: "cancel",
+        timing: "end_of_period",
+        credit_action: "none",
+        final_invoice_action: "generate",
+      });
+    });
+
+    it("applies a downgrade with the caller idempotency key", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ subscription_transition: { id: "transition-1" } }), {
+          status: 200,
+        }),
+      );
+
+      await client.applySubscriptionTransition(
+        {
+          customerId: "customer-1",
+          subscriptionId: "sub-1",
+          operation: "downgrade",
+          timing: "immediate",
+          targetPlanCode: "starter",
+          creditAction: "refund",
+          finalInvoiceAction: "generate",
+        },
+        "downgrade-1",
+      );
+
+      const [, init] = fetchMock.mock.calls[0];
+      expect(new Headers(init?.headers).get("Idempotency-Key")).toBe("downgrade-1");
+    });
+
+    it("rejects unsafe shapes before network I/O", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      await expect(
+        client.applySubscriptionTransition(
+          {
+            customerId: "customer-1",
+            subscriptionId: "sub-1",
+            operation: "cancel",
+            timing: "immediate",
+            targetPlanCode: "starter",
+          },
+          "key-1",
+        ),
+      ).rejects.toThrow("targetPlanCode is forbidden");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("margin", () => {
     it("fetches summary", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ margin: 0.42 }));
