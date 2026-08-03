@@ -69,6 +69,72 @@ export interface CancelSubscriptionResult {
   };
 }
 
+export type SubscriptionTransitionOperation = "cancel" | "downgrade" | "uncancel";
+export type SubscriptionTransitionTiming = "end_of_period" | "immediate";
+export type SubscriptionTransitionBillingAnchor = "keep_anchor" | "reset_anchor";
+export type SubscriptionTransitionProrationBehavior = "prorate_immediately" | "none";
+export type SubscriptionTransitionCreditAction = "credit" | "refund" | "offset" | "none";
+export type SubscriptionTransitionRefundMode = "prorated" | "full";
+export type SubscriptionTransitionFinalInvoiceAction = "generate" | "skip";
+
+export interface SubscriptionTransitionParams {
+  customerId: string;
+  subscriptionId: string;
+  operation: SubscriptionTransitionOperation;
+  timing?: SubscriptionTransitionTiming;
+  targetPlanCode?: string;
+  billingAnchor?: SubscriptionTransitionBillingAnchor;
+  prorationBehavior?: SubscriptionTransitionProrationBehavior;
+  creditAction?: SubscriptionTransitionCreditAction;
+  refundMode?: SubscriptionTransitionRefundMode;
+  finalInvoiceAction?: SubscriptionTransitionFinalInvoiceAction;
+}
+
+export interface SubscriptionTransitionPreview {
+  subscription_transition: {
+    operation: SubscriptionTransitionOperation;
+    timing: SubscriptionTransitionTiming;
+    billing_anchor: SubscriptionTransitionBillingAnchor;
+    proration_behavior: SubscriptionTransitionProrationBehavior;
+    credit_action: SubscriptionTransitionCreditAction;
+    refund_mode: SubscriptionTransitionRefundMode;
+    final_invoice_action: SubscriptionTransitionFinalInvoiceAction;
+    effective_at: string;
+    renewal_at?: string | null;
+    credit_amount_cents: number;
+    refund_amount_cents: number;
+    offset_amount_cents: number;
+    amount_due_cents: number;
+    currency: string;
+  };
+}
+
+export interface SubscriptionTransitionResult {
+  subscription_transition: {
+    id: string;
+    replayed: boolean;
+    operation: SubscriptionTransitionOperation;
+    timing: SubscriptionTransitionTiming;
+    billing_anchor: SubscriptionTransitionBillingAnchor;
+    proration_behavior: SubscriptionTransitionProrationBehavior;
+    credit_action: SubscriptionTransitionCreditAction;
+    refund_mode: SubscriptionTransitionRefundMode;
+    final_invoice_action: SubscriptionTransitionFinalInvoiceAction;
+    effective_at: string;
+    subscription_id?: string;
+    external_subscription_id?: string;
+    plan_code?: string;
+    status?: string;
+    credit_note_id?: string;
+    credit_amount_cents: number;
+    refund_amount_cents: number;
+    offset_amount_cents: number;
+    invoice_id?: string;
+    amount_due_cents: number;
+    currency?: string;
+  };
+}
+
 export interface MarginQueryParams {
   from?: string;
   to?: string;

@@ -14,6 +14,9 @@ import type {
   SubscribeResult,
   CancellationPolicy,
   CancelSubscriptionResult,
+  SubscriptionTransitionParams,
+  SubscriptionTransitionPreview,
+  SubscriptionTransitionResult,
   PingResult,
   CustomerUpsertParams,
   CustomerUpsertResult,
@@ -146,6 +149,96 @@ export class Nozle {
       throw new Error(`cancelSubscription failed: ${res.status} ${res.statusText}`);
     }
     return res.json();
+  }
+
+  async previewSubscriptionTransition(
+    params: SubscriptionTransitionParams,
+  ): Promise<SubscriptionTransitionPreview> {
+    this.validateSubscriptionTransition(params);
+    const res = await fetch(`${this.baseUrl}/api/v1/subscriptions/transitions/preview`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(this.subscriptionTransitionBody(params)),
+      signal: AbortSignal.timeout(this.timeout),
+    });
+    if (!res.ok) {
+      throw new Error(`previewSubscriptionTransition failed: ${res.status} ${res.statusText}`);
+    }
+    return res.json();
+  }
+
+  async applySubscriptionTransition(
+    params: SubscriptionTransitionParams,
+    idempotencyKey: string,
+  ): Promise<SubscriptionTransitionResult> {
+    this.validateSubscriptionTransition(params);
+    if (!idempotencyKey.trim() || new TextEncoder().encode(idempotencyKey).length > 255) {
+      throw new Error("applySubscriptionTransition requires an Idempotency-Key up to 255 bytes");
+    }
+    const res = await fetch(`${this.baseUrl}/api/v1/subscriptions/transitions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify(this.subscriptionTransitionBody(params)),
+      signal: AbortSignal.timeout(this.timeout),
+    });
+    if (!res.ok) {
+      throw new Error(`applySubscriptionTransition failed: ${res.status} ${res.statusText}`);
+    }
+    return res.json();
+  }
+
+  private validateSubscriptionTransition(params: SubscriptionTransitionParams): void {
+    if (!this.apiKey.startsWith("sk_")) {
+      throw new Error("subscription transitions require a secret key");
+    }
+    if (!params.customerId.trim() || !params.subscriptionId.trim()) {
+      throw new Error("subscription transitions require customerId and subscriptionId");
+    }
+    if ((params.operation === "cancel" || params.operation === "uncancel") && params.targetPlanCode) {
+      throw new Error("targetPlanCode is forbidden for cancellation and uncancel");
+    }
+    if (params.operation === "downgrade" && !params.targetPlanCode?.trim()) {
+      throw new Error("targetPlanCode is required for downgrade");
+    }
+    if (params.timing === "end_of_period" && params.creditAction && params.creditAction !== "none") {
+      throw new Error("end_of_period transitions require creditAction none");
+    }
+    if (params.refundMode === "full" && params.creditAction !== "refund") {
+      throw new Error("full refundMode requires creditAction refund");
+    }
+    if (
+      params.operation === "uncancel" &&
+      (params.timing ||
+        params.billingAnchor ||
+        params.prorationBehavior ||
+        params.creditAction ||
+        params.refundMode ||
+        params.finalInvoiceAction)
+    ) {
+      throw new Error("uncancel does not accept settlement options");
+    }
+  }
+
+  private subscriptionTransitionBody(params: SubscriptionTransitionParams): Record<string, unknown> {
+    return {
+      customer_id: params.customerId,
+      subscription_id: params.subscriptionId,
+      operation: params.operation,
+      timing: params.timing,
+      target_plan_code: params.targetPlanCode,
+      billing_anchor: params.billingAnchor,
+      proration_behavior: params.prorationBehavior,
+      credit_action: params.creditAction,
+      refund_mode: params.refundMode,
+      final_invoice_action: params.finalInvoiceAction,
+    };
   }
 
   async ping(): Promise<PingResult> {
