@@ -2,6 +2,7 @@ import { can as _can } from "./can";
 import { CreditsNamespace } from "./credits";
 import { CreditSystemsNamespace } from "./credit-systems";
 import { EntitiesNamespace } from "./entities";
+import { EntitySubscriptionsNamespace } from "./entity-subscriptions";
 import { MarginClient } from "./margin";
 import { track as _track } from "./track";
 import { UsageNamespace } from "./usage";
@@ -32,6 +33,7 @@ export class Nozle {
   readonly customers: CustomersNamespace;
   readonly creditSystems: CreditSystemsNamespace;
   readonly entities: EntitiesNamespace;
+  readonly entitySubscriptions: EntitySubscriptionsNamespace;
   readonly credits: CreditsNamespace;
   readonly usage: UsageNamespace;
 
@@ -47,6 +49,7 @@ export class Nozle {
     this.customers = new CustomersNamespace(this.baseUrl, this.apiKey, this.timeout);
     this.creditSystems = new CreditSystemsNamespace(this.eventsUrl, this.apiKey, this.timeout);
     this.entities = new EntitiesNamespace(this.baseUrl, this.apiKey, this.timeout);
+    this.entitySubscriptions = new EntitySubscriptionsNamespace(this.eventsUrl, this.apiKey, this.timeout);
     this.credits = new CreditsNamespace(this.baseUrl, this.apiKey, this.timeout);
     this.usage = new UsageNamespace(this.baseUrl, this.apiKey, this.timeout);
   }

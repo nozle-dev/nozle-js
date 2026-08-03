@@ -852,4 +852,94 @@ describe("Nozle", () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });
+
+  describe("Entity subscriptions", () => {
+    const entitySubscription = {
+      external_customer_id: "workspace/1",
+      external_entity_id: "user/42",
+      external_subscription_id: "entity-sub-1",
+      status: "active",
+      current_plan: {
+        code: "pro",
+        name: "Pro",
+        interval: "monthly",
+        amount_cents: 1499,
+        amount_currency: "USD",
+        status: "active",
+        effective_at: "2026-08-03T00:00:00Z",
+      },
+      pending_plan: null,
+      billing_time: "anniversary",
+      subscription_at: "2026-08-03T00:00:00Z",
+      started_at: "2026-08-03T00:00:00Z",
+      ending_at: null,
+      canceled_at: null,
+      created_at: "2026-08-03T00:00:00Z",
+      updated_at: "2026-08-03T00:00:00Z",
+    };
+
+    it("uses Core for ensure, reads and Entity checkout", async () => {
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse({ entity_subscription: entitySubscription }, 201))
+        .mockResolvedValueOnce(jsonResponse({ entity_subscription: entitySubscription }))
+        .mockResolvedValueOnce(
+          jsonResponse({
+            type: "stripe",
+            client_secret: "cs_entity",
+            external_entity_id: "user/42",
+            external_subscription_id: "entity-sub-1",
+          }),
+        );
+      const client = new Nozle({
+        apiKey: "sk_test",
+        baseUrl: "https://engine.example",
+        eventsUrl: "https://core.example",
+      });
+
+      await client.entitySubscriptions.ensure("workspace/1", "user/42");
+      await client.entitySubscriptions.get("workspace/1", "user/42");
+      await client.entitySubscriptions.checkout("workspace/1", "user/42", {
+        planCode: "pro",
+        returnUrl: "https://wrrk.ai/settings/billing",
+        billingTime: "anniversary",
+        idempotencyKey: "checkout-user-42-pro",
+      });
+
+      expect(fetchMock.mock.calls[0][0]).toBe(
+        "https://core.example/api/v1/customers/workspace%2F1/entities/user%2F42/subscription",
+      );
+      expect(fetchMock.mock.calls[0][1].method).toBe("PUT");
+      expect(fetchMock.mock.calls[2][0]).toBe(
+        "https://core.example/api/v1/customers/workspace%2F1/entities/user%2F42/subscription/checkout",
+      );
+      expect(fetchMock.mock.calls[2][1].headers["Idempotency-Key"]).toBe("checkout-user-42-pro");
+      expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({
+        plan_code: "pro",
+        return_url: "https://wrrk.ai/settings/billing",
+        billing_time: "anniversary",
+      });
+    });
+
+    it("cancels with an idempotency key and rejects publishable keys locally", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          entity_subscription: entitySubscription,
+          subscription_transition: { id: "transition-1", replayed: false },
+        }),
+      );
+      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://core.example" });
+      await client.entitySubscriptions.cancel("workspace", "user-42", {
+        idempotencyKey: "cancel-user-42",
+        timing: "end_of_period",
+      });
+
+      expect(fetchMock.mock.calls[0][1].headers["Idempotency-Key"]).toBe("cancel-user-42");
+
+      const browserClient = new Nozle({ apiKey: "pk_browser" });
+      await expect(browserClient.entitySubscriptions.get("workspace", "user-42")).rejects.toThrow(
+        "requires a secret key",
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });
