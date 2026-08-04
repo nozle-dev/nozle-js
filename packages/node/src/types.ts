@@ -45,13 +45,70 @@ export type CheckoutResult =
       invoice_id?: string;
       amount_cents?: number;
       currency?: string;
+      external_entity_id?: string;
+      external_subscription_id?: string;
     }
   | {
       type: "completed" | "scheduled";
       status: string;
       subscription_id?: string;
       plan_code?: string;
+      external_entity_id?: string;
+      external_subscription_id?: string;
     };
+
+export interface EntitySubscriptionPlan {
+  code: string;
+  name: string;
+  interval: string;
+  amount_cents: number;
+  amount_currency: string;
+  status: string;
+  effective_at: string | null;
+}
+
+export interface EntitySubscription {
+  external_customer_id: string;
+  external_entity_id: string;
+  external_subscription_id: string;
+  status: string;
+  current_plan: EntitySubscriptionPlan | null;
+  pending_plan: EntitySubscriptionPlan | null;
+  billing_time: "calendar" | "anniversary" | null;
+  subscription_at: string | null;
+  started_at: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  ending_at: string | null;
+  canceled_at: string | null;
+  cancel_at_period_end: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EntitySubscriptionList {
+  entity_subscriptions: EntitySubscription[];
+}
+
+export interface EntitySubscriptionCheckoutParams {
+  planCode: string;
+  returnUrl?: string;
+  billingTime?: "calendar" | "anniversary";
+  idempotencyKey?: string;
+}
+
+export interface EntitySubscriptionCancelParams {
+  idempotencyKey: string;
+  timing?: SubscriptionTransitionTiming;
+  creditAction?: SubscriptionTransitionCreditAction;
+  refundMode?: SubscriptionTransitionRefundMode;
+  finalInvoiceAction?: SubscriptionTransitionFinalInvoiceAction;
+}
+
+export interface EntitySubscriptionCancelResult {
+  entity_subscription: EntitySubscription;
+  subscription_transition: SubscriptionTransitionResult["subscription_transition"];
+}
 
 export interface SubscribeResult {
   subscription_id: string;

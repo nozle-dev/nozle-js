@@ -3,6 +3,7 @@ export { MarginClient } from "./margin";
 export { CreditSystemsNamespace } from "./credit-systems";
 export { CreditsNamespace } from "./credits";
 export { EntitiesNamespace } from "./entities";
+export { EntitySubscriptionsNamespace } from "./entity-subscriptions";
 export { UsageNamespace } from "./usage";
 export { wrapOpenAI } from "./wrap-openai";
 export type { WrapOptions } from "./wrap-openai";
@@ -58,6 +59,12 @@ export type {
   EntityCreditTransferParams,
   EntityCreditTransferSource,
   EntityCreditTransferResult,
+  EntitySubscriptionPlan,
+  EntitySubscription,
+  EntitySubscriptionList,
+  EntitySubscriptionCheckoutParams,
+  EntitySubscriptionCancelParams,
+  EntitySubscriptionCancelResult,
   UsageCheckParams,
   UsageTrackParams,
   UsageTrackOptions,
