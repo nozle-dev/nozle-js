@@ -97,6 +97,39 @@ export interface EntitySubscriptionCheckoutParams {
   idempotencyKey?: string;
 }
 
+export interface EntitySubscriptionCheckoutItem {
+  externalEntityId: string;
+  planCode: string;
+}
+
+export interface EntitySubscriptionCheckoutManyParams {
+  items: EntitySubscriptionCheckoutItem[];
+  returnUrl?: string;
+  billingTime?: "calendar" | "anniversary";
+  idempotencyKey: string;
+}
+
+export interface EntitySubscriptionCheckoutItemResult {
+  external_entity_id: string;
+  external_subscription_id: string;
+  plan_code: string;
+  subscription_status: string;
+}
+
+export interface EntitySubscriptionCheckoutManyResult {
+  id: string;
+  type: "stripe" | "processing" | "completed";
+  status: string;
+  client_secret: string | null;
+  clientSecret?: string | null;
+  invoice_id: string;
+  amount_cents: number;
+  currency: string;
+  replayed: boolean;
+  expires_at: string | null;
+  items: EntitySubscriptionCheckoutItemResult[];
+}
+
 export interface EntitySubscriptionCancelParams {
   idempotencyKey: string;
   timing?: SubscriptionTransitionTiming;

@@ -4,6 +4,8 @@ import type {
   EntitySubscriptionCancelParams,
   EntitySubscriptionCancelResult,
   EntitySubscriptionCheckoutParams,
+  EntitySubscriptionCheckoutManyParams,
+  EntitySubscriptionCheckoutManyResult,
   EntitySubscriptionList,
 } from "./types";
 
@@ -44,6 +46,61 @@ export class EntitySubscriptionsNamespace {
     params: EntitySubscriptionCheckoutParams,
   ): Promise<CheckoutResult> {
     return this.change("checkout", customerId, entityId, params);
+  }
+
+  async checkoutMany(
+    customerId: string,
+    params: EntitySubscriptionCheckoutManyParams,
+  ): Promise<EntitySubscriptionCheckoutManyResult> {
+    const operation = "entitySubscriptions.checkoutMany";
+    this.requireSecret(operation);
+    requireValue(customerId, "customerId", operation);
+    validateIdempotencyKey(params.idempotencyKey, operation);
+    if (!Array.isArray(params.items) || params.items.length < 1 || params.items.length > 100) {
+      throw new Error(`${operation} requires between 1 and 100 items`);
+    }
+
+    const entityIds = new Set<string>();
+    for (const item of params.items) {
+      requireValue(item.externalEntityId, "items[].externalEntityId", operation);
+      requireValue(item.planCode, "items[].planCode", operation);
+      const entityId = item.externalEntityId.trim();
+      if (new TextEncoder().encode(entityId).length > 255) {
+        throw new Error(`${operation} externalEntityId must not exceed 255 bytes`);
+      }
+      if (entityIds.has(entityId)) {
+        throw new Error(`${operation} requires unique externalEntityId values`);
+      }
+      entityIds.add(entityId);
+    }
+
+    const response = await fetch(
+      `${this.coreUrl}/api/v1/customers/${encodeURIComponent(customerId)}/entity-subscriptions/checkout`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": params.idempotencyKey,
+        },
+        body: JSON.stringify({
+          entity_subscription_checkout: {
+            billing_time: params.billingTime,
+            return_url: params.returnUrl,
+            items: params.items.map((item) => ({
+              external_entity_id: item.externalEntityId,
+              plan_code: item.planCode,
+            })),
+          },
+        }),
+        signal: AbortSignal.timeout(this.timeout),
+      },
+    );
+    if (!response.ok) throw requestError(operation, response);
+    const payload = (await response.json()) as {
+      entity_subscription_checkout: EntitySubscriptionCheckoutManyResult;
+    };
+    return payload.entity_subscription_checkout;
   }
 
   async changePlan(
