@@ -166,6 +166,9 @@ if (result.allowed) {
 
 ## Customer Management
 
+Customer writes go directly to Nozle Core using the merchant's secret key, so
+Core derives the owning organization from that key.
+
 ```ts
 // Create or update a customer
 const customer = await nozle.customers.upsert({
