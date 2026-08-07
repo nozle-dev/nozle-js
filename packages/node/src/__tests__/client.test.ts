@@ -172,6 +172,16 @@ describe("Nozle", () => {
 
       expect(String(fetchMock.mock.calls[0][0])).not.toContain("engine.example");
     });
+
+    it("rejects publishable keys and missing customer IDs before network I/O", async () => {
+      await expect(
+        new Nozle({ apiKey: "pk_browser" }).customers.upsert({ externalId: "cust-1" }),
+      ).rejects.toThrow("requires a secret key");
+      await expect(
+        new Nozle({ apiKey: "sk_merchant" }).customers.upsert({ externalId: "" }),
+      ).rejects.toThrow("requires externalId");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("plans", () => {

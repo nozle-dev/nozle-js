@@ -310,6 +310,12 @@ class CustomersNamespace {
   ) {}
 
   async upsert(params: CustomerUpsertParams): Promise<CustomerUpsertResult> {
+    if (!this.apiKey.startsWith("sk_")) {
+      throw new Error("customers.upsert requires a secret key");
+    }
+    if (!params.externalId?.trim()) {
+      throw new Error("customers.upsert requires externalId");
+    }
     const res = await fetch(`${this.baseUrl}/api/v1/customers`, {
       method: "POST",
       headers: {
