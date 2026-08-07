@@ -941,5 +941,75 @@ describe("Nozle", () => {
       );
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
+
+    it("creates one checkout for multiple Entity plans", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          entity_subscription_checkout: {
+            id: "batch-1",
+            type: "stripe",
+            status: "open",
+            client_secret: "cs_bulk",
+            invoice_id: "invoice-1",
+            amount_cents: 4498,
+            currency: "USD",
+            replayed: false,
+            expires_at: "2026-08-07T12:00:00Z",
+            items: [
+              {
+                external_entity_id: "seat-pro-1",
+                external_subscription_id: "entity-sub-1",
+                plan_code: "pro",
+                subscription_status: "incomplete",
+              },
+            ],
+          },
+        }),
+      );
+      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://core.example" });
+
+      const result = await client.entitySubscriptions.checkoutMany("workspace/1", {
+        billingTime: "anniversary",
+        returnUrl: "https://wrrk.ai/settings/billing",
+        idempotencyKey: "workspace-1-seat-purchase",
+        items: [{ externalEntityId: "seat-pro-1", planCode: "pro" }],
+      });
+
+      expect(result.client_secret).toBe("cs_bulk");
+      expect(fetchMock.mock.calls[0][0]).toBe(
+        "https://core.example/api/v1/customers/workspace%2F1/entity-subscriptions/checkout",
+      );
+      expect(fetchMock.mock.calls[0][1].headers["Idempotency-Key"]).toBe(
+        "workspace-1-seat-purchase",
+      );
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+        entity_subscription_checkout: {
+          billing_time: "anniversary",
+          return_url: "https://wrrk.ai/settings/billing",
+          items: [{ external_entity_id: "seat-pro-1", plan_code: "pro" }],
+        },
+      });
+    });
+
+    it("validates bulk Entity checkout before network I/O", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+
+      await expect(
+        client.entitySubscriptions.checkoutMany("workspace", {
+          idempotencyKey: "purchase-1",
+          items: [
+            { externalEntityId: "seat-1", planCode: "pro" },
+            { externalEntityId: "seat-1", planCode: "max" },
+          ],
+        }),
+      ).rejects.toThrow("unique externalEntityId");
+      await expect(
+        new Nozle({ apiKey: "pk_browser" }).entitySubscriptions.checkoutMany("workspace", {
+          idempotencyKey: "purchase-1",
+          items: [{ externalEntityId: "seat-1", planCode: "pro" }],
+        }),
+      ).rejects.toThrow("requires a secret key");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 });

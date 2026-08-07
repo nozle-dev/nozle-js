@@ -30,7 +30,7 @@ const { allowed, reason, used, limit } = await nozle.can("cust_123", "code_compl
 const nozle = new Nozle({
   apiKey: "sk_live_...",            // Required
   baseUrl: "https://api.nozle.ai",  // Default: http://localhost:8080
-  eventsUrl: "https://lago.nozle.ai", // Default: http://localhost:3000
+  eventsUrl: "https://core.nozle.app", // Default: http://localhost:3000
   timeout: 15_000,                   // Default: 10000ms
 });
 ```
@@ -144,7 +144,7 @@ result.min_margin_percent    // Configured margin floor (if set)
 
 ## Credit Check & Deduct
 
-`checkAndDeduct` is a legacy Lago-wallet adapter. New product-credit integrations should use `nozle.usage.check()` and `nozle.usage.track()` so metric conversion, source ordering, idempotency, and the immutable ledger remain authoritative.
+`checkAndDeduct` is a legacy wallet adapter. New product-credit integrations should use `nozle.usage.check()` and `nozle.usage.track()` so metric conversion, source ordering, idempotency, and the immutable ledger remain authoritative.
 
 Advisory checks return exact-decimal `projected_remaining` and ordered
 `projected_deductions`. These fields show the source plan without changing a
@@ -216,6 +216,26 @@ console.log(balance.entity_available);
 console.log(balance.shared_available);
 console.log(balance.effective_available);
 ```
+
+## Entity subscription checkout
+
+Create one payment for a mixed basket of Entity plans from your trusted backend:
+
+```ts
+const checkout = await nozle.entitySubscriptions.checkoutMany("workspace_123", {
+  billingTime: "anniversary",
+  returnUrl: "https://app.example.com/settings/billing",
+  idempotencyKey: "workspace-123-seat-purchase-v1",
+  items: [
+    { externalEntityId: "seat_pro_001", planCode: "pro_monthly" },
+    { externalEntityId: "seat_max_001", planCode: "max_monthly" },
+  ],
+});
+```
+
+Return the result to your frontend and mount `checkout.client_secret` with the
+`Checkout` component from `@nozle-js/react`. Never expose the secret Nozle key
+to the browser.
 
 Allocation and deallocation preserve exact decimal strings, source provenance, and expiry. They are backend-only operations and may also be disabled by the Engine's exact organization/Credit System rollout gate.
 
