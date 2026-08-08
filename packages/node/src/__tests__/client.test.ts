@@ -120,6 +120,70 @@ describe("Nozle", () => {
     });
   });
 
+  describe("customers", () => {
+    it("upserts through Core with the merchant key and Core contract", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          customer: { external_id: "cust/1", name: "Acme", email: "billing@acme.test" },
+        }),
+      );
+      const client = new Nozle({
+        apiKey: "sk_merchant",
+        baseUrl: "https://engine.example",
+        eventsUrl: "https://core.example",
+      });
+
+      const customer = await client.customers.upsert({
+        externalId: "cust/1",
+        name: "Acme",
+        email: "billing@acme.test",
+      });
+
+      expect(customer).toEqual({
+        external_id: "cust/1",
+        name: "Acme",
+        email: "billing@acme.test",
+      });
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://core.example/api/v1/customers",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({ Authorization: "Bearer sk_merchant" }),
+        }),
+      );
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+        customer: {
+          external_id: "cust/1",
+          name: "Acme",
+          email: "billing@acme.test",
+        },
+      });
+    });
+
+    it("never sends customer upserts to Engine", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ customer: { external_id: "cust-1" } }));
+      const client = new Nozle({
+        apiKey: "sk_merchant",
+        baseUrl: "https://engine.example",
+        eventsUrl: "https://core.example",
+      });
+
+      await client.customers.upsert({ externalId: "cust-1" });
+
+      expect(String(fetchMock.mock.calls[0][0])).not.toContain("engine.example");
+    });
+
+    it("rejects publishable keys and missing customer IDs before network I/O", async () => {
+      await expect(
+        new Nozle({ apiKey: "pk_browser" }).customers.upsert({ externalId: "cust-1" }),
+      ).rejects.toThrow("requires a secret key");
+      await expect(
+        new Nozle({ apiKey: "sk_merchant" }).customers.upsert({ externalId: "" }),
+      ).rejects.toThrow("requires externalId");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe("plans", () => {
     it("fetches available plans", async () => {
       fetchMock.mockResolvedValueOnce(

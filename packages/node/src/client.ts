@@ -46,7 +46,7 @@ export class Nozle {
     this.eventsUrl = (config.eventsUrl ?? "http://localhost:3000").replace(/\/+$/, "");
     this.timeout = config.timeout ?? 10_000;
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.timeout);
-    this.customers = new CustomersNamespace(this.baseUrl, this.apiKey, this.timeout);
+    this.customers = new CustomersNamespace(this.eventsUrl, this.apiKey, this.timeout);
     this.creditSystems = new CreditSystemsNamespace(this.eventsUrl, this.apiKey, this.timeout);
     this.entities = new EntitiesNamespace(this.baseUrl, this.apiKey, this.timeout);
     this.entitySubscriptions = new EntitySubscriptionsNamespace(this.eventsUrl, this.apiKey, this.timeout);
@@ -310,6 +310,12 @@ class CustomersNamespace {
   ) {}
 
   async upsert(params: CustomerUpsertParams): Promise<CustomerUpsertResult> {
+    if (!this.apiKey.startsWith("sk_")) {
+      throw new Error("customers.upsert requires a secret key");
+    }
+    if (!params.externalId?.trim()) {
+      throw new Error("customers.upsert requires externalId");
+    }
     const res = await fetch(`${this.baseUrl}/api/v1/customers`, {
       method: "POST",
       headers: {
@@ -317,13 +323,16 @@ class CustomersNamespace {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        external_id: params.externalId,
-        name: params.name,
-        email: params.email,
+        customer: {
+          external_id: params.externalId,
+          name: params.name,
+          email: params.email,
+        },
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!res.ok) throw new Error(`customers.upsert failed: ${res.status} ${res.statusText}`);
-    return res.json();
+    const payload = (await res.json()) as { customer: CustomerUpsertResult };
+    return payload.customer;
   }
 }
