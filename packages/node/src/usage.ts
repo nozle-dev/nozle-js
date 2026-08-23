@@ -24,7 +24,7 @@ export class UsageNamespace {
       body: JSON.stringify({
         customer_id: params.customerId,
         ...(params.entityId && { entity_id: params.entityId }),
-        billable_metric_code: params.billableMetricCode,
+        feature_code: params.featureCode,
         ...(params.creditSystemCode && {
           credit_system_code: params.creditSystemCode,
         }),
@@ -59,7 +59,7 @@ export class UsageNamespace {
       body: JSON.stringify({
         customer_id: params.customerId,
         ...(params.entityId && { entity_id: params.entityId }),
-        billable_metric_code: params.billableMetricCode,
+        feature_code: params.featureCode,
         ...(params.creditSystemCode && {
           credit_system_code: params.creditSystemCode,
         }),
@@ -80,8 +80,8 @@ function validateUsageParams(params: UsageCheckParams | UsageTrackParams): void 
   if (params.entityId !== undefined && !params.entityId.trim()) {
     throw new Error("usage entityId must not be empty");
   }
-  if (!params.billableMetricCode?.trim()) {
-    throw new Error("usage requires billableMetricCode");
+  if (!params.featureCode?.trim()) {
+    throw new Error("usage requires featureCode");
   }
 }
 

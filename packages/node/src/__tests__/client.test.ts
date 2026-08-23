@@ -600,7 +600,7 @@ describe("Nozle", () => {
 
       const result = await client.usage.check({
         customerId: "acme",
-        billableMetricCode: "agent_execution",
+        featureCode: "agent_execution",
         creditSystemCode: "ai_credits",
         properties: { model: "gpt-5" },
         occurredAt: "2026-07-20T12:00:00.750Z",
@@ -618,7 +618,7 @@ describe("Nozle", () => {
       expect(url).toBe("http://localhost:8080/api/v1/usage/check");
       expect(JSON.parse(options.body)).toEqual({
         customer_id: "acme",
-        billable_metric_code: "agent_execution",
+        feature_code: "agent_execution",
         credit_system_code: "ai_credits",
         properties: { model: "gpt-5" },
         occurred_at: "2026-07-20T12:00:00.750Z",
@@ -639,7 +639,7 @@ describe("Nozle", () => {
         {
           customerId: "acme",
           entityId: "user/42",
-          billableMetricCode: "agent_execution",
+          featureCode: "agent_execution",
           properties: { request: 1 },
           timestamp: "2026-07-20T12:00:00.750Z",
         },
@@ -653,7 +653,7 @@ describe("Nozle", () => {
       expect(JSON.parse(options.body)).toEqual({
         customer_id: "acme",
         entity_id: "user/42",
-        billable_metric_code: "agent_execution",
+        feature_code: "agent_execution",
         properties: { request: 1 },
         timestamp: "2026-07-20T12:00:00.750Z",
       });
@@ -664,7 +664,7 @@ describe("Nozle", () => {
 
       await expect(
         client.usage.track(
-          { customerId: "acme", billableMetricCode: "agent_execution" },
+          { customerId: "acme", featureCode: "agent_execution" },
           { idempotencyKey: "execution-1" },
         ),
       ).rejects.toThrow("requires a secret key");
@@ -675,7 +675,7 @@ describe("Nozle", () => {
       const client = new Nozle({ apiKey: "sk_test" });
       const params = {
         customerId: "acme",
-        billableMetricCode: "agent_execution",
+        featureCode: "agent_execution",
       };
 
       await expect(client.usage.track(params, { idempotencyKey: "" })).rejects.toThrow("non-empty idempotencyKey");

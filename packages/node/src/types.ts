@@ -333,7 +333,7 @@ export interface CreditOperation {
   credit_system_id: string;
   credit_system_name: string;
   unit_name: string;
-  billable_metric_code: string | null;
+  feature_code: string | null;
   type:
     | "consume"
     | "grant"
@@ -498,7 +498,7 @@ export interface EntityCreditTransferResult {
 export interface UsageCheckParams {
   customerId: string;
   entityId?: string;
-  billableMetricCode: string;
+  featureCode: string;
   creditSystemCode?: string;
   properties?: Record<string, unknown>;
   occurredAt?: string;
@@ -507,7 +507,7 @@ export interface UsageCheckParams {
 export interface UsageTrackParams {
   customerId: string;
   entityId?: string;
-  billableMetricCode: string;
+  featureCode: string;
   creditSystemCode?: string;
   properties?: Record<string, unknown>;
   timestamp?: string;
