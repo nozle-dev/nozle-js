@@ -254,7 +254,7 @@ await nozle.usage.track(
   {
     customerId: "workspace_123",
     entityId: "user_42",
-    billableMetricCode: "agent_execution",
+    featureCode: "agent_execution",
     creditSystemCode: "ai_credits",
   },
   { idempotencyKey: "execution-0183f" },
