@@ -11,21 +11,48 @@ export interface TrackOptions {
   timestamp?: string;
 }
 
+export interface CostEventParams {
+  costMeterCode: string;
+  costEventId?: string;
+  parentTransactionId?: string;
+  externalCustomerId?: string;
+  requestId?: string;
+  operationKey?: string;
+  properties?: Record<string, unknown>;
+  timestamp?: number;
+}
+
+export interface CostEventAccepted {
+  status: "accepted";
+  cost_event_id: string;
+}
+
 export interface CanResult {
   allowed: boolean;
   reason?: string;
+  feature_type?: string;
+  configuration?: Record<string, string>;
   used: number;
   limit?: number;
   remaining?: number;
   overage?: boolean;
-  cost_per_use_cents: number;
-  revenue_per_use_cents: number;
-  margin_per_use_cents: number;
-  margin_percent?: number;
-  min_margin_percent?: number;
-  margin_level?: string;
-  margin_enforcement_mode?: string;
-  warning?: string;
+  economics?: CanEconomics;
+}
+
+export interface CanEconomics {
+  status: "estimated" | "not_configured" | "unavailable" | "stale";
+  reporting_currency?: string;
+  estimated_cost?: string;
+  estimated_revenue?: string;
+  estimated_margin?: string;
+  estimated_margin_percent?: string;
+  cost_rule_version_ids?: string[];
+  exclusions?: string[];
+  policy_version_id?: string;
+  policy_decision?: "allow" | "warn" | "deny";
+  policy_reason?: string;
+  reason?: string;
+  calculated_at: string;
 }
 
 export interface Plan {

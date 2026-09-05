@@ -1,9 +1,11 @@
 import type { Nozle } from "./client";
+import { captureProviderUsage, normalizeOpenAIUsage } from "./provider-usage";
 
 export interface WrapOptions {
   customerId: string;
   metricCode?: string;
   feature?: string;
+  costMeterCode?: string;
 }
 
 export function wrapOpenAI<T extends { chat: { completions: { create: Function } } }>(
@@ -24,12 +26,17 @@ export function wrapOpenAI<T extends { chat: { completions: { create: Function }
 
     const usage = (result as any).usage;
     if (usage) {
-      void nozle.track(opts.customerId, opts.metricCode ?? "llm_tokens", {
+      captureProviderUsage({
+        nozle,
+        customerId: opts.customerId,
+        featureCode: opts.metricCode ?? "llm_tokens",
+        feature: opts.feature,
+        costMeterCode: opts.costMeterCode,
+        provider: "openai",
         model: (result as any).model ?? params.model,
-        input_tokens: usage.prompt_tokens ?? 0,
-        output_tokens: usage.completion_tokens ?? 0,
-        latency_ms: Date.now() - start,
-        ...(opts.feature && { feature: opts.feature }),
+        requestId: (result as any).id,
+        usage: normalizeOpenAIUsage(usage),
+        latencyMs: Date.now() - start,
       });
     }
     return result;
@@ -45,20 +52,29 @@ async function* wrapStream(
   model: string,
   start: number,
 ): AsyncGenerator<any> {
-  let usage: { prompt_tokens?: number; completion_tokens?: number } | null = null;
+  let usage: any = null;
+  let responseModel = model;
+  let requestId: unknown;
 
   for await (const chunk of stream) {
     if (chunk.usage) usage = chunk.usage;
+    if (chunk.model) responseModel = chunk.model;
+    if (chunk.id) requestId = chunk.id;
     yield chunk;
   }
 
   if (usage) {
-    void nozle.track(opts.customerId, opts.metricCode ?? "llm_tokens", {
-      model,
-      input_tokens: usage.prompt_tokens ?? 0,
-      output_tokens: usage.completion_tokens ?? 0,
-      latency_ms: Date.now() - start,
-      ...(opts.feature && { feature: opts.feature }),
+    captureProviderUsage({
+      nozle,
+      customerId: opts.customerId,
+      featureCode: opts.metricCode ?? "llm_tokens",
+      feature: opts.feature,
+      costMeterCode: opts.costMeterCode,
+      provider: "openai",
+      model: responseModel,
+      requestId,
+      usage: normalizeOpenAIUsage(usage),
+      latencyMs: Date.now() - start,
     });
   }
 }
