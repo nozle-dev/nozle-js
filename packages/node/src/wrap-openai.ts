@@ -17,7 +17,11 @@ export function wrapOpenAI<T extends { chat: { completions: { create: Function }
 
   client.chat.completions.create = async function wrappedCreate(...args: any[]) {
     const start = Date.now();
-    const params = args[0] ?? {};
+    const params = { ...(args[0] ?? {}) };
+    if (params.stream) {
+      params.stream_options = { ...(params.stream_options ?? {}), include_usage: true };
+      args[0] = params;
+    }
     const result = await original(...args);
 
     if (params.stream) {

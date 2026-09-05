@@ -169,10 +169,11 @@ if (result.allowed) {
 Response includes cost intelligence:
 
 ```ts
-result.economics?.estimated_cost           // Exact decimal string, for example "0.05"
-result.economics?.estimated_revenue        // Exact decimal string, for example "0.10"
-result.economics?.estimated_margin         // Exact decimal string, for example "0.05"
-result.economics?.estimated_margin_percent // Percentage string when revenue is above zero
+result.economics?.estimated_incremental_cost    // Exact decimal string, for example "0.05"
+result.economics?.estimated_incremental_revenue // Exact decimal string, for example "0.10"
+result.economics?.estimated_incremental_margin  // Exact decimal string, for example "0.05"
+result.economics?.estimated_margin_percent      // Percentage string when revenue is above zero
+result.policy?.decision                         // "allow", "warn", or "deny"
 ```
 
 ## Credit Check & Deduct

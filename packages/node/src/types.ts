@@ -37,22 +37,33 @@ export interface CanResult {
   remaining?: number;
   overage?: boolean;
   economics?: CanEconomics;
+  policy?: CanPolicy;
 }
 
 export interface CanEconomics {
   status: "estimated" | "not_configured" | "unavailable" | "stale";
-  reporting_currency?: string;
-  estimated_cost?: string;
-  estimated_revenue?: string;
-  estimated_margin?: string;
+  currency?: string;
+  estimated_incremental_cost?: string;
+  estimated_incremental_revenue?: string;
+  estimated_incremental_margin?: string;
   estimated_margin_percent?: string;
-  cost_rule_version_ids?: string[];
-  exclusions?: string[];
-  policy_version_id?: string;
-  policy_decision?: "allow" | "warn" | "deny";
-  policy_reason?: string;
+  rule_version_ids?: string[];
+  includes?: string[];
+  excludes?: string[];
   reason?: string;
   calculated_at: string;
+}
+
+export interface CanPolicy {
+  version_id: string;
+  mode: "allow" | "warn" | "deny";
+  on_unavailable: "allow" | "warn" | "deny";
+  minimum_margin_amount?: string;
+  minimum_margin_percent?: string;
+  maximum_estimated_cost?: string;
+  maximum_snapshot_age_seconds: number;
+  decision: "allow" | "warn" | "deny";
+  reason: string;
 }
 
 export interface Plan {

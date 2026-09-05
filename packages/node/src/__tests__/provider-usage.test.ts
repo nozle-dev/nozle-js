@@ -99,6 +99,38 @@ describe("provider wrappers", () => {
     );
   });
 
+  it("requests usage in OpenAI streaming responses", async () => {
+    const nozle = tracker();
+    async function* responseStream() {
+      yield { id: "openai_stream_1", model: "gpt-test", choices: [] };
+      yield {
+        id: "openai_stream_1",
+        model: "gpt-test",
+        choices: [],
+        usage: { prompt_tokens: 20, completion_tokens: 5 },
+      };
+    }
+    const create = vi.fn(async () => responseStream());
+    const provider = { chat: { completions: { create } } };
+
+    wrapOpenAI(provider, nozle as any, {
+      customerId: "customer_1",
+      metricCode: "copilot_action",
+      costMeterCode: "ai_tokens",
+    });
+    const stream = await provider.chat.completions.create({ model: "gpt-test", stream: true } as any);
+    for await (const _chunk of stream) {
+      // Consume the stream so the final usage chunk is captured.
+    }
+
+    expect(create).toHaveBeenCalledWith({
+      model: "gpt-test",
+      stream: true,
+      stream_options: { include_usage: true },
+    });
+    await vi.waitFor(() => expect(nozle.costEvents.track).toHaveBeenCalledTimes(2));
+  });
+
   it("captures Anthropic cached tokens without changing the provider response", async () => {
     const nozle = tracker();
     const response = {
