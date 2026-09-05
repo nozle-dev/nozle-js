@@ -17,8 +17,19 @@ import { Nozle } from "@nozle-js/node";
 
 const nozle = new Nozle({ apiKey: "sk_live_..." });
 
-// Track usage event
-await nozle.track("cust_123", "tokens_used", { tokens: 150, model: "gpt-4o" });
+// Track a Feature Event and keep its organization-wide identity.
+const transactionId = await nozle.track(
+  "cust_123",
+  "copilot_action",
+  { mode: "planning" },
+);
+
+// Add a detailed provider cost to that Feature Event without waiting for it.
+await nozle.costEvents.track({
+  parentTransactionId: transactionId,
+  costMeterCode: "ai_tokens",
+  properties: { model: "gpt-5", type: "input", tokens: 150 },
+});
 
 // Entitlement check
 const { allowed, reason, used, limit } = await nozle.can("cust_123", "code_completion");
@@ -54,8 +65,9 @@ import { Nozle, wrapOpenAI } from "@nozle-js/node";
 const nozle = new Nozle({ apiKey: "sk_live_..." });
 const openai = wrapOpenAI(new OpenAI(), nozle, {
   customerId: "cust_123",
-  feature: "code_completion",  // optional: tag for entitlement tracking
-  metricCode: "llm_tokens",   // optional: defaults to "llm_tokens"
+  metricCode: "copilot_action", // customer-facing Feature Event code
+  costMeterCode: "ai_tokens",  // optional detailed Cost Events
+  feature: "code_completion",  // optional analytics property
 });
 
 // Use OpenAI normally — tracking happens automatically
@@ -88,6 +100,8 @@ import { Nozle, wrapAnthropic } from "@nozle-js/node";
 const nozle = new Nozle({ apiKey: "sk_live_..." });
 const anthropic = wrapAnthropic(new Anthropic(), nozle, {
   customerId: "cust_123",
+  metricCode: "copilot_action",
+  costMeterCode: "ai_tokens",
   feature: "code_completion",
 });
 
@@ -99,7 +113,7 @@ const message = await anthropic.messages.create({
 });
 ```
 
-Each tracked event sends `{ model, input_tokens, output_tokens, latency_ms, feature }` to the engine. The Go cost model system calculates `cost_cents` server-side.
+Each provider call creates one Feature Event. When `costMeterCode` is set, the wrapper generates the Feature Event `transaction_id` before sending and attaches separate detailed Cost Events for `input`, `cached_input`, `cache_write`, `output`, and `reasoning` token categories when present. OpenAI and Anthropic field names are normalized into the same Cost Event properties: `{ tokens, provider, model, type }`. Delivery can arrive out of order because the Cost Event processor resolves the shared `transaction_id` asynchronously.
 
 ## Usage Tracking
 
@@ -121,6 +135,25 @@ await nozle.track("cust_123", "api_call", { tokens: 100 }, {
 
 Subscription auto-resolution: if no `subscriptionId` is provided, the SDK looks up the customer's active subscription and caches it for subsequent calls.
 
+`track()` returns the `transactionId`. The SDK generates a UUID version 7 identifier before sending the request when one is not supplied. The identifier is unique across the Nozle organization and can immediately be reused as a Cost Event parent, including when the two requests arrive out of order.
+
+```ts
+const transactionId = nozle.events.createTransactionId();
+
+await nozle.track("cust_123", "copilot_action", {}, { transactionId });
+
+await nozle.costEvents.track({
+  costEventId: nozle.costEvents.createCostEventId(),
+  costMeterCode: "ai_tokens",
+  parentTransactionId: transactionId,
+  requestId: "provider_request_123",
+  operationKey: "planning",
+  properties: { model: "gpt-5", type: "output", tokens: 900 },
+});
+```
+
+A Cost Event may instead use `externalCustomerId` without a parent when the cost belongs to a customer but not to one Feature Event. Cost Event methods require a secret key.
+
 ## Entitlement Checks
 
 ```ts
@@ -136,10 +169,11 @@ if (result.allowed) {
 Response includes cost intelligence:
 
 ```ts
-result.cost_per_use_cents    // Your cost per unit
-result.revenue_per_use_cents // What you charge per unit
-result.margin_per_use_cents  // Revenue minus cost
-result.min_margin_percent    // Configured margin floor (if set)
+result.economics?.estimated_incremental_cost    // Exact decimal string, for example "0.05"
+result.economics?.estimated_incremental_revenue // Exact decimal string, for example "0.10"
+result.economics?.estimated_incremental_margin  // Exact decimal string, for example "0.05"
+result.economics?.estimated_margin_percent      // Percentage string when revenue is above zero
+result.policy?.decision                         // "allow", "warn", or "deny"
 ```
 
 ## Credit Check & Deduct

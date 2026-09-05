@@ -1,5 +1,8 @@
 export { Nozle } from "./client";
 export { MarginClient } from "./margin";
+export { EventsNamespace } from "./events";
+export { CostEventsNamespace } from "./cost-events";
+export { createTransactionId, createCostEventId } from "./identifiers";
 export { CreditSystemsNamespace } from "./credit-systems";
 export { CreditsNamespace } from "./credits";
 export { EntitiesNamespace } from "./entities";
@@ -8,9 +11,13 @@ export { UsageNamespace } from "./usage";
 export { wrapOpenAI } from "./wrap-openai";
 export type { WrapOptions } from "./wrap-openai";
 export { wrapAnthropic } from "./wrap-anthropic";
+export { normalizeOpenAIUsage, normalizeAnthropicUsage } from "./provider-usage";
+export type { ProviderTokenType, ProviderTokenUsage } from "./provider-usage";
 export type {
   NozleConfig,
   TrackOptions,
+  CostEventParams,
+  CostEventAccepted,
   CanResult,
   Plan,
   CheckoutResult,
