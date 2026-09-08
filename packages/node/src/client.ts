@@ -1,8 +1,10 @@
 import { can as _can } from "./can";
 import { CreditsNamespace } from "./credits";
+import { CostEventsNamespace } from "./cost-events";
 import { CreditSystemsNamespace } from "./credit-systems";
 import { EntitiesNamespace } from "./entities";
 import { EntitySubscriptionsNamespace } from "./entity-subscriptions";
+import { EventsNamespace } from "./events";
 import { MarginClient } from "./margin";
 import { track as _track } from "./track";
 import { UsageNamespace } from "./usage";
@@ -30,6 +32,8 @@ export class Nozle {
   readonly baseUrl: string;
   readonly eventsUrl: string;
   readonly margin: MarginClient;
+  readonly events: EventsNamespace;
+  readonly costEvents: CostEventsNamespace;
   readonly customers: CustomersNamespace;
   readonly creditSystems: CreditSystemsNamespace;
   readonly entities: EntitiesNamespace;
@@ -46,6 +50,8 @@ export class Nozle {
     this.eventsUrl = (config.eventsUrl ?? "http://localhost:3000").replace(/\/+$/, "");
     this.timeout = config.timeout ?? 10_000;
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.timeout);
+    this.events = new EventsNamespace();
+    this.costEvents = new CostEventsNamespace(this.baseUrl, this.apiKey, this.timeout);
     this.customers = new CustomersNamespace(this.eventsUrl, this.apiKey, this.timeout);
     this.creditSystems = new CreditSystemsNamespace(this.eventsUrl, this.apiKey, this.timeout);
     this.entities = new EntitiesNamespace(this.baseUrl, this.apiKey, this.timeout);
@@ -59,7 +65,7 @@ export class Nozle {
     event: string,
     metadata?: Record<string, unknown>,
     options?: TrackOptions,
-  ): Promise<void> {
+  ): Promise<string> {
     const opts = { ...options };
     if (!opts.subscriptionId) {
       opts.subscriptionId = await this.resolveSubscription(customerId);

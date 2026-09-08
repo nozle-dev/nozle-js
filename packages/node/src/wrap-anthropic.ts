@@ -1,4 +1,5 @@
 import type { Nozle } from "./client";
+import { captureProviderUsage, normalizeAnthropicUsage } from "./provider-usage";
 import type { WrapOptions } from "./wrap-openai";
 
 export function wrapAnthropic<T extends { messages: { create: Function } }>(
@@ -19,12 +20,17 @@ export function wrapAnthropic<T extends { messages: { create: Function } }>(
 
     const usage = (result as any).usage;
     if (usage) {
-      void nozle.track(opts.customerId, opts.metricCode ?? "llm_tokens", {
+      captureProviderUsage({
+        nozle,
+        customerId: opts.customerId,
+        featureCode: opts.metricCode ?? "llm_tokens",
+        feature: opts.feature,
+        costMeterCode: opts.costMeterCode,
+        provider: "anthropic",
         model: (result as any).model ?? params.model,
-        input_tokens: usage.input_tokens ?? 0,
-        output_tokens: usage.output_tokens ?? 0,
-        latency_ms: Date.now() - start,
-        ...(opts.feature && { feature: opts.feature }),
+        requestId: (result as any).id,
+        usage: normalizeAnthropicUsage(usage),
+        latencyMs: Date.now() - start,
       });
     }
     return result;
@@ -40,26 +46,34 @@ async function* wrapStream(
   model: string,
   start: number,
 ): AsyncGenerator<any> {
-  let inputTokens = 0;
-  let outputTokens = 0;
+  let usage: any = null;
+  let responseModel = model;
+  let requestId: unknown;
 
   for await (const event of stream) {
-    if (event.type === "message_delta" && event.usage) {
-      outputTokens = event.usage.output_tokens ?? outputTokens;
+    if (event.type === "message_start" && event.message) {
+      usage = event.message.usage ?? usage;
+      responseModel = event.message.model ?? responseModel;
+      requestId = event.message.id ?? requestId;
     }
-    if (event.type === "message_start" && event.message?.usage) {
-      inputTokens = event.message.usage.input_tokens ?? 0;
+    if (event.type === "message_delta" && event.usage) {
+      usage = { ...(usage ?? {}), ...event.usage };
     }
     yield event;
   }
 
-  if (inputTokens || outputTokens) {
-    void nozle.track(opts.customerId, opts.metricCode ?? "llm_tokens", {
-      model,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      latency_ms: Date.now() - start,
-      ...(opts.feature && { feature: opts.feature }),
+  if (usage) {
+    captureProviderUsage({
+      nozle,
+      customerId: opts.customerId,
+      featureCode: opts.metricCode ?? "llm_tokens",
+      feature: opts.feature,
+      costMeterCode: opts.costMeterCode,
+      provider: "anthropic",
+      model: responseModel,
+      requestId,
+      usage: normalizeAnthropicUsage(usage),
+      latencyMs: Date.now() - start,
     });
   }
 }

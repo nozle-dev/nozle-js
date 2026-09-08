@@ -5,7 +5,7 @@ export async function can(
   apiKey: string,
   customerId: string,
   feature: string,
-  metadata?: Record<string, string>,
+  metadata?: Record<string, unknown>,
   timeout = 10_000,
 ): Promise<CanResult> {
   const url = new URL(`${baseUrl}/api/v1/can`);

@@ -11,21 +11,59 @@ export interface TrackOptions {
   timestamp?: string;
 }
 
+export interface CostEventParams {
+  costMeterCode: string;
+  costEventId?: string;
+  parentTransactionId?: string;
+  externalCustomerId?: string;
+  requestId?: string;
+  operationKey?: string;
+  properties?: Record<string, unknown>;
+  timestamp?: number;
+}
+
+export interface CostEventAccepted {
+  status: "accepted";
+  cost_event_id: string;
+}
+
 export interface CanResult {
   allowed: boolean;
   reason?: string;
+  feature_type?: string;
+  configuration?: Record<string, string>;
   used: number;
   limit?: number;
   remaining?: number;
   overage?: boolean;
-  cost_per_use_cents: number;
-  revenue_per_use_cents: number;
-  margin_per_use_cents: number;
-  margin_percent?: number;
-  min_margin_percent?: number;
-  margin_level?: string;
-  margin_enforcement_mode?: string;
-  warning?: string;
+  economics?: CanEconomics;
+  policy?: CanPolicy;
+}
+
+export interface CanEconomics {
+  status: "estimated" | "not_configured" | "unavailable" | "stale";
+  currency?: string;
+  estimated_incremental_cost?: string;
+  estimated_incremental_revenue?: string;
+  estimated_incremental_margin?: string;
+  estimated_margin_percent?: string;
+  rule_version_ids?: string[];
+  includes?: string[];
+  excludes?: string[];
+  reason?: string;
+  calculated_at: string;
+}
+
+export interface CanPolicy {
+  version_id: string;
+  mode: "allow" | "warn" | "deny";
+  on_unavailable: "allow" | "warn" | "deny";
+  minimum_margin_amount?: string;
+  minimum_margin_percent?: string;
+  maximum_estimated_cost?: string;
+  maximum_snapshot_age_seconds: number;
+  decision: "allow" | "warn" | "deny";
+  reason: string;
 }
 
 export interface Plan {

@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto";
-
+import { createTransactionId } from "./identifiers";
 import type { TrackOptions } from "./types";
 
 export async function track(
@@ -10,9 +9,10 @@ export async function track(
   metadata?: Record<string, unknown>,
   options?: TrackOptions,
   timeout = 10_000,
-): Promise<void> {
+): Promise<string> {
+  const transactionId = options?.transactionId ?? createTransactionId();
   const body: Record<string, unknown> = {
-    transaction_id: options?.transactionId ?? randomUUID(),
+    transaction_id: transactionId,
     external_customer_id: customerId,
     code: event,
     properties: metadata ?? {},
@@ -39,4 +39,6 @@ export async function track(
   if (!res.ok) {
     throw new Error(`track failed: ${res.status} ${res.statusText}`);
   }
+
+  return transactionId;
 }

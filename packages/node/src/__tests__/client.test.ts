@@ -55,10 +55,14 @@ describe("Nozle", () => {
     it("generates transaction_id when not provided", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({}));
       const client = new Nozle({ apiKey: "sk_test" });
-      await client.track("cust_1", "api_call", undefined, { subscriptionId: "sub_1" });
+      const transactionId = await client.track("cust_1", "api_call", undefined, {
+        subscriptionId: "sub_1",
+      });
 
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
       expect(body.event.transaction_id).toHaveLength(36);
+      expect(transactionId).toBe(body.event.transaction_id);
+      expect(transactionId[14]).toBe("7");
     });
 
     it("auto-resolves subscription when not provided", async () => {
@@ -100,6 +104,65 @@ describe("Nozle", () => {
       );
       const client = new Nozle({ apiKey: "sk_test" });
       await expect(client.track("cust_1", "event")).rejects.toThrow("2 active subscriptions");
+    });
+  });
+
+  describe("costEvents", () => {
+    it("creates identifiers before either event is sent", () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+
+      expect(client.events.createTransactionId()[14]).toBe("7");
+      expect(client.costEvents.createCostEventId()[14]).toBe("7");
+    });
+
+    it("sends an attached Cost Event to the Engine", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ status: "accepted", cost_event_id: "cost_123" }, 202),
+      );
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+
+      const result = await client.costEvents.track({
+        costEventId: "cost_123",
+        costMeterCode: "ai_tokens",
+        parentTransactionId: "feature_123",
+        externalCustomerId: "customer_123",
+        requestId: "provider_123",
+        operationKey: "planning",
+        properties: { tokens: 900 },
+        timestamp: 1788345001,
+      });
+
+      expect(result).toEqual({ status: "accepted", cost_event_id: "cost_123" });
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://engine.example/api/v1/cost-events",
+        expect.objectContaining({ method: "POST" }),
+      );
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+        cost_event_id: "cost_123",
+        cost_meter_code: "ai_tokens",
+        parent_transaction_id: "feature_123",
+        external_customer_id: "customer_123",
+        request_id: "provider_123",
+        operation_key: "planning",
+        properties: { tokens: 900 },
+        timestamp: 1788345001,
+      });
+    });
+
+    it("rejects invalid attribution and publishable keys before network I/O", async () => {
+      const secretClient = new Nozle({ apiKey: "sk_test" });
+      const publishableClient = new Nozle({ apiKey: "pk_test" });
+
+      await expect(
+        secretClient.costEvents.track({ costMeterCode: "email" }),
+      ).rejects.toThrow("requires parentTransactionId or externalCustomerId");
+      await expect(
+        publishableClient.costEvents.track({
+          costMeterCode: "email",
+          externalCustomerId: "customer_123",
+        }),
+      ).rejects.toThrow("requires a secret key");
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
