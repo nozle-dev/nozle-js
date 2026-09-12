@@ -74,7 +74,65 @@ export interface Plan {
   interval: string;
 }
 
+export interface RazorpayCheckoutResult {
+  type: "razorpay";
+  checkout_id: string;
+  key_id: string;
+  order_id: string;
+  amount_cents: number;
+  currency: string;
+  expires_at?: string;
+  invoice_id?: string;
+  customer_id?: string;
+  recurring?: boolean;
+  mandate_max_amount_cents?: number;
+}
+
+export interface ProcessingCheckoutResult {
+  type: "processing";
+  checkout_id: string;
+  status: string;
+}
+
+export interface HostedCheckoutResult {
+  type: "hosted";
+  payment_url: string;
+  checkout_id?: string;
+}
+
+export interface CheckoutOptions {
+  idempotencyKey?: string;
+  registerMandate?: boolean;
+  externalEntityId?: string;
+}
+
+export interface RazorpayVerification {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}
+
+export interface CheckoutStatus {
+  checkout_id: string;
+  provider: "razorpay";
+  status:
+    | "processing"
+    | "awaiting_payment"
+    | "succeeded"
+    | "failed"
+    | "expired"
+    | "needs_review";
+  fulfillment_status: "pending" | "processing" | "succeeded";
+  amount_cents: number;
+  currency: string;
+  invoice_id?: string | null;
+  checkout?: CheckoutResult;
+}
+
 export type CheckoutResult =
+  | RazorpayCheckoutResult
+  | ProcessingCheckoutResult
+  | HostedCheckoutResult
   | {
       type: "stripe";
       client_secret?: string;
@@ -129,6 +187,7 @@ export interface EntitySubscriptionList {
 }
 
 export interface EntitySubscriptionCheckoutParams {
+  registerMandate?: boolean;
   planCode: string;
   returnUrl?: string;
   billingTime?: "calendar" | "anniversary";
@@ -156,7 +215,10 @@ export interface EntitySubscriptionCheckoutItemResult {
 
 export interface EntitySubscriptionCheckoutManyResult {
   id: string;
-  type: "stripe" | "processing" | "completed";
+  type: "stripe" | "razorpay" | "processing" | "completed";
+  checkout_id?: string;
+  key_id?: string;
+  order_id?: string;
   status: string;
   client_secret: string | null;
   clientSecret?: string | null;

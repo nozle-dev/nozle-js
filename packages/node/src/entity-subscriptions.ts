@@ -169,6 +169,7 @@ export class EntitySubscriptionsNamespace {
       body: JSON.stringify({
         plan_code: params.planCode,
         return_url: params.returnUrl,
+          register_mandate: params.registerMandate,
         billing_time: params.billingTime,
       }),
       signal: AbortSignal.timeout(this.timeout),

@@ -38,7 +38,8 @@ export function UpgradeModal({
   onCancel,
   onError,
 }: UpgradeModalProps): React.ReactElement | null {
-  const { createCheckout } = useBillingContext();
+  const { createCheckout, verifyCheckout, getCheckoutStatus } = useBillingContext();
+  const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
@@ -54,11 +55,15 @@ export function UpgradeModal({
         returnUrl: returnUrl ?? window.location.href,
       });
       await handleCheckoutResult(result, {
+        verifyCheckout,
+        getCheckoutStatus,
+        onSuccess: () => { setProcessing(false); onCompleted?.(); },
+        onProcessing: () => setProcessing(true),
         onStripeClientSecret: (clientSecret) => {
           onStripeClientSecret?.(clientSecret);
           onCheckoutStarted?.();
         },
-        onComplete: () => onCompleted?.(),
+        onComplete: () => { setProcessing(false); onCompleted?.(); },
         onScheduled: () => onScheduled?.(),
       });
       onConfirm?.();
@@ -104,7 +109,8 @@ export function UpgradeModal({
           Confirm plan change
         </h2>
 
-        {error && <p role="alert" style={{ color: 'oklch(0.6 0.2 25)' }}>{error}</p>}
+        {processing && <p role="status">Payment is processing. Confirmation may take a little while.</p>}
+      {error && <p role="alert" style={{ color: 'oklch(0.6 0.2 25)' }}>{error}</p>}
 
         {preview && (
           <div style={{ marginBottom: '1.5rem' }}>

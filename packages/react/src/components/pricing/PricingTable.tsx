@@ -416,6 +416,7 @@ export function PricingTable({
   const [currentPlan, setCurrentPlan] = useState<string | null>(currentPlanCode ?? null);
   const [isAnnual, setIsAnnual] = useState(false);
   const [loading, setLoading] = useState(!propPlans);
+  const [processing, setProcessing] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -454,7 +455,14 @@ export function PricingTable({
         returnUrl: returnUrl ?? window.location.href,
       });
       onCheckoutResult?.(result);
-      await handleCheckoutResult(result, { onStripeClientSecret });
+      await handleCheckoutResult(result, {
+        onStripeClientSecret,
+        verifyCheckout: billing?.verifyCheckout,
+        getCheckoutStatus: billing?.getCheckoutStatus,
+        onProcessing: () => setProcessing(true),
+        onSuccess: () => setProcessing(false),
+        onComplete: () => setProcessing(false),
+      });
     } catch (cause) {
       const error = cause instanceof Error ? cause : new Error('Checkout failed');
       setCheckoutError(error.message);
@@ -479,6 +487,7 @@ export function PricingTable({
         <Toggle isAnnual={isAnnual} onChange={setIsAnnual} />
       )}
 
+      {processing && <p role="status">Payment is processing. Confirmation may take a little while.</p>}
       {checkoutError && <p role="alert">{checkoutError}</p>}
 
       <div style={{

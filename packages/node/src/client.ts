@@ -14,6 +14,9 @@ import type {
   TrackOptions,
   Plan,
   CheckoutResult,
+  CheckoutOptions,
+  CheckoutStatus,
+  RazorpayVerification,
   SubscribeResult,
   CancellationPolicy,
   CancelSubscriptionResult,
@@ -87,24 +90,94 @@ export class Nozle {
     return data.plans ?? [];
   }
 
-  async checkout(customerId: string, planCode: string, returnUrl?: string): Promise<CheckoutResult> {
-    if (!this.apiKey.startsWith("sk_")) {
-      throw new Error("checkout requires a secret key");
-    }
-    const res = await fetch(`${this.baseUrl}/api/v1/checkout`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+  async checkout(
+    customerId: string,
+    planCode: string,
+    returnUrl?: string,
+    options: CheckoutOptions = {},
+  ): Promise<CheckoutResult> {
+    return this.checkoutRequest(
+      "POST",
+      "",
+      {
         plan_code: planCode,
         customer_id: customerId,
         ...(returnUrl && { return_url: returnUrl }),
-      }),
+        ...(options.registerMandate !== undefined && {
+          register_mandate: options.registerMandate,
+        }),
+        ...(options.externalEntityId && {
+          external_entity_id: options.externalEntityId,
+        }),
+      },
+      options.idempotencyKey,
+    );
+  }
+
+  async checkoutInvoice(
+    invoiceId: string,
+    options: CheckoutOptions = {},
+  ): Promise<CheckoutResult> {
+    if (!invoiceId.trim())
+      throw new Error("checkoutInvoice requires invoiceId");
+    return this.checkoutRequest(
+      "POST",
+      "",
+      {
+        invoice_id: invoiceId,
+        ...(options.registerMandate !== undefined && {
+          register_mandate: options.registerMandate,
+        }),
+      },
+      options.idempotencyKey,
+    );
+  }
+
+  async verifyCheckout(
+    checkoutId: string,
+    verification: RazorpayVerification,
+  ): Promise<CheckoutStatus> {
+    if (!checkoutId.trim())
+      throw new Error("verifyCheckout requires checkoutId");
+    return this.checkoutRequest(
+      "POST",
+      `/${encodeURIComponent(checkoutId)}/verify`,
+      verification,
+    );
+  }
+
+  async checkoutStatus(checkoutId: string): Promise<CheckoutStatus> {
+    if (!checkoutId.trim())
+      throw new Error("checkoutStatus requires checkoutId");
+    return this.checkoutRequest("GET", `/${encodeURIComponent(checkoutId)}`);
+  }
+
+  private async checkoutRequest<T>(
+    method: string,
+    suffix: string,
+    body?: unknown,
+    idempotencyKey?: string,
+  ): Promise<T> {
+    if (!this.apiKey.startsWith("sk_"))
+      throw new Error("checkout requires a secret key");
+    if (
+      idempotencyKey !== undefined &&
+      (!idempotencyKey.trim() || idempotencyKey.length > 255)
+    ) {
+      throw new Error("checkout requires a valid idempotencyKey");
+    }
+    const res = await fetch(`${this.baseUrl}/api/v1/checkout${suffix}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+        ...(idempotencyKey && { "Idempotency-Key": idempotencyKey }),
+      },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`checkout failed: ${res.status} ${res.statusText}`);
+    if (!res.ok)
+      throw new Error(`checkout failed: ${res.status} ${res.statusText}`);
     return res.json();
   }
 
