@@ -9,6 +9,29 @@ import {
 } from '../provider.js';
 
 describe('BillingProvider', () => {
+  it.each([undefined, 'https://custom.example/nested/engine///'])(
+    'preserves the Engine prefix for catalog requests with base %s',
+    async (baseUrl) => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <BillingProvider publishableKey="pk_browser" baseUrl={baseUrl}>
+          {children}
+        </BillingProvider>
+      );
+      const { result } = renderHook(() => useNozleClient(), { wrapper });
+
+      await result.current.catalogFetch('/api/v1/plans?currency=USD');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${baseUrl?.replace(/\/+$/, '') ?? 'https://api.nozle.app/engine'}/api/v1/plans?currency=USD`,
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: 'Bearer pk_browser' }),
+        }),
+      );
+    },
+  );
+
   it('uses the publishable key only for catalog requests', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);

@@ -46,8 +46,8 @@ export class Nozle {
 
   constructor(config: NozleConfig) {
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl ?? "http://localhost:8080").replace(/\/+$/, "");
-    this.eventsUrl = (config.eventsUrl ?? "http://localhost:3000").replace(/\/+$/, "");
+    this.baseUrl = (config.baseUrl ?? "https://api.nozle.app/engine").replace(/\/+$/, "");
+    this.eventsUrl = (config.eventsUrl ?? "https://api.nozle.app/core").replace(/\/+$/, "");
     this.timeout = config.timeout ?? 10_000;
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.timeout);
     this.events = new EventsNamespace();

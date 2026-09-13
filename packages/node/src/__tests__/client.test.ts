@@ -22,8 +22,8 @@ describe("Nozle", () => {
   it("initializes with defaults", () => {
     const client = new Nozle({ apiKey: "sk_test" });
     expect(client.apiKey).toBe("sk_test");
-    expect(client.baseUrl).toBe("http://localhost:8080");
-    expect(client.eventsUrl).toBe("http://localhost:3000");
+    expect(client.baseUrl).toBe("https://api.nozle.app/engine");
+    expect(client.eventsUrl).toBe("https://api.nozle.app/core");
   });
 
   it("strips trailing slashes", () => {
@@ -44,7 +44,7 @@ describe("Nozle", () => {
 
       expect(fetchMock).toHaveBeenCalledOnce();
       const [url, opts] = fetchMock.mock.calls[0];
-      expect(url).toBe("http://localhost:3000/api/v1/events");
+      expect(url).toBe("https://api.nozle.app/core/api/v1/events");
       const body = JSON.parse(opts.body);
       expect(body.event.external_customer_id).toBe("cust_1");
       expect(body.event.code).toBe("api_call");
@@ -119,7 +119,7 @@ describe("Nozle", () => {
       fetchMock.mockResolvedValueOnce(
         jsonResponse({ status: "accepted", cost_event_id: "cost_123" }, 202),
       );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://api.example/engine" });
 
       const result = await client.costEvents.track({
         costEventId: "cost_123",
@@ -134,7 +134,7 @@ describe("Nozle", () => {
 
       expect(result).toEqual({ status: "accepted", cost_event_id: "cost_123" });
       expect(fetchMock).toHaveBeenCalledWith(
-        "https://engine.example/api/v1/cost-events",
+        "https://api.example/engine/api/v1/cost-events",
         expect.objectContaining({ method: "POST" }),
       );
       expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
@@ -192,8 +192,8 @@ describe("Nozle", () => {
       );
       const client = new Nozle({
         apiKey: "sk_merchant",
-        baseUrl: "https://engine.example",
-        eventsUrl: "https://core.example",
+        baseUrl: "https://api.example/engine",
+        eventsUrl: "https://api.example/core",
       });
 
       const customer = await client.customers.upsert({
@@ -208,7 +208,7 @@ describe("Nozle", () => {
         email: "billing@acme.test",
       });
       expect(fetchMock).toHaveBeenCalledWith(
-        "https://core.example/api/v1/customers",
+        "https://api.example/core/api/v1/customers",
         expect.objectContaining({
           method: "POST",
           headers: expect.objectContaining({ Authorization: "Bearer sk_merchant" }),
@@ -227,8 +227,8 @@ describe("Nozle", () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ customer: { external_id: "cust-1" } }));
       const client = new Nozle({
         apiKey: "sk_merchant",
-        baseUrl: "https://engine.example",
-        eventsUrl: "https://core.example",
+        baseUrl: "https://api.example/engine",
+        eventsUrl: "https://api.example/core",
       });
 
       await client.customers.upsert({ externalId: "cust-1" });
@@ -508,7 +508,7 @@ describe("Nozle", () => {
       );
       const client = new Nozle({
         apiKey: "sk_test",
-        eventsUrl: "https://core.example",
+        eventsUrl: "https://api.example/core",
       });
 
       const systems = await client.creditSystems.list();
@@ -526,7 +526,7 @@ describe("Nozle", () => {
         },
       ]);
       expect(fetchMock.mock.calls[0][0].toString()).toBe(
-        "https://core.example/api/v1/credit-systems?status=active&page=1&per_page=100",
+        "https://api.example/core/api/v1/credit-systems?status=active&page=1&per_page=100",
       );
     });
 
@@ -548,7 +548,7 @@ describe("Nozle", () => {
         .mockResolvedValueOnce(
           jsonResponse({ credit_systems: [coreSystem("system-2", "api")], meta: { next_page: null } }),
         );
-      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://core.example" });
+      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://api.example/core" });
 
       const systems = await client.creditSystems.list();
 
@@ -567,7 +567,7 @@ describe("Nozle", () => {
       );
       const client = new Nozle({
         apiKey: "sk_test",
-        baseUrl: "https://engine.example",
+        baseUrl: "https://api.example/engine",
       });
 
       const balance = await client.credits.getBalance("acme/west", "ai credits");
@@ -575,7 +575,7 @@ describe("Nozle", () => {
       expect(balance.available).toBe("123456789012345678.123456789012");
       expect(balance.sources[0].remaining).toBe("375.000000000001");
       expect(fetchMock.mock.calls[0][0]).toBe(
-        "https://engine.example/api/v1/customers/acme%2Fwest/credit-systems/ai%20credits/balance",
+        "https://api.example/engine/api/v1/customers/acme%2Fwest/credit-systems/ai%20credits/balance",
       );
     });
 
@@ -595,7 +595,7 @@ describe("Nozle", () => {
             next_cursor: "next/page",
           }),
         );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://api.example/engine" });
 
       const balances = await client.credits.listBalances("acme/west");
       const operations = await client.credits.listOperations("acme/west", {
@@ -607,10 +607,10 @@ describe("Nozle", () => {
       expect(balances.balances[0].available).toBe("500.000000000001");
       expect(operations.operations[0].credit_amount).toBe("2.000000000001");
       expect(fetchMock.mock.calls[0][0]).toBe(
-        "https://engine.example/api/v1/customers/acme%2Fwest/credit-systems",
+        "https://api.example/engine/api/v1/customers/acme%2Fwest/credit-systems",
       );
       expect(fetchMock.mock.calls[1][0].toString()).toBe(
-        "https://engine.example/api/v1/customers/acme%2Fwest/credit-operations?credit_system_code=ai+credits&limit=25&cursor=current%2Fpage",
+        "https://api.example/engine/api/v1/customers/acme%2Fwest/credit-operations?credit_system_code=ai+credits&limit=25&cursor=current%2Fpage",
       );
     });
 
@@ -622,7 +622,7 @@ describe("Nozle", () => {
           next_cursor: null,
         }),
       );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://api.example/engine" });
 
       const operations = await client.credits.listOperations("acme");
 
@@ -678,7 +678,7 @@ describe("Nozle", () => {
         remaining: "247.999999999999",
       });
       const [url, options] = fetchMock.mock.calls[0];
-      expect(url).toBe("http://localhost:8080/api/v1/usage/check");
+      expect(url).toBe("https://api.nozle.app/engine/api/v1/usage/check");
       expect(JSON.parse(options.body)).toEqual({
         customer_id: "acme",
         feature_code: "agent_execution",
@@ -711,7 +711,7 @@ describe("Nozle", () => {
 
       expect(result.operation_id).toBe("operation-1");
       const [url, options] = fetchMock.mock.calls[0];
-      expect(url).toBe("http://localhost:8080/api/v1/usage/track");
+      expect(url).toBe("https://api.nozle.app/engine/api/v1/usage/track");
       expect(options.headers["Idempotency-Key"]).toBe("execution-1");
       expect(JSON.parse(options.body)).toEqual({
         customer_id: "acme",
@@ -771,7 +771,7 @@ describe("Nozle", () => {
           jsonResponse({ customer_id: "acme/west", entities: [entity], next_cursor: null }),
         )
         .mockResolvedValueOnce(jsonResponse({ action: "updated", entity, replayed: false }));
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://api.example/engine" });
 
       const page = await client.entities.list("acme/west", { status: "active", limit: 25 });
       const result = await client.entities.upsert(
@@ -785,10 +785,10 @@ describe("Nozle", () => {
       expect(page.entities[0].external_id).toBe("user/42");
       expect(result.entity.external_id).toBe("user/42");
       expect(fetchMock.mock.calls[0][0].toString()).toBe(
-        "https://engine.example/api/v1/customers/acme%2Fwest/entities?status=active&limit=25",
+        "https://api.example/engine/api/v1/customers/acme%2Fwest/entities?status=active&limit=25",
       );
       expect(fetchMock.mock.calls[1][0]).toBe(
-        "https://engine.example/api/v1/customers/acme%2Fwest/entities/user%2F42",
+        "https://api.example/engine/api/v1/customers/acme%2Fwest/entities/user%2F42",
       );
       expect(fetchMock.mock.calls[1][1].headers["Idempotency-Key"]).toBe("entity-user-42-v2");
       expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
@@ -808,7 +808,7 @@ describe("Nozle", () => {
             replayed: false,
           }),
         );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://api.example/engine" });
 
       await client.entities.suspend("acme/west", "user/42", {
         idempotencyKey: "suspend-user-42",
@@ -825,7 +825,7 @@ describe("Nozle", () => {
       fetchMock.mockResolvedValueOnce(
         jsonResponse({ customer_id: "acme", entities: [], counts: {}, replayed: false }),
       );
-      const secretClient = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const secretClient = new Nozle({ apiKey: "sk_test", baseUrl: "https://api.example/engine" });
       await secretClient.entities.bulkUpsert(
         "acme",
         [{ externalId: "user-1", status: "active" }],
@@ -894,7 +894,7 @@ describe("Nozle", () => {
             next_cursor: null,
           }),
         );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://api.example/engine" });
 
       const balance = await client.credits.getEntityBalance(
         "acme/west",
@@ -908,10 +908,10 @@ describe("Nozle", () => {
       expect(balance.effective_available).toBe("730.000000000001");
       expect(operations.next_cursor).toBeNull();
       expect(fetchMock.mock.calls[0][0]).toBe(
-        "https://engine.example/api/v1/customers/acme%2Fwest/entities/user%2F42/credit-systems/ai%20credits/balance",
+        "https://api.example/engine/api/v1/customers/acme%2Fwest/entities/user%2F42/credit-systems/ai%20credits/balance",
       );
       expect(fetchMock.mock.calls[1][0].toString()).toBe(
-        "https://engine.example/api/v1/customers/acme%2Fwest/entities/user%2F42/credit-operations?limit=25",
+        "https://api.example/engine/api/v1/customers/acme%2Fwest/entities/user%2F42/credit-operations?limit=25",
       );
     });
 
@@ -933,7 +933,7 @@ describe("Nozle", () => {
             replayed: false,
           }),
         );
-      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example" });
+      const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://api.example/engine" });
 
       await client.credits.allocate(
         "acme",
@@ -1019,8 +1019,8 @@ describe("Nozle", () => {
         );
       const client = new Nozle({
         apiKey: "sk_test",
-        baseUrl: "https://engine.example",
-        eventsUrl: "https://core.example",
+        baseUrl: "https://api.example/engine",
+        eventsUrl: "https://api.example/core",
       });
 
       await client.entitySubscriptions.ensure("workspace/1", "user/42");
@@ -1033,11 +1033,11 @@ describe("Nozle", () => {
       });
 
       expect(fetchMock.mock.calls[0][0]).toBe(
-        "https://core.example/api/v1/customers/workspace%2F1/entities/user%2F42/subscription",
+        "https://api.example/core/api/v1/customers/workspace%2F1/entities/user%2F42/subscription",
       );
       expect(fetchMock.mock.calls[0][1].method).toBe("PUT");
       expect(fetchMock.mock.calls[2][0]).toBe(
-        "https://core.example/api/v1/customers/workspace%2F1/entities/user%2F42/subscription/checkout",
+        "https://api.example/core/api/v1/customers/workspace%2F1/entities/user%2F42/subscription/checkout",
       );
       expect(fetchMock.mock.calls[2][1].headers["Idempotency-Key"]).toBe("checkout-user-42-pro");
       expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({
@@ -1054,7 +1054,7 @@ describe("Nozle", () => {
           subscription_transition: { id: "transition-1", replayed: false },
         }),
       );
-      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://core.example" });
+      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://api.example/core" });
       await client.entitySubscriptions.cancel("workspace", "user-42", {
         idempotencyKey: "cancel-user-42",
         timing: "end_of_period",
@@ -1093,7 +1093,7 @@ describe("Nozle", () => {
           },
         }),
       );
-      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://core.example" });
+      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://api.example/core" });
 
       const result = await client.entitySubscriptions.checkoutMany("workspace/1", {
         billingTime: "anniversary",
@@ -1104,7 +1104,7 @@ describe("Nozle", () => {
 
       expect(result.client_secret).toBe("cs_bulk");
       expect(fetchMock.mock.calls[0][0]).toBe(
-        "https://core.example/api/v1/customers/workspace%2F1/entity-subscriptions/checkout",
+        "https://api.example/core/api/v1/customers/workspace%2F1/entity-subscriptions/checkout",
       );
       expect(fetchMock.mock.calls[0][1].headers["Idempotency-Key"]).toBe(
         "workspace-1-seat-purchase",
