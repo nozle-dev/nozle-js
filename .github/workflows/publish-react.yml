@@ -69,4 +69,4 @@ jobs:
           name: react-sdk
           path: artifacts
       - name: Publish tested artifact with npm trusted publishing
-        run: npm publish artifacts/*.tgz --access public --provenance
+        run: npm publish ./artifacts/*.tgz --access public --provenance
