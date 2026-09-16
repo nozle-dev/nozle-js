@@ -81,7 +81,7 @@ export interface BillingProviderProps {
 export function BillingProvider({
   publishableKey,
   createCheckout,
-  baseUrl = 'https://api.nozle.app',
+  baseUrl = 'https://api.nozle.app/engine',
   children,
 }: BillingProviderProps): React.ReactElement {
   if (!publishableKey.startsWith('pk_')) {
