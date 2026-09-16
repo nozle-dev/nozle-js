@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleCheckoutResult } from '../components/billing/CheckoutButton.js';
-import { loadRazorpayScript } from '../components/billing/razorpay-checkout.js';
+import {
+  loadRazorpayScript,
+  resumeCheckout,
+  waitForCheckout,
+} from '../components/billing/razorpay-checkout.js';
 import type {
   CheckoutStatus,
   RazorpayCheckoutResult,
@@ -98,6 +102,101 @@ describe('Razorpay checkout confirmation', () => {
     expect(onSuccess).not.toHaveBeenCalled();
     expect(onProcessing).toHaveBeenCalled();
   });
+
+  it('polls authorization through capture and fulfillment before succeeding', async () => {
+    vi.useFakeTimers();
+    install();
+    const awaiting = {
+      ...status,
+      status: 'awaiting_payment' as const,
+      fulfillment_status: 'pending' as const,
+    };
+    const getCheckoutStatus = vi
+      .fn()
+      .mockResolvedValueOnce(awaiting)
+      .mockResolvedValueOnce({ ...status, fulfillment_status: 'processing' })
+      .mockResolvedValue(status);
+    const onSuccess = vi.fn();
+    const onProcessing = vi.fn();
+    const promise = handleCheckoutResult(checkout, {
+      verifyCheckout: vi.fn().mockResolvedValue(awaiting),
+      getCheckoutStatus,
+      onSuccess,
+      onProcessing,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    options.handler(callback);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(onSuccess).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    await promise;
+    expect(getCheckoutStatus).toHaveBeenCalledTimes(3);
+    expect(onProcessing).toHaveBeenCalled();
+    expect(onSuccess).toHaveBeenCalledExactlyOnceWith('pay_example');
+  });
+
+  it('returns a prepared checkout so the buyer can open it', async () => {
+    const getCheckoutStatus = vi.fn().mockResolvedValue({
+      ...status,
+      status: 'awaiting_payment',
+      fulfillment_status: 'pending',
+      checkout,
+    });
+    const result = await resumeCheckout(
+      {
+        type: 'processing',
+        status: 'processing',
+        checkout_id: checkout.checkout_id,
+      },
+      { getCheckoutStatus },
+    );
+    expect(result).toEqual(checkout);
+    expect(getCheckoutStatus).toHaveBeenCalledOnce();
+  });
+
+  it('bounds confirmation polling while capture is still pending', async () => {
+    vi.useFakeTimers();
+    const awaiting = {
+      ...status,
+      status: 'awaiting_payment' as const,
+      fulfillment_status: 'pending' as const,
+    };
+    const getCheckoutStatus = vi.fn().mockResolvedValue(awaiting);
+    const promise = waitForCheckout(
+      checkout.checkout_id,
+      { getCheckoutStatus },
+      awaiting,
+    );
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(await promise).toEqual(awaiting);
+    expect(getCheckoutStatus).toHaveBeenCalledTimes(29);
+  });
+
+  it.each(['failed', 'expired', 'needs_review'] as const)(
+    'stops confirmation on %s',
+    async (terminal) => {
+      vi.useFakeTimers();
+      const getCheckoutStatus = vi
+        .fn()
+        .mockResolvedValue({ ...status, status: terminal });
+      const promise = waitForCheckout(
+        checkout.checkout_id,
+        { getCheckoutStatus },
+        {
+          ...status,
+          status: 'awaiting_payment',
+          fulfillment_status: 'pending',
+        },
+      );
+      const assertion = expect(promise).rejects.toThrow(
+        'Checkout ' + terminal.replaceAll('_', ' '),
+      );
+      await vi.advanceTimersByTimeAsync(1000);
+      await assertion;
+      expect(getCheckoutStatus).toHaveBeenCalledOnce();
+    },
+  );
 
   it('does not verify or succeed when the checkout is dismissed', async () => {
     install();

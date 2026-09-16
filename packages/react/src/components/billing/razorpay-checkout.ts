@@ -95,6 +95,7 @@ export async function waitForCheckout(
   id: string,
   actions: RazorpayActions,
   initial?: CheckoutStatus,
+  phase: 'prepare' | 'confirm' = 'confirm',
 ): Promise<CheckoutStatus> {
   let status = initial;
   if (!status && !actions.getCheckoutStatus)
@@ -105,7 +106,7 @@ export async function waitForCheckout(
     if (
       (status.status === 'succeeded' &&
         status.fulfillment_status === 'succeeded') ||
-      status.status === 'awaiting_payment'
+      (phase === 'prepare' && status.status === 'awaiting_payment')
     )
       return status;
     actions.onProcessing?.(status);
@@ -188,7 +189,12 @@ export async function resumeCheckout(
   result: Extract<CheckoutResult, { type: 'processing' }>,
   actions: RazorpayActions,
 ): Promise<CheckoutResult | undefined> {
-  const status = await waitForCheckout(result.checkout_id, actions);
+  const status = await waitForCheckout(
+    result.checkout_id,
+    actions,
+    undefined,
+    'prepare',
+  );
   if (status.status === 'awaiting_payment') return status.checkout;
   if (
     status.status === 'succeeded' &&
