@@ -36,6 +36,18 @@ describe("Nozle", () => {
     expect(client.eventsUrl).toBe("https://events.example.com");
   });
 
+  it("preserves long internal slash runs when trimming service bases", () => {
+    const prefix = `https://api.example.com/${"/".repeat(100_000)}`;
+    const client = new Nozle({
+      apiKey: "sk_test",
+      baseUrl: `${prefix}engine///`,
+      eventsUrl: `${prefix}core///`,
+    });
+
+    expect(client.baseUrl).toBe(`${prefix}engine`);
+    expect(client.eventsUrl).toBe(`${prefix}core`);
+  });
+
   describe("track", () => {
     it("sends event with explicit subscriptionId", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({}));
