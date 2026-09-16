@@ -1,6 +1,6 @@
 {
   "name": "@nozle-js/react",
-  "version": "0.7.1",
+  "version": "0.9.0",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -52,5 +52,10 @@
     "@stripe/stripe-js": ">=5.0.0",
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nozle-dev/nozle-js.git",
+    "directory": "packages/react"
   }
 }

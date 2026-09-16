@@ -30,6 +30,12 @@ import type {
   CheckAndDeductResult,
 } from "./types";
 
+function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47) end -= 1;
+  return url.slice(0, end);
+}
+
 export class Nozle {
   readonly apiKey: string;
   readonly baseUrl: string;
@@ -49,8 +55,8 @@ export class Nozle {
 
   constructor(config: NozleConfig) {
     this.apiKey = config.apiKey;
-    this.baseUrl = (config.baseUrl ?? "http://localhost:8080").replace(/\/+$/, "");
-    this.eventsUrl = (config.eventsUrl ?? "http://localhost:3000").replace(/\/+$/, "");
+    this.baseUrl = trimTrailingSlashes(config.baseUrl ?? "https://api.nozle.app/engine");
+    this.eventsUrl = trimTrailingSlashes(config.eventsUrl ?? "https://api.nozle.app/core");
     this.timeout = config.timeout ?? 10_000;
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.timeout);
     this.events = new EventsNamespace();

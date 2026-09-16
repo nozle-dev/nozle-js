@@ -17,21 +17,23 @@ const status = {
 };
 afterEach(() => vi.unstubAllGlobals());
 describe("Razorpay server checkout", () => {
-  it("forwards invoice/mandate/idempotency and verification without assuming success", async () => {
+  it.each([undefined, "https://engine.example", "https://api.example/nested/engine///"])("preserves the service prefix and checkout contracts with base %s", async (baseUrl) => {
     const fetch = vi
       .fn()
       .mockResolvedValue({ ok: true, json: async () => checkout });
     vi.stubGlobal("fetch", fetch);
     const client = new Nozle({
       apiKey: "sk_test",
-      baseUrl: "https://engine.example",
+      baseUrl,
     });
+    const expectedBase = baseUrl?.replace(/\/+$/, "") ?? "https://api.nozle.app/engine";
     expect(
       await client.checkout("customer", "pro", undefined, {
         idempotencyKey: "retry-1",
         registerMandate: true,
       }),
     ).toEqual(checkout);
+    expect(fetch.mock.calls[0][0]).toBe(`${expectedBase}/api/v1/checkout`);
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
       customer_id: "customer",
       plan_code: "pro",
@@ -39,6 +41,7 @@ describe("Razorpay server checkout", () => {
     });
     expect(fetch.mock.calls[0][1].headers["Idempotency-Key"]).toBe("retry-1");
     await client.checkoutInvoice("invoice-1");
+    expect(fetch.mock.calls[1][0]).toBe(`${expectedBase}/api/v1/checkout`);
     expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({
       invoice_id: "invoice-1",
     });
@@ -50,10 +53,11 @@ describe("Razorpay server checkout", () => {
     };
     expect(await client.verifyCheckout("checkout-1", proof)).toEqual(status);
     expect(fetch.mock.calls[2][0]).toBe(
-      "https://engine.example/api/v1/checkout/checkout-1/verify",
+      `${expectedBase}/api/v1/checkout/checkout-1/verify`,
     );
     expect(JSON.parse(fetch.mock.calls[2][1].body)).toEqual(proof);
     expect(await client.checkoutStatus("checkout-1")).toEqual(status);
+    expect(fetch.mock.calls[3][0]).toBe(`${expectedBase}/api/v1/checkout/checkout-1`);
   });
   it("keeps all collection endpoints server-only", async () => {
     const client = new Nozle({ apiKey: "pk_browser" });

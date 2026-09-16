@@ -11,6 +11,7 @@ on:
       - package-lock.json
       - .github/workflows/node-ci.yml
       - .github/workflows/publish-node.yml
+      - .github/workflows/publish-react.yml
   push:
     branches:
       - main
@@ -21,6 +22,7 @@ on:
       - package-lock.json
       - .github/workflows/node-ci.yml
       - .github/workflows/publish-node.yml
+      - .github/workflows/publish-react.yml
   workflow_dispatch:
 
 permissions:
@@ -29,7 +31,7 @@ permissions:
 jobs:
   test:
     name: Node ${{ matrix.node-version }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, nozle-ci]
     strategy:
       fail-fast: false
       matrix:
@@ -66,7 +68,7 @@ jobs:
 
   react:
     name: React ${{ matrix.node-version }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, nozle-ci]
     strategy:
       fail-fast: false
       matrix:

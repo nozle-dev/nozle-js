@@ -40,8 +40,8 @@ const { allowed, reason, used, limit } = await nozle.can("cust_123", "code_compl
 ```ts
 const nozle = new Nozle({
   apiKey: "sk_live_...",            // Required
-  baseUrl: "https://api.nozle.ai",  // Default: http://localhost:8080
-  eventsUrl: "https://core.nozle.app", // Default: http://localhost:3000
+  baseUrl: "https://api.nozle.app/engine",  // Default: https://api.nozle.app/engine
+  eventsUrl: "https://api.nozle.app/core", // Default: https://api.nozle.app/core
   timeout: 15_000,                   // Default: 10000ms
 });
 ```

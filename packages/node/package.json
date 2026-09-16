@@ -1,6 +1,6 @@
 {
   "name": "@nozle-js/node",
-  "version": "0.6.1",
+  "version": "0.8.0",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -59,7 +59,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nozle-app/nozle-js"
+    "url": "git+https://github.com/nozle-dev/nozle-js.git",
+    "directory": "packages/node"
   },
   "homepage": "https://nozle.ai"
 }

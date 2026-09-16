@@ -154,7 +154,7 @@ export function BillingProvider({
   createCheckout,
   verifyCheckout,
   getCheckoutStatus,
-  baseUrl = 'https://api.nozle.app',
+  baseUrl = 'https://api.nozle.app/engine',
   children,
 }: BillingProviderProps): React.ReactElement {
   if (!publishableKey.startsWith('pk_')) {
