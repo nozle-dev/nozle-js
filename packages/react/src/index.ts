@@ -83,3 +83,5 @@ export type {
   PaymentMethodDisplayProps,
   PaymentMethod,
 } from './components/billing/PaymentMethodDisplay.js';
+
+export type { RazorpayCheckoutResult, ProcessingCheckoutResult, HostedCheckoutResult, RazorpayVerification, CheckoutStatus, VerifyCheckout, GetCheckoutStatus } from "./provider.js";

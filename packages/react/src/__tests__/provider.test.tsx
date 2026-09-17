@@ -62,16 +62,32 @@ describe('BillingProvider', () => {
     ).toThrow('publishableKey must be a publishable key');
   });
 
-  it('exposes the merchant checkout callback without adding customer identity', () => {
+  it('preserves merchant verification callbacks alongside the unified Engine default', async () => {
     const createCheckout: CreateCheckout = vi.fn();
+    const verifyCheckout = vi.fn();
+    const getCheckoutStatus = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
     const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <BillingProvider publishableKey="pk_browser" createCheckout={createCheckout}>
+      <BillingProvider
+        publishableKey="pk_browser"
+        createCheckout={createCheckout}
+        verifyCheckout={verifyCheckout}
+        getCheckoutStatus={getCheckoutStatus}
+      >
         {children}
       </BillingProvider>
     );
 
     const { result } = renderHook(() => useBillingContext(), { wrapper });
     expect(result.current.createCheckout).toBe(createCheckout);
+    expect(result.current.verifyCheckout).toBe(verifyCheckout);
+    expect(result.current.getCheckoutStatus).toBe(getCheckoutStatus);
     expect(result.current).not.toHaveProperty('customerId');
+    await result.current.client.catalogFetch('/api/v1/plans');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.nozle.app/engine/api/v1/plans',
+      expect.any(Object),
+    );
   });
 });

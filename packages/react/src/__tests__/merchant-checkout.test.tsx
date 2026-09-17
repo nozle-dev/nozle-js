@@ -36,6 +36,7 @@ describe('merchant checkout components', () => {
     expect(createCheckout).toHaveBeenCalledWith({
       planCode: 'pro',
       returnUrl: 'https://merchant.example/complete',
+      idempotencyKey: expect.any(String),
     });
     expect(createCheckout.mock.calls[0][0]).not.toHaveProperty('customerId');
   });

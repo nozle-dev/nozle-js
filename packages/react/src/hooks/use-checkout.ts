@@ -37,7 +37,11 @@ export function useCheckout(): UseCheckoutResult {
           navigateToCheckout(result.url);
           return null;
         }
-        if ('type' in result && (result.type === 'completed' || result.type === 'scheduled')) {
+        if ('type' in result && result.type === 'hosted') {
+          navigateToCheckout(result.payment_url);
+          return null;
+        }
+        if ('type' in result && ['completed', 'scheduled', 'razorpay', 'processing'].includes(result.type)) {
           return null;
         }
         throw new Error('Checkout response did not include a supported result type');

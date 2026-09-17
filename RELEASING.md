@@ -18,11 +18,14 @@ The previous Node 0.6.1 workflow failed with `ENEEDAUTH` on 2026-09-08 because
 `NODE_AUTH_TOKEN` was empty and no usable publishing identity was available.
 The existence of that version in npm does not establish working CI publication.
 
-For the API domain migration, reserve Node 0.7.0 and React 0.8.0 after confirming
-they remain unpublished. Publish only after production `/core` and `/engine`
-acceptance passes. Push `node-v0.7.0` and `react-v0.8.0` tags pointing at the
+The Razorpay integration prepares Node 0.8.0 and React 0.9.0 after the published
+API-domain releases. Keep the unified `/core` and `/engine` defaults and both
+merchant verification callbacks. Publish only after the matching Core/Engine
+changes are deployed and real Razorpay merchant test-mode acceptance passes.
+After release approval, push `node-v0.8.0` and `react-v0.9.0` tags pointing at the
 reviewed release commit; both workflows check tag/package-version agreement.
-Install each published version in a fresh consumer and verify its defaults.
+Install each published version in a fresh consumer and verify checkout and its
+service prefixes. Preparing these versions does not publish them.
 
 For an interrupted release, dispatch the existing tag only after inspecting npm
 to establish whether publication already succeeded. Never overwrite a version.
