@@ -272,7 +272,7 @@ export function createMerchantServer({
         sessions.set(id, { customerId, expires: now() + 3_600_000 });
         response.setHeader(
           "Set-Cookie",
-          `billing_session=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600${origin.startsWith("https:") ? "; Secure" : ""}`,
+          `billing_session=${id}; HttpOnly; SameSite=Strict; Secure; Path=/; Max-Age=3600`,
         );
         send(200, {});
         return;

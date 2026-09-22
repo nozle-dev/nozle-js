@@ -137,7 +137,9 @@ export interface NozleClient {
 }
 
 function createClient(publishableKey: string, baseUrl: string): NozleClient {
-  const base = baseUrl.replace(/\/+$/, "");
+  let end = baseUrl.length;
+  while (end > 0 && baseUrl[end - 1] === "/") end--;
+  const base = baseUrl.slice(0, end);
 
   return {
     publishableKey,

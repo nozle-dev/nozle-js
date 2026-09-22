@@ -290,6 +290,7 @@ test("HTTP requires login, same-origin JSON, expires sessions, and redacts upstr
   const login = await post("/api/login", { token: loginToken });
   const cookie = login.headers.get("set-cookie");
   assert.match(cookie, /HttpOnly; SameSite=Strict/);
+  assert.match(cookie, /; Secure;/);
   const headers = { Cookie: cookie.split(";")[0] };
   assert.deepEqual(
     await (await post("/api/billing/session", {}, headers)).json(),

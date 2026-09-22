@@ -21,7 +21,7 @@ node server.mjs
 
 `NOZLE_ENGINE_URL` and `NOZLE_CORE_URL` are explicit: local/VM test APIs work without contacting production. Use `NOZLE_CORE_API_KEY` if Core requires a different credential. Set `NOZLE_PORTAL_API_URL` to the Core URL reachable by the browser, which may differ from the server's internal URL. React permits HTTPS and loopback HTTP.
 
-Choose a dedicated customer in `DEMO_CUSTOMER_ID` and a random `DEMO_LOGIN_TOKEN` of at least 32 characters. Open `http://localhost:4242` to sign in. This token is only the demo's merchant login credential; it is not a Nozle key. Bind to loopback by default. Set `HOST` only when running behind your development proxy or inside an isolated test container.
+Choose a dedicated customer in `DEMO_CUSTOMER_ID` and a random `DEMO_LOGIN_TOKEN` of at least 32 characters. Use the HTTPS React demo below to sign in. This token is only the demo's merchant login credential; it is not a Nozle key. Bind to loopback by default. Set `HOST` only when running behind your development proxy or inside an isolated test container.
 
 The React controls and confirmation-date guard must come from the associated feature builds. Existing SDK installations without `expectedEffectiveAt`, or Engine/Core installations without `expected_effective_at`, cannot provide the atomic date check. Deploy the compatible backend before enabling the action adapter.
 
@@ -37,7 +37,7 @@ npm install
 MERCHANT_PORT=4242 npm run dev
 ```
 
-Open `https://127.0.0.1:5179` and enter the demo login token. To use the Python merchant example, start it on port 4243 with the same `MERCHANT_ORIGIN`, then restart Vite with `MERCHANT_PORT=4243 npm run dev`. Vite keeps the merchant connection on loopback HTTP while the browser uses HTTPS. Cancellation-only testing can use loopback HTTP, but checkout requires the HTTPS configuration. This source-linked demo is separate from the packed-package verification described below.
+Open `https://127.0.0.1:5179` and enter the demo login token. To use the Python merchant example, start it on port 4243 with the same `MERCHANT_ORIGIN`, then restart Vite with `MERCHANT_PORT=4243 npm run dev`. Vite keeps the merchant connection on loopback HTTP while the browser uses HTTPS. Browser sessions use Secure cookies and require HTTPS. Direct loopback HTTP is reserved for the CLI test driver and the development proxy connection. This source-linked demo is separate from the packed-package verification described below.
 
 ## React adapter
 
