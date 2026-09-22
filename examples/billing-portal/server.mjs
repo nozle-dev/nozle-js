@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Nozle } from "@nozle-js/node";
+import { createPlanService, PlanError } from "./plan-changes.mjs";
 
 export class HttpError extends Error {
   constructor(status, message) {
@@ -91,8 +92,22 @@ function quote(value) {
   };
 }
 
-export function createBillingService({ sdk, store, createPortalSession }) {
+export function createBillingService({
+  sdk,
+  store,
+  createPortalSession,
+  returnOrigin = "http://localhost:4242",
+  stripePublishableKey,
+}) {
+  const plans = createPlanService({
+    sdk,
+    store,
+    returnOrigin,
+    stripePublishableKey,
+  });
   return async function dispatch(customerId, path, body) {
+    if (path.startsWith("/api/billing/plans/"))
+      return plans(customerId, path, body);
     if (path === "/api/billing/session") {
       fields(body, []);
       return createPortalSession(customerId);
@@ -234,7 +249,7 @@ export function createMerchantServer({
       let raw = "";
       for await (const chunk of request) {
         raw += chunk;
-        if (Buffer.byteLength(raw) > 4096)
+        if (Buffer.byteLength(raw) > 32768)
           throw new HttpError(413, "Request too large.");
       }
       let body;
@@ -272,12 +287,17 @@ export function createMerchantServer({
       send(200, await dispatch(session.customerId, request.url, body));
     } catch (error) {
       // SDK/upstream errors can include private details. Never echo them to the browser or logs.
-      send(error instanceof HttpError ? error.status : 502, {
-        error:
-          error instanceof HttpError
-            ? error.message
-            : "Billing request failed. Refresh before retrying.",
-      });
+      send(
+        error instanceof HttpError || error instanceof PlanError
+          ? error.status
+          : 502,
+        {
+          error:
+            error instanceof HttpError || error instanceof PlanError
+              ? error.message
+              : "Billing request failed. Refresh before retrying.",
+        },
+      );
     }
   });
 }
@@ -300,6 +320,8 @@ if (
   const origin = process.env.MERCHANT_ORIGIN ?? "http://localhost:4242";
   const dispatch = createBillingService({
     sdk,
+    returnOrigin: origin,
+    stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
     store: new ActionStore(
       process.env.ACTION_STORE_PATH ?? ".billing-portal/actions.json",
     ),

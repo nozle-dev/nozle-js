@@ -16,6 +16,10 @@ import type {
   CheckoutResult,
   CheckoutOptions,
   CheckoutStatus,
+  SubscriptionCheckoutScope,
+  SubscriptionOptions,
+  SubscriptionChangePreview,
+  WithdrawPendingSubscriptionChangeResult,
   RazorpayVerification,
   SubscribeResult,
   CancellationPolicy,
@@ -102,12 +106,18 @@ export class Nozle {
     returnUrl?: string,
     options: CheckoutOptions = {},
   ): Promise<CheckoutResult> {
+    if (options.subscriptionId !== undefined && !options.subscriptionId.trim())
+      throw new Error("checkout requires a non-empty subscriptionId");
+    if (options.quoteId !== undefined && (!options.quoteId.trim() || !options.subscriptionId))
+      throw new Error("checkout quoteId requires an explicit subscriptionId");
     return this.checkoutRequest(
       "POST",
       "",
       {
         plan_code: planCode,
         customer_id: customerId,
+        ...(options.subscriptionId && { subscription_id: options.subscriptionId }),
+        ...(options.quoteId && { quote_id: options.quoteId }),
         ...(returnUrl && { return_url: returnUrl }),
         ...(options.registerMandate !== undefined && {
           register_mandate: options.registerMandate,
@@ -142,20 +152,62 @@ export class Nozle {
   async verifyCheckout(
     checkoutId: string,
     verification: RazorpayVerification,
+    scope?: SubscriptionCheckoutScope,
   ): Promise<CheckoutStatus> {
     if (!checkoutId.trim())
       throw new Error("verifyCheckout requires checkoutId");
     return this.checkoutRequest(
       "POST",
-      `/${encodeURIComponent(checkoutId)}/verify`,
+      `/${encodeURIComponent(checkoutId)}/verify${this.checkoutScopeQuery(scope)}`,
       verification,
     );
   }
 
-  async checkoutStatus(checkoutId: string): Promise<CheckoutStatus> {
+  async checkoutStatus(checkoutId: string, scope?: SubscriptionCheckoutScope): Promise<CheckoutStatus> {
     if (!checkoutId.trim())
       throw new Error("checkoutStatus requires checkoutId");
-    return this.checkoutRequest("GET", `/${encodeURIComponent(checkoutId)}`);
+    return this.checkoutRequest("GET", `/${encodeURIComponent(checkoutId)}${this.checkoutScopeQuery(scope)}`);
+  }
+
+  private checkoutScopeQuery(scope?: SubscriptionCheckoutScope): string {
+    if (!scope) return "";
+    if (!scope.customerId.trim() || !scope.subscriptionId.trim())
+      throw new Error("checkout scope requires customerId and subscriptionId");
+    return `?${new URLSearchParams({ customer_id: scope.customerId, subscription_id: scope.subscriptionId })}`;
+  }
+
+  async subscriptionOptions(customerId: string, subscriptionId: string): Promise<SubscriptionOptions> {
+    const query = this.checkoutScopeQuery({ customerId, subscriptionId });
+    return this.subscriptionManagementRequest("GET", `/api/v1/subscriptions/options${query}`);
+  }
+
+  async previewSubscriptionChange(customerId: string, subscriptionId: string, planCode: string): Promise<SubscriptionChangePreview> {
+    this.checkoutScopeQuery({ customerId, subscriptionId });
+    if (!planCode.trim()) throw new Error("previewSubscriptionChange requires planCode");
+    return this.subscriptionManagementRequest("POST", "/api/v1/subscriptions/preview", {
+      customer_id: customerId, subscription_id: subscriptionId, plan_code: planCode,
+    });
+  }
+
+  async withdrawPendingSubscriptionChange(customerId: string, subscriptionId: string, pendingSubscriptionId: string, idempotencyKey: string): Promise<WithdrawPendingSubscriptionChangeResult> {
+    this.checkoutScopeQuery({ customerId, subscriptionId });
+    if (!pendingSubscriptionId.trim()) throw new Error("withdrawPendingSubscriptionChange requires pendingSubscriptionId");
+    if (!idempotencyKey.trim() || new TextEncoder().encode(idempotencyKey).length > 255)
+      throw new Error("withdrawPendingSubscriptionChange requires an Idempotency-Key up to 255 bytes");
+    return this.subscriptionManagementRequest("POST", "/api/v1/subscriptions/transitions/withdraw", {
+      customer_id: customerId, subscription_id: subscriptionId, pending_subscription_id: pendingSubscriptionId,
+    }, idempotencyKey);
+  }
+
+  private async subscriptionManagementRequest<T>(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
+    if (!this.apiKey.startsWith("sk_")) throw new Error("subscription management requires a secret key");
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method, headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json",
+        ...(idempotencyKey && { "Idempotency-Key": idempotencyKey }) },
+      ...(body !== undefined && { body: JSON.stringify(body) }), signal: AbortSignal.timeout(this.timeout),
+    });
+    if (!response.ok) throw new Error(`subscriptionManagement failed: ${response.status} ${response.statusText}`);
+    return response.json();
   }
 
   private async checkoutRequest<T>(
@@ -289,6 +341,8 @@ export class Nozle {
     if (!params.customerId.trim() || !params.subscriptionId.trim()) {
       throw new Error("subscription transitions require customerId and subscriptionId");
     }
+    if (params.quoteId !== undefined && (params.operation !== "downgrade" || !params.quoteId.trim()))
+      throw new Error("quoteId requires a downgrade transition");
     if (params.expectedEffectiveAt !== undefined) {
       if (params.operation !== "cancel" || params.timing !== "end_of_period") {
         throw new Error("expectedEffectiveAt requires end_of_period cancellation");
@@ -339,6 +393,7 @@ export class Nozle {
       refund_mode: params.refundMode,
       final_invoice_action: params.finalInvoiceAction,
       expected_effective_at: params.expectedEffectiveAt,
+      quote_id: params.quoteId,
     };
   }
 

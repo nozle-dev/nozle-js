@@ -104,4 +104,4 @@ jobs:
       - name: Test authenticated merchant example
         run: |
           npm run build --workspace=@nozle-js/node
-          node --test examples/billing-portal/server.test.mjs
+          node --test examples/billing-portal/*.test.mjs
