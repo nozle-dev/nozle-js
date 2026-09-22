@@ -1,11 +1,14 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { UpgradeModal, type ProrationPreview } from './UpgradeModal.js';
+import React, { useState } from "react";
+import { UpgradeModal, type ProrationPreview } from "./UpgradeModal.js";
 
 export interface UpgradeButtonProps {
   planCode: string;
   returnUrl?: string;
+  subscriptionId?: string;
+  quoteId?: string;
+  idempotencyKey?: string;
   preview?: ProrationPreview;
   label?: string;
   className?: string;
@@ -20,8 +23,11 @@ export interface UpgradeButtonProps {
 export function UpgradeButton({
   planCode,
   returnUrl,
+  subscriptionId,
+  quoteId,
+  idempotencyKey,
   preview,
-  label = 'Upgrade',
+  label = "Upgrade",
   className,
   style,
   onStripeClientSecret,
@@ -39,12 +45,12 @@ export function UpgradeButton({
         onClick={() => setIsOpen(true)}
         className={className}
         style={{
-          padding: '0.75rem 1.5rem',
-          borderRadius: 'var(--nozle-radius, 0.5rem)',
-          border: 'none',
-          background: 'var(--nozle-primary, var(--primary))',
-          color: 'var(--nozle-primary-foreground, var(--primary-foreground))',
-          cursor: 'pointer',
+          padding: "0.75rem 1.5rem",
+          borderRadius: "var(--nozle-radius, 0.5rem)",
+          border: "none",
+          background: "var(--nozle-primary, var(--primary))",
+          color: "var(--nozle-primary-foreground, var(--primary-foreground))",
+          cursor: "pointer",
           fontWeight: 500,
           ...style,
         }}
@@ -56,6 +62,9 @@ export function UpgradeButton({
         isOpen={isOpen}
         planCode={planCode}
         returnUrl={returnUrl}
+        subscriptionId={subscriptionId}
+        quoteId={quoteId}
+        idempotencyKey={idempotencyKey}
         preview={preview}
         onStripeClientSecret={onStripeClientSecret}
         onCheckoutStarted={() => {

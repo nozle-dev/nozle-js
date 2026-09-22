@@ -162,7 +162,7 @@ export interface SubscriptionChangePreview {
 }
 
 export interface WithdrawPendingSubscriptionChangeResult {
-  subscription: SubscriptionOptions["subscription"];
+  subscription: Pick<SubscriptionOptions["subscription"], "id" | "external_id" | "plan_code" | "status">;
   withdrawn_pending_subscription_id: string;
   replayed: boolean;
 }

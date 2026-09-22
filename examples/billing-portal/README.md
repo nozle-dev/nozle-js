@@ -1,6 +1,6 @@
 # React subscription management through the Node SDK
 
-This runnable merchant server connects `BillingPortal`'s optional cancellation controls to the existing `previewSubscriptionTransition` and `applySubscriptionTransition` methods. The merchant authenticates the customer; Nozle Engine checks that the external subscription belongs to that customer and organization. No secret API key goes to React.
+This runnable merchant server connects `BillingPortal` to the existing subscription transitions and payment-backed checkout. Customers can cancel at period end, keep their subscription, upgrade, schedule a downgrade, and withdraw the exact pending change. The merchant authenticates the customer; Nozle Engine checks that the selected external subscription belongs to that customer and organization. No secret API key goes to React.
 
 ## Run
 
@@ -27,17 +27,17 @@ The React controls and confirmation-date guard must come from the associated fea
 
 ### Run the included React demo
 
-Start the merchant server with `MERCHANT_ORIGIN=http://localhost:5179`, then, in another terminal:
+Checkout return URLs require HTTPS. Set `MERCHANT_ORIGIN=https://127.0.0.1:5179` on the merchant server. Supply a development TLS certificate and private key to Vite; for example, create a local certificate outside the repository with `mkcert 127.0.0.1` and set absolute paths in `DEV_TLS_CERT` and `DEV_TLS_KEY`.
 
 ```sh
-# From the repository root:
+# From the repository root, with DEV_TLS_CERT and DEV_TLS_KEY exported:
 npm run build --workspace=@nozle-js/react
 cd examples/billing-portal/web
 npm install
 MERCHANT_PORT=4242 npm run dev
 ```
 
-Open `http://localhost:5179` and enter the demo login token. To use the Python merchant example, start it on port 4243 with the same `MERCHANT_ORIGIN`, then restart Vite with `MERCHANT_PORT=4243 npm run dev`. Both servers expose the same authenticated endpoints; the browser still uses one origin. This source-linked demo is separate from the packed-package verification described below.
+Open `https://127.0.0.1:5179` and enter the demo login token. To use the Python merchant example, start it on port 4243 with the same `MERCHANT_ORIGIN`, then restart Vite with `MERCHANT_PORT=4243 npm run dev`. Vite keeps the merchant connection on loopback HTTP while the browser uses HTTPS. Cancellation-only testing can use loopback HTTP, but checkout requires the HTTPS configuration. This source-linked demo is separate from the packed-package verification described below.
 
 ## React adapter
 
@@ -76,7 +76,7 @@ After any apply result or timeout, the React control reads persisted customer-sc
 
 ## Handler boundaries
 
-- Browser action bodies contain only an external `subscriptionId`, `operation` (`cancel` or `uncancel`), and, on apply, `idempotencyKey` plus `expectedEffectiveAt` for cancellation. Customer IDs, refund settings, plan changes, and immediate timing are rejected.
+- Cancellation action bodies contain only an external `subscriptionId`, `operation` (`cancel` or `uncancel`), and, on apply, `idempotencyKey` plus `expectedEffectiveAt` for cancellation. Customer IDs, refund settings, plan changes, and immediate timing are rejected.
 - Cancellation always explicitly uses `end_of_period`. Keep sends `uncancel` without settlement overrides. It restores renewal while the subscription is active; it does not restart an ended subscription or restore a removed pending downgrade.
 - Core owns durable idempotency. The local action file binds the authenticated customer and confirmation to the same upstream key, remembers completed calls, and allows retries after a lost response to bypass a now-invalid fresh preview. Keep the same key for a retry. Create a new key only after a new confirmation.
 - `ACTION_STORE_PATH` defaults to `.billing-portal/actions.json` under the current directory, with private file permissions. Run from the example directory, whose `.gitignore` excludes the store. Use a transactional shared database and your app's existing authentication/session store for multiple workers. This file store and token login are for one development process, not a replacement for merchant production auth. Keep replay records for your supported retry window.
@@ -86,7 +86,9 @@ After any apply result or timeout, the React control reads persisted customer-sc
 
 ### Access enforcement
 
-The portal changes billing state; the merchant application must enforce access through server-side subscription and entitlement checks. In the current backend, the termination clock runs hourly at minute 05 and Engine refreshes its entitlement cache every minute. Therefore, a scheduled cancellation date is not a guarantee of access removal at that exact instant. Backend clock tests that invoke the termination job directly do not verify deployed job timing. Exact scheduled-time access removal remains a launch gate for this milestone; verify the worker and cache behavior before promising that guarantee.
+The portal changes billing state; your application must enforce entitlement checks on its server. The companion Engine build checks the authoritative subscription and database clock on each `/can` request: access ends at the scheduled cancellation boundary even while Core's termination job has not updated the row, and Keep takes effect without waiting for cache refresh. A failed authoritative read returns an error rather than allowing access. Merchants must handle that error without granting access and must not add a cache that extends the scheduled cutoff.
+
+The real isolated-backend probe verified immediate Keep and denial after the boundary with two Engine instances, while the canceled Core row was still active. Core's lifecycle jobs still run on their configured schedule (termination is hourly at minute 05). Manually clocked renewal/termination tests prove lifecycle behavior; they do not prove deployed job timing, invoice execution, or exact scheduled-downgrade activation. Verify those operational dependencies in the deployment before release.
 
 ### Run the fixture checks
 

@@ -53,7 +53,7 @@ const scheduled = await state(selected);
 assert.equal(scheduled.currentPlan.code, target);
 assert.equal(scheduled.pendingChange.plan.code, lower);
 assert.equal(Date.parse(scheduled.pendingChange.effectiveAt), Date.parse(lowerPreview.effectiveAt));
-await plans("withdraw", { subscriptionId: selected, pendingChangeId: "00000000-0000-0000-0000-000000000000", idempotencyKey: randomUUID() }, 409);
+await plans("withdraw", { subscriptionId: selected, pendingChangeId: "00000000-0000-0000-0000-000000000000", idempotencyKey: randomUUID() }, 404);
 const withdraw = { subscriptionId: selected, pendingChangeId: scheduled.pendingChange.id, idempotencyKey: randomUUID() };
 await plans("withdraw", withdraw);
 await plans("withdraw", withdraw);
@@ -64,4 +64,4 @@ assert.equal(final.endingAt, null);
 assert.equal((await state(other)).currentPlan.code, untouchedBefore.currentPlan.code);
 console.log(JSON.stringify({ result: "passed", subscriptionId: selected, otherSubscriptionId: other,
   finalPlan: final.currentPlan.code, finalStatus: final.status, pendingChange: null,
-  checks: ["authenticated subscription selection", "zero-due upgrade and replay", "other subscription unchanged", "scheduled downgrade and replay", "stale withdrawal rejected", "exact withdrawal and replay"] }));
+  checks: ["authenticated subscription selection", "zero-due upgrade and replay", "other subscription unchanged", "scheduled downgrade and replay", "nonexistent withdrawal rejected", "exact withdrawal and replay"] }));

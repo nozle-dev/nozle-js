@@ -4,6 +4,7 @@ import {
   BillingPortal,
   BillingPortalError,
   type CancellationActions,
+  type PlanChangeActions,
   type CreateBillingPortalSession,
 } from "@nozle-js/react";
 
@@ -32,6 +33,21 @@ const cancellationActions: CancellationActions = {
     post("/api/billing/cancellation/preview", body, signal),
   apply: ({ signal, ...body }) =>
     post("/api/billing/cancellation", body, signal),
+};
+const planChangeActions: PlanChangeActions = {
+  load: ({ signal, ...body }) => post("/api/billing/plans/load", body, signal),
+  status: ({ signal, ...body }) =>
+    post("/api/billing/plans/status", body, signal),
+  preview: ({ signal, ...body }) =>
+    post("/api/billing/plans/preview", body, signal),
+  apply: ({ signal, ...body }) =>
+    post("/api/billing/plans/apply", body, signal),
+  withdraw: ({ signal, ...body }) =>
+    post("/api/billing/plans/withdraw", body, signal),
+  getCheckoutStatus: ({ signal, ...body }) =>
+    post("/api/billing/plans/checkout-status", body, signal),
+  verifyCheckout: ({ signal, ...body }) =>
+    post("/api/billing/plans/checkout-verify", body, signal),
 };
 
 function App() {
@@ -63,6 +79,7 @@ function App() {
         <BillingPortal
           createSession={createSession}
           cancellationActions={cancellationActions}
+          planChangeActions={planChangeActions}
         />
       ) : (
         <>

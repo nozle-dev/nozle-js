@@ -42,12 +42,18 @@ import {
   type CancellationActions,
   type CancellationSubscription,
 } from "./CancellationControl.js";
+import {
+  PlanChangeControl,
+  type PlanChangeActions,
+} from "./PlanChangeControl.js";
 
 export interface BillingPortalProps {
   /** Stable callback to an authenticated merchant endpoint. Never accept customer identity from browser input. */
   createSession: CreateBillingPortalSession;
   /** Optional authenticated merchant callbacks enabling cancel/keep controls. */
   cancellationActions?: CancellationActions;
+  /** Optional authenticated merchant callbacks for upgrades and scheduled downgrades. */
+  planChangeActions?: PlanChangeActions;
   /** Formats amounts and dates. Interface copy is currently English. */
   locale?: string;
   className?: string;
@@ -67,6 +73,7 @@ function asError(error: unknown) {
 export function BillingPortal({
   createSession,
   cancellationActions,
+  planChangeActions,
   locale = "en-US",
   className = "",
   style,
@@ -137,6 +144,7 @@ export function BillingPortal({
           reconnect={reconnect}
           onError={onError}
           cancellationActions={cancellationActions}
+          planChangeActions={planChangeActions}
           nonce={nonce}
         />
       ) : current?.error ? (
@@ -302,6 +310,7 @@ type SectionProps = {
   reconnect: () => void;
   onError?: BillingPortalProps["onError"];
   cancellationActions?: CancellationActions;
+  planChangeActions?: PlanChangeActions;
   nonce?: string;
 };
 function Portal(props: SectionProps) {
@@ -475,6 +484,7 @@ function Subscriptions({
   onError,
   onUsage,
   cancellationActions,
+  planChangeActions,
   nonce,
 }: SectionProps & {
   timezone: string;
@@ -503,7 +513,11 @@ function Subscriptions({
               {result.collection
                 .map((item) => updated[item.id] ?? item)
                 .map((subscription) => (
-                  <article className="nzp-card" key={subscription.id}>
+                  <article
+                    className="nzp-card"
+                    data-subscription-id={subscription.externalId}
+                    key={subscription.externalId || subscription.id}
+                  >
                     <div className="nzp-row">
                       <h3>{planName(subscription)}</h3>
                       <span className="nzp-badge">
@@ -585,6 +599,18 @@ function Subscriptions({
                               )
                             : null;
                         }}
+                      />
+                    )}
+                    {planChangeActions && subscription.externalId && (
+                      <PlanChangeControl
+                        subscriptionId={subscription.externalId}
+                        refreshKey={`${subscription.id}:${subscription.endingAt ?? ""}:${subscription.nextSubscription?.id ?? ""}:${subscription.plan.code}`}
+                        actions={planChangeActions}
+                        locale={locale}
+                        timezone={timezone}
+                        nonce={nonce}
+                        onError={onError}
+                        onChanged={retry}
                       />
                     )}
                   </article>
