@@ -289,6 +289,18 @@ export class Nozle {
     if (!params.customerId.trim() || !params.subscriptionId.trim()) {
       throw new Error("subscription transitions require customerId and subscriptionId");
     }
+    if (params.expectedEffectiveAt !== undefined) {
+      if (params.operation !== "cancel" || params.timing !== "end_of_period") {
+        throw new Error("expectedEffectiveAt requires end_of_period cancellation");
+      }
+      if (
+        typeof params.expectedEffectiveAt !== "string" ||
+        !/^\d{4}-\d\d-\d\dT.+(?:Z|[+-]\d\d:\d\d)$/.test(params.expectedEffectiveAt) ||
+        !Number.isFinite(Date.parse(params.expectedEffectiveAt))
+      ) {
+        throw new Error("expectedEffectiveAt requires an ISO timestamp with timezone");
+      }
+    }
     if ((params.operation === "cancel" || params.operation === "uncancel") && params.targetPlanCode) {
       throw new Error("targetPlanCode is forbidden for cancellation and uncancel");
     }
@@ -326,6 +338,7 @@ export class Nozle {
       credit_action: params.creditAction,
       refund_mode: params.refundMode,
       final_invoice_action: params.finalInvoiceAction,
+      expected_effective_at: params.expectedEffectiveAt,
     };
   }
 

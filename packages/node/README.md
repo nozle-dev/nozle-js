@@ -384,3 +384,7 @@ import type {
 ## License
 
 Proprietary
+
+## React billing portal cancellation example
+
+See the [runnable authenticated merchant integration](../../examples/billing-portal/README.md) for Cancel and Keep through the React billing portal. It reuses the existing transition methods and derives customer identity from the merchant session. For end-of-period cancellation, optional `expectedEffectiveAt` preserves the exact preview timestamp and rejects a changed date atomically on compatible Engine/Core deployments. Existing calls without this option remain compatible.

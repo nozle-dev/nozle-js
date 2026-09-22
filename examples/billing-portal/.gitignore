@@ -1,0 +1,3 @@
+.billing-portal/
+.env
+!.env.example

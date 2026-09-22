@@ -1,3 +1,10 @@
+export { BillingPortal } from './components/portal/BillingPortal.js';
+export { CancellationControl } from './components/portal/CancellationControl.js';
+export type { CancellationActions, CancellationApplyInput, CancellationInput, CancellationOperation, CancellationPreview, CancellationSubscription, CancellationControlProps } from './components/portal/CancellationControl.js';
+export type { BillingPortalProps } from './components/portal/BillingPortal.js';
+export { BillingPortalError } from './components/portal/client.js';
+export type { BillingPortalSession, CreateBillingPortalSession } from './components/portal/client.js';
+
 /** @nozle-js/react — public catalog and merchant-BFF checkout components. */
 
 export {

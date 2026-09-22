@@ -278,6 +278,8 @@ export interface SubscriptionTransitionParams {
   creditAction?: SubscriptionTransitionCreditAction;
   refundMode?: SubscriptionTransitionRefundMode;
   finalInvoiceAction?: SubscriptionTransitionFinalInvoiceAction;
+  /** For end-of-period cancellation, reject a changed confirmation date atomically. */
+  expectedEffectiveAt?: string;
 }
 
 export interface SubscriptionTransitionPreview {
