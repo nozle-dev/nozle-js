@@ -104,6 +104,67 @@ export interface CheckoutOptions {
   idempotencyKey?: string;
   registerMandate?: boolean;
   externalEntityId?: string;
+  /** External subscription identifier for a customer plan change. */
+  subscriptionId?: string;
+  /** Opaque quote from previewSubscriptionChange; never reformat or inspect it. */
+  quoteId?: string;
+}
+
+export interface SubscriptionCheckoutScope {
+  customerId: string;
+  subscriptionId: string;
+}
+
+export interface SubscriptionPlan {
+  code: string;
+  name: string;
+  amount_cents: number | string;
+  currency: string;
+  interval: string;
+}
+
+export interface SubscriptionOptions {
+  subscription: {
+    id: string;
+    external_id: string;
+    plan_code: string;
+    status: string;
+    ending_at: string | null;
+    plan: SubscriptionPlan;
+  };
+  pending_change: {
+    id: string;
+    plan_code: string;
+    name: string;
+    effective_at: string;
+    plan: SubscriptionPlan;
+  } | null;
+  eligible_plans: Array<SubscriptionPlan & {
+    direction: "upgrade" | "downgrade";
+    timing: "immediate" | "end_of_period";
+  }>;
+  checkout?: { id: string; status: string; plan_code: string } | null;
+  blocked_reason?: string | null;
+}
+
+export interface SubscriptionChangePreview {
+  quote_id: string;
+  currency: string;
+  credit_amount_cents: number | string;
+  debit_amount_cents: number | string;
+  net_amount_cents: number | string;
+  amount_due_now_cents: number | string;
+  amount_due_at_effective_cents: number | string;
+  transition_direction: "upgrade" | "downgrade";
+  timing: "immediate" | "end_of_period";
+  effective_at: string;
+  renewal_at: string | null;
+}
+
+export interface WithdrawPendingSubscriptionChangeResult {
+  subscription: Pick<SubscriptionOptions["subscription"], "id" | "external_id" | "plan_code" | "status">;
+  withdrawn_pending_subscription_id: string;
+  replayed: boolean;
 }
 
 export interface RazorpayVerification {
@@ -114,7 +175,7 @@ export interface RazorpayVerification {
 
 export interface CheckoutStatus {
   checkout_id: string;
-  provider: "razorpay";
+  provider: "razorpay" | "stripe";
   status:
     | "processing"
     | "awaiting_payment"
@@ -135,6 +196,8 @@ export type CheckoutResult =
   | HostedCheckoutResult
   | {
       type: "stripe";
+      publishable_key?: string;
+      stripe_account?: string;
       client_secret?: string;
       clientSecret?: string;
       url?: string;
@@ -143,14 +206,21 @@ export type CheckoutResult =
       currency?: string;
       external_entity_id?: string;
       external_subscription_id?: string;
+      checkout_id?: string;
     }
   | {
       type: "completed" | "scheduled";
+      pending_subscription_id?: string;
       status: string;
       subscription_id?: string;
       plan_code?: string;
       external_entity_id?: string;
       external_subscription_id?: string;
+      checkout_id?: string;
+      effective_at?: string;
+      renewal_at?: string | null;
+      amount_due_cents?: number | string;
+      currency?: string;
     };
 
 export interface EntitySubscriptionPlan {
@@ -278,6 +348,10 @@ export interface SubscriptionTransitionParams {
   creditAction?: SubscriptionTransitionCreditAction;
   refundMode?: SubscriptionTransitionRefundMode;
   finalInvoiceAction?: SubscriptionTransitionFinalInvoiceAction;
+  /** For end-of-period cancellation, reject a changed confirmation date atomically. */
+  expectedEffectiveAt?: string;
+  /** Opaque plan-change quote; only valid for a downgrade transition. */
+  quoteId?: string;
 }
 
 export interface SubscriptionTransitionPreview {

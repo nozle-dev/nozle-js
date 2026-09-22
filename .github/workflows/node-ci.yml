@@ -7,6 +7,7 @@ on:
     paths:
       - packages/node/**
       - packages/react/**
+      - examples/billing-portal/**
       - package.json
       - package-lock.json
       - .github/workflows/node-ci.yml
@@ -18,6 +19,7 @@ on:
     paths:
       - packages/node/**
       - packages/react/**
+      - examples/billing-portal/**
       - package.json
       - package-lock.json
       - .github/workflows/node-ci.yml
@@ -98,3 +100,8 @@ jobs:
 
       - name: Build package
         run: npm run build --workspace=@nozle-js/react
+
+      - name: Test authenticated merchant example
+        run: |
+          npm run build --workspace=@nozle-js/node
+          node --test examples/billing-portal/*.test.mjs
