@@ -84,6 +84,12 @@ After any apply result or timeout, the React control reads persisted customer-sc
 
 ## Verify a dedicated backend fixture
 
+### Access enforcement
+
+The portal changes billing state; the merchant application must enforce access through server-side subscription and entitlement checks. In the current backend, the termination clock runs hourly at minute 05 and Engine refreshes its entitlement cache every minute. Therefore, a scheduled cancellation date is not a guarantee of access removal at that exact instant. Backend clock tests that invoke the termination job directly do not verify deployed job timing. Exact scheduled-time access removal remains a launch gate for this milestone; verify the worker and cache behavior before promising that guarantee.
+
+### Run the fixture checks
+
 Create a renewing test customer and subscription whose external IDs both start `sdk-cancel-test-`. Export `DEMO_SUBSCRIPTION_ID`, `DEMO_CUSTOMER_ID`, and the login variables used by the server, then:
 
 ```sh
