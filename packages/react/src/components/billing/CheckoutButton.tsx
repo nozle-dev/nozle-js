@@ -1,23 +1,22 @@
-'use client';
+"use client";
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState } from "react";
 import {
   useBillingContext,
   type CheckoutResult,
   type CompletedCheckoutResult,
   type ScheduledCheckoutResult,
-} from '../../provider.js';
+} from "../../provider.js";
 
 import {
   openRazorpayCheckout,
   resumeCheckout,
   type RazorpayActions,
-} from './razorpay-checkout.js';
+} from "./razorpay-checkout.js";
+import { navigateToCheckout } from "./checkout-navigation.js";
 
-export interface CheckoutButtonProps extends Omit<
-  RazorpayActions,
-  'verifyCheckout' | 'getCheckoutStatus'
-> {
+export interface CheckoutButtonProps
+  extends Omit<RazorpayActions, "verifyCheckout" | "getCheckoutStatus"> {
   planCode: string;
   returnUrl?: string;
   label?: string;
@@ -37,40 +36,40 @@ export async function handleCheckoutResult(
   result: CheckoutResult,
   options: Pick<
     CheckoutButtonProps,
-    | 'razorpayKeyId'
-    | 'onStripeClientSecret'
-    | 'onSuccess'
-    | 'onComplete'
-    | 'onScheduled'
+    | "razorpayKeyId"
+    | "onStripeClientSecret"
+    | "onSuccess"
+    | "onComplete"
+    | "onScheduled"
   > &
     RazorpayActions,
 ): Promise<void> {
-  if ('type' in result && result.type === 'scheduled') {
+  if ("type" in result && result.type === "scheduled") {
     options.onScheduled?.(result);
     return;
   }
-  if ('type' in result && result.type === 'completed') {
+  if ("type" in result && result.type === "completed") {
     options.onComplete?.(result);
     return;
   }
-  if ('type' in result && result.type === 'razorpay') {
+  if ("type" in result && result.type === "razorpay") {
     await openRazorpayCheckout(result, options);
     return;
   }
-  if ('type' in result && result.type === 'processing') {
+  if ("type" in result && result.type === "processing") {
     const next = await resumeCheckout(result, options);
     if (next) await handleCheckoutResult(next, options);
     return;
   }
-  if ('type' in result && result.type === 'hosted') {
-    window.location.assign(result.payment_url);
+  if ("type" in result && result.type === "hosted") {
+    navigateToCheckout(result.payment_url);
     return;
   }
-  if ('url' in result && result.url) {
-    window.location.assign(result.url);
+  if ("url" in result && result.url) {
+    navigateToCheckout(result.url);
     return;
   }
-  if ('type' in result && result.type === 'stripe') {
+  if ("type" in result && result.type === "stripe") {
     const clientSecret = result.clientSecret ?? result.client_secret;
     if (clientSecret && options.onStripeClientSecret) {
       options.onStripeClientSecret(clientSecret);
@@ -78,17 +77,17 @@ export async function handleCheckoutResult(
     }
     if (clientSecret)
       throw new Error(
-        'onStripeClientSecret is required for embedded Stripe checkout',
+        "onStripeClientSecret is required for embedded Stripe checkout",
       );
-    throw new Error('Stripe checkout did not include a URL or client secret');
+    throw new Error("Stripe checkout did not include a URL or client secret");
   }
-  throw new Error('Unknown checkout response format');
+  throw new Error("Unknown checkout response format");
 }
 
 export function CheckoutButton({
   planCode,
   returnUrl,
-  label = 'Get Started',
+  label = "Get Started",
   className,
   style,
   onError,
@@ -118,7 +117,7 @@ export function CheckoutButton({
     try {
       if (!createCheckout) {
         throw new Error(
-          'BillingProvider createCheckout callback is required for checkout',
+          "BillingProvider createCheckout callback is required for checkout",
         );
       }
       if (attempt.current?.plan !== planCode)
@@ -151,7 +150,7 @@ export function CheckoutButton({
       });
     } catch (cause) {
       const checkoutError =
-        cause instanceof Error ? cause : new Error('Checkout failed');
+        cause instanceof Error ? cause : new Error("Checkout failed");
       setError(checkoutError);
       onError?.(checkoutError);
     } finally {
@@ -168,19 +167,19 @@ export function CheckoutButton({
         disabled={loading}
         className={className}
         style={{
-          padding: '0.75rem 1.5rem',
-          borderRadius: 'var(--nozle-radius, 0.5rem)',
-          border: 'none',
-          background: 'var(--nozle-primary, var(--primary))',
-          color: 'var(--nozle-primary-foreground, var(--primary-foreground))',
-          cursor: loading ? 'not-allowed' : 'pointer',
+          padding: "0.75rem 1.5rem",
+          borderRadius: "var(--nozle-radius, 0.5rem)",
+          border: "none",
+          background: "var(--nozle-primary, var(--primary))",
+          color: "var(--nozle-primary-foreground, var(--primary-foreground))",
+          cursor: loading ? "not-allowed" : "pointer",
           fontWeight: 500,
           opacity: loading ? 0.7 : 1,
           ...style,
         }}
         aria-busy={loading}
       >
-        {loading ? 'Loading...' : label}
+        {loading ? "Loading..." : label}
       </button>
       {processing && (
         <span role="status">

@@ -1,14 +1,24 @@
-'use client';
+"use client";
 
 import React, {
   createContext,
   useContext,
   useMemo,
   type ReactNode,
-} from 'react';
+} from "react";
 
-export interface CompletedCheckoutResult {
-  type: 'completed';
+export interface CheckoutSubscriptionResult {
+  external_entity_id?: string;
+  external_subscription_id?: string;
+  checkout_id?: string;
+  effective_at?: string;
+  renewal_at?: string | null;
+  amount_due_cents?: number | string;
+  currency?: string;
+}
+
+export interface CompletedCheckoutResult extends CheckoutSubscriptionResult {
+  type: "completed";
   status: string;
   payment_source?: string;
   subscription_id?: string;
@@ -18,15 +28,17 @@ export interface CompletedCheckoutResult {
   currency?: string;
 }
 
-export interface ScheduledCheckoutResult {
-  type: 'scheduled';
+export interface ScheduledCheckoutResult extends CheckoutSubscriptionResult {
+  type: "scheduled";
   status: string;
   subscription_id?: string;
   plan_code?: string;
+  effective_at?: string;
+  pending_subscription_id?: string;
 }
 
 export interface RazorpayCheckoutResult {
-  type: 'razorpay';
+  type: "razorpay";
   checkout_id: string;
   key_id: string;
   order_id: string;
@@ -40,13 +52,13 @@ export interface RazorpayCheckoutResult {
 }
 
 export interface ProcessingCheckoutResult {
-  type: 'processing';
+  type: "processing";
   checkout_id: string;
   status: string;
 }
 
 export interface HostedCheckoutResult {
-  type: 'hosted';
+  type: "hosted";
   payment_url: string;
   checkout_id?: string;
 }
@@ -59,15 +71,15 @@ export interface RazorpayVerification {
 
 export interface CheckoutStatus {
   checkout_id: string;
-  provider: 'razorpay';
+  provider: "razorpay" | "stripe";
   status:
-    | 'processing'
-    | 'awaiting_payment'
-    | 'succeeded'
-    | 'failed'
-    | 'expired'
-    | 'needs_review';
-  fulfillment_status: 'pending' | 'processing' | 'succeeded';
+    | "processing"
+    | "awaiting_payment"
+    | "succeeded"
+    | "failed"
+    | "expired"
+    | "needs_review";
+  fulfillment_status: "pending" | "processing" | "succeeded";
   amount_cents?: number;
   currency?: string;
   invoice_id?: string | null;
@@ -83,10 +95,18 @@ export type GetCheckoutStatus = (checkoutId: string) => Promise<CheckoutStatus>;
 
 export type CheckoutResult =
   | {
-      type: 'stripe';
+      type: "stripe";
       url?: string;
       clientSecret?: string;
       client_secret?: string;
+      publishable_key?: string;
+      stripe_account?: string;
+      checkout_id?: string;
+      invoice_id?: string;
+      amount_cents?: number;
+      currency?: string;
+      external_entity_id?: string;
+      external_subscription_id?: string;
     }
   | RazorpayCheckoutResult
   | ProcessingCheckoutResult
@@ -100,6 +120,10 @@ export interface CreateCheckoutInput {
   returnUrl: string;
   idempotencyKey?: string;
   registerMandate?: boolean;
+  /** Select the customer's external subscription for a plan change. */
+  subscriptionId?: string;
+  /** Opaque, server-issued confirmation for the displayed quote. */
+  quoteId?: string;
 }
 
 export type CreateCheckout = (
@@ -113,7 +137,9 @@ export interface NozleClient {
 }
 
 function createClient(publishableKey: string, baseUrl: string): NozleClient {
-  const base = baseUrl.replace(/\/+$/, '');
+  let end = baseUrl.length;
+  while (end > 0 && baseUrl[end - 1] === "/") end--;
+  const base = baseUrl.slice(0, end);
 
   return {
     publishableKey,
@@ -123,7 +149,7 @@ function createClient(publishableKey: string, baseUrl: string): NozleClient {
         ...init,
         headers: {
           Authorization: `Bearer ${publishableKey}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           ...init?.headers,
         },
       });
@@ -154,12 +180,12 @@ export function BillingProvider({
   createCheckout,
   verifyCheckout,
   getCheckoutStatus,
-  baseUrl = 'https://api.nozle.app/engine',
+  baseUrl = "https://api.nozle.app/engine",
   children,
 }: BillingProviderProps): React.ReactElement {
-  if (!publishableKey.startsWith('pk_')) {
+  if (!publishableKey.startsWith("pk_")) {
     throw new Error(
-      'BillingProvider publishableKey must be a publishable key (pk_)',
+      "BillingProvider publishableKey must be a publishable key (pk_)",
     );
   }
 
@@ -186,7 +212,7 @@ export function useOptionalBillingContext(): BillingContextValue | null {
 export function useBillingContext(): BillingContextValue {
   const context = useOptionalBillingContext();
   if (!context) {
-    throw new Error('useBillingContext must be used within a BillingProvider');
+    throw new Error("useBillingContext must be used within a BillingProvider");
   }
   return context;
 }

@@ -1,6 +1,12 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   EmbeddedCheckout as StripeEmbeddedCheckout,
   EmbeddedCheckoutProvider,
@@ -8,16 +14,18 @@ import {
   PaymentElement,
   useStripe,
   useElements,
-} from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
-import type { Appearance, StripeElementsOptions } from '@stripe/stripe-js';
+} from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
+import type { Appearance, StripeElementsOptions } from "@stripe/stripe-js";
 
 import {
   useOptionalBillingContext,
   type CheckoutResult,
   type CheckoutStatus,
-} from '../../provider.js';
-import { handleCheckoutResult } from './CheckoutButton.js';
+  type VerifyCheckout,
+  type GetCheckoutStatus,
+} from "../../provider.js";
+import { handleCheckoutResult } from "./CheckoutButton.js";
 
 // ── Public interfaces ────────────────────────────────────────────────────────
 
@@ -72,7 +80,7 @@ const CheckoutContext = createContext<CheckoutContextValue | null>(null);
 export function useCheckout(): UseCheckoutResult {
   const ctx = useContext(CheckoutContext);
   if (ctx === null) {
-    throw new Error('useCheckout must be used inside a <Checkout> component');
+    throw new Error("useCheckout must be used inside a <Checkout> component");
   }
   return ctx;
 }
@@ -80,8 +88,8 @@ export function useCheckout(): UseCheckoutResult {
 // ── Stripe appearance builder ─────────────────────────────────────────────────
 
 function buildStripeAppearance(): Appearance {
-  if (typeof document === 'undefined') {
-    return { theme: 'stripe' };
+  if (typeof document === "undefined") {
+    return { theme: "stripe" };
   }
 
   const style = getComputedStyle(document.documentElement);
@@ -89,14 +97,14 @@ function buildStripeAppearance(): Appearance {
     style.getPropertyValue(prop).trim() || fallback;
 
   return {
-    theme: 'stripe',
+    theme: "stripe",
     variables: {
-      colorPrimary: get('--nozle-primary', '#16a34a'),
-      colorBackground: get('--nozle-background', '#f8fafc'),
-      colorText: get('--nozle-foreground', '#1e293b'),
-      colorDanger: get('--nozle-destructive', '#dc2626'),
-      borderRadius: get('--nozle-radius', '0.5rem'),
-      fontFamily: 'inherit',
+      colorPrimary: get("--nozle-primary", "#16a34a"),
+      colorBackground: get("--nozle-background", "#f8fafc"),
+      colorText: get("--nozle-foreground", "#1e293b"),
+      colorDanger: get("--nozle-destructive", "#dc2626"),
+      borderRadius: get("--nozle-radius", "0.5rem"),
+      fontFamily: "inherit",
     },
   };
 }
@@ -105,13 +113,13 @@ function buildStripeAppearance(): Appearance {
 
 type CheckoutInnerProps = Pick<
   StripeCheckoutProps,
-  | 'submitLabel'
-  | 'onSuccess'
-  | 'onError'
-  | 'onReady'
-  | 'className'
-  | 'style'
-  | 'returnUrl'
+  | "submitLabel"
+  | "onSuccess"
+  | "onError"
+  | "onReady"
+  | "className"
+  | "style"
+  | "returnUrl"
 > & { children?: React.ReactNode };
 
 function CheckoutInner({
@@ -130,27 +138,36 @@ function CheckoutInner({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const inFlight = useRef(false);
 
   async function confirmPayment(): Promise<void> {
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || inFlight.current) return;
 
+    inFlight.current = true;
     setIsProcessing(true);
     setError(null);
-
-    const result = await stripe.confirmPayment({
-      elements,
-      confirmParams: { return_url: returnUrl ?? window.location.href },
-      redirect: 'if_required',
-    });
-
-    setIsProcessing(false);
-
-    if (result.error) {
-      const err = new Error(result.error.message ?? 'Payment failed');
-      setError(err);
-      onError?.(err);
-    } else if (result.paymentIntent?.status === 'succeeded') {
-      onSuccess?.(result.paymentIntent.id);
+    try {
+      const result = await stripe.confirmPayment({
+        elements,
+        confirmParams: { return_url: returnUrl ?? window.location.href },
+        redirect: "if_required",
+      });
+      if (result.error) {
+        const err = new Error(result.error.message ?? "Payment failed");
+        setError(err);
+        onError?.(err);
+      } else if (result.paymentIntent?.status === "succeeded") {
+        onSuccess?.(result.paymentIntent.id);
+      }
+    } catch {
+      const failure = new Error(
+        "Payment could not be confirmed. Check its status before retrying.",
+      );
+      setError(failure);
+      onError?.(failure);
+    } finally {
+      inFlight.current = false;
+      setIsProcessing(false);
     }
   }
 
@@ -163,12 +180,12 @@ function CheckoutInner({
           <div
             data-testid="checkout-skeleton"
             style={{
-              height: '200px',
-              borderRadius: 'var(--nozle-radius, 0.5rem)',
+              height: "200px",
+              borderRadius: "var(--nozle-radius, 0.5rem)",
               background:
-                'linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)',
-              backgroundSize: '200% 100%',
-              animation: 'nozle-skeleton-pulse 1.5s ease-in-out infinite',
+                "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
+              backgroundSize: "200% 100%",
+              animation: "nozle-skeleton-pulse 1.5s ease-in-out infinite",
             }}
           />
         )}
@@ -183,8 +200,8 @@ function CheckoutInner({
         {error !== null && (
           <p
             style={{
-              color: 'var(--nozle-destructive, #dc2626)',
-              margin: '0.5rem 0 0',
+              color: "var(--nozle-destructive, #dc2626)",
+              margin: "0.5rem 0 0",
             }}
           >
             {error.message}
@@ -198,20 +215,20 @@ function CheckoutInner({
             disabled={isProcessing || !stripe}
             aria-busy={isProcessing}
             style={{
-              padding: '0.75rem 1.5rem',
-              borderRadius: 'var(--nozle-radius, 0.5rem)',
-              border: 'none',
-              background: 'var(--nozle-primary, var(--primary))',
+              padding: "0.75rem 1.5rem",
+              borderRadius: "var(--nozle-radius, 0.5rem)",
+              border: "none",
+              background: "var(--nozle-primary, var(--primary))",
               color:
-                'var(--nozle-primary-foreground, var(--primary-foreground))',
-              cursor: isProcessing ? 'not-allowed' : 'pointer',
+                "var(--nozle-primary-foreground, var(--primary-foreground))",
+              cursor: isProcessing ? "not-allowed" : "pointer",
               fontWeight: 500,
               opacity: isProcessing ? 0.7 : 1,
-              marginTop: '1rem',
-              width: '100%',
+              marginTop: "1rem",
+              width: "100%",
             }}
           >
-            {isProcessing ? 'Processing...' : (submitLabel ?? 'Pay now')}
+            {isProcessing ? "Processing..." : (submitLabel ?? "Pay now")}
           </button>
         )}
       </div>
@@ -248,7 +265,7 @@ function StripeCheckout({
     [clientSecret, onComplete],
   );
 
-  if (clientSecret.startsWith('cs_')) {
+  if (clientSecret.startsWith("cs_")) {
     return (
       <div className={className} style={style}>
         <EmbeddedCheckoutProvider
@@ -287,6 +304,10 @@ export interface ProviderCheckoutProps {
   onProcessing?: (status: CheckoutStatus) => void;
   onError?: (error: Error) => void;
   className?: string;
+  returnUrl?: string;
+  verifyCheckout?: VerifyCheckout;
+  getCheckoutStatus?: GetCheckoutStatus;
+  onDismiss?: () => void;
 }
 
 export type CheckoutProps = StripeCheckoutProps | ProviderCheckoutProps;
@@ -302,8 +323,10 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
     setError(null);
     try {
       await handleCheckoutResult(props.checkout, {
-        verifyCheckout: billing?.verifyCheckout,
-        getCheckoutStatus: billing?.getCheckoutStatus,
+        verifyCheckout: props.verifyCheckout ?? billing?.verifyCheckout,
+        getCheckoutStatus:
+          props.getCheckoutStatus ?? billing?.getCheckoutStatus,
+        onDismiss: props.onDismiss,
         onSuccess: (id) => {
           setProcessing(false);
           props.onSuccess?.(id);
@@ -313,6 +336,7 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
           setProcessing(false);
           props.onComplete?.();
         },
+        onScheduled: () => props.onComplete?.(),
         onProcessing: (status) => {
           setProcessing(true);
           props.onProcessing?.(status);
@@ -320,13 +344,40 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
       });
     } catch (cause) {
       const failure =
-        cause instanceof Error ? cause : new Error('Checkout failed');
+        cause instanceof Error ? cause : new Error("Checkout failed");
       setError(failure);
       props.onError?.(failure);
     } finally {
       setBusy(false);
     }
   };
+  if (
+    "type" in props.checkout &&
+    props.checkout.type === "stripe" &&
+    !props.checkout.url
+  ) {
+    const result = props.checkout;
+    const clientSecret = result.clientSecret ?? result.client_secret;
+    if (clientSecret && result.publishable_key) {
+      return (
+        <StripeCheckout
+          clientSecret={clientSecret}
+          publishableKey={result.publishable_key}
+          stripeAccount={result.stripe_account}
+          returnUrl={props.returnUrl}
+          submitLabel={props.submitLabel}
+          onSuccess={props.onSuccess}
+          onComplete={props.onComplete}
+          onError={props.onError}
+        />
+      );
+    }
+    return (
+      <p role="alert">
+        Payment setup is incomplete. Contact support to continue.
+      </p>
+    );
+  }
   return (
     <CheckoutContext.Provider
       value={{ confirmPayment: pay, isProcessing: busy, error }}
@@ -338,7 +389,7 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
           aria-busy={busy}
           onClick={() => void pay()}
         >
-          {busy ? 'Processing…' : props.submitLabel || 'Pay now'}
+          {busy ? "Processing…" : props.submitLabel || "Pay now"}
         </button>
         {processing && (
           <p role="status">
@@ -352,7 +403,7 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
 }
 
 export function Checkout(props: CheckoutProps) {
-  return 'checkout' in props ? (
+  return "checkout" in props ? (
     <ProviderCheckout {...props} />
   ) : (
     <StripeCheckout {...props} />

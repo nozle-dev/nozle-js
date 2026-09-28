@@ -1,6 +1,6 @@
 import React from "react";
-import {describe, expect, it, vi} from "vitest";
-import {fireEvent, render, waitFor} from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 
 const stripe = vi.hoisted(() => ({
   confirmPayment: vi.fn(),
@@ -11,27 +11,43 @@ vi.mock("@stripe/stripe-js", () => ({
 }));
 
 vi.mock("@stripe/react-stripe-js", () => ({
-  EmbeddedCheckoutProvider: ({children, options}: {children: React.ReactNode; options: {clientSecret: string}}) => (
-    <div data-testid="embedded-provider" data-client-secret={options.clientSecret}>{children}</div>
+  EmbeddedCheckoutProvider: ({
+    children,
+    options,
+  }: {
+    children: React.ReactNode;
+    options: { clientSecret: string };
+  }) => (
+    <div
+      data-testid="embedded-provider"
+      data-client-secret={options.clientSecret}
+    >
+      {children}
+    </div>
   ),
   EmbeddedCheckout: () => <div data-testid="embedded-checkout" />,
-  Elements: ({children}: {children: React.ReactNode}) => <div data-testid="elements-provider">{children}</div>,
+  Elements: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="elements-provider">{children}</div>
+  ),
   PaymentElement: () => <div data-testid="payment-element" />,
-  useStripe: () => ({confirmPayment: stripe.confirmPayment}),
+  useStripe: () => ({ confirmPayment: stripe.confirmPayment }),
   useElements: () => ({}),
 }));
 
-import {Checkout} from "../components/billing/Checkout";
+import { Checkout } from "../components/billing/Checkout";
 
 describe("Checkout secret routing", () => {
   it("mounts Stripe Embedded Checkout for Checkout Session secrets", () => {
     const view = render(
-      <Checkout clientSecret="cs_test_session_secret" publishableKey="pk_test" />,
+      <Checkout
+        clientSecret="cs_test_session_secret"
+        publishableKey="pk_test"
+      />,
     );
 
-    expect(view.getByTestId("embedded-provider").getAttribute("data-client-secret")).toBe(
-      "cs_test_session_secret",
-    );
+    expect(
+      view.getByTestId("embedded-provider").getAttribute("data-client-secret"),
+    ).toBe("cs_test_session_secret");
     expect(view.getByTestId("embedded-checkout")).toBeTruthy();
     expect(view.queryByTestId("payment-element")).toBeNull();
   });
@@ -45,10 +61,34 @@ describe("Checkout secret routing", () => {
     expect(view.getByTestId("payment-element")).toBeTruthy();
     expect(view.queryByTestId("embedded-checkout")).toBeNull();
   });
+  it("renders an embedded merchant checkout without requiring BillingProvider", () => {
+    const view = render(
+      <Checkout
+        checkout={{
+          type: "stripe",
+          client_secret: "cs_test_public_secret",
+          publishable_key: "pk_test_public",
+        }}
+      />,
+    );
+    expect(
+      view.getByTestId("embedded-provider").getAttribute("data-client-secret"),
+    ).toBe("cs_test_public_secret");
+  });
+  it("reports missing embedded Stripe public configuration", () => {
+    const view = render(
+      <Checkout
+        checkout={{ type: "stripe", client_secret: "cs_test_public_secret" }}
+      />,
+    );
+    expect(view.getByRole("alert").textContent).toContain(
+      "Payment setup is incomplete",
+    );
+  });
 
   it("uses the caller return URL when confirming a PaymentElement payment", async () => {
     stripe.confirmPayment.mockResolvedValueOnce({
-      paymentIntent: {id: "pi_test", status: "succeeded"},
+      paymentIntent: { id: "pi_test", status: "succeeded" },
     });
     const view = render(
       <Checkout
@@ -58,14 +98,36 @@ describe("Checkout secret routing", () => {
       />,
     );
 
-    fireEvent.click(view.getByRole("button", {name: "Pay now"}));
+    fireEvent.click(view.getByRole("button", { name: "Pay now" }));
 
     await waitFor(() =>
       expect(stripe.confirmPayment).toHaveBeenCalledWith({
         elements: {},
-        confirmParams: {return_url: "https://merchant.example/billing/complete"},
+        confirmParams: {
+          return_url: "https://merchant.example/billing/complete",
+        },
         redirect: "if_required",
       }),
     );
+  });
+  it("releases the payment button and reports a rejected provider request", async () => {
+    stripe.confirmPayment.mockRejectedValueOnce(
+      new Error("private provider transport details"),
+    );
+    const onError = vi.fn();
+    const view = render(
+      <Checkout
+        clientSecret="pi_test_secret_123"
+        publishableKey="pk_test"
+        onError={onError}
+      />,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Pay now" }));
+    await waitFor(() => expect(onError).toHaveBeenCalledOnce());
+    expect(
+      (view.getByRole("button", { name: "Pay now" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+    expect(view.queryByText("private provider transport details")).toBeNull();
   });
 });
