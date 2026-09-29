@@ -1,18 +1,19 @@
 # @nozle-js/react
 
-Browser-safe React components for Nozle's public plan catalog and merchant-controlled checkout.
+React components for Nozle's public catalog, checkout, and customer billing portal.
 
 ## Credential boundary
 
 - `pk_` is used only for `GET /api/v1/plans`.
 - Secret keys stay on the merchant backend.
-- The React package does not fetch customer billing, invoice, subscription, entitlement, or credit data.
-- The React package never sends a customer ID.
+- Presentational components consume caller-supplied customer state.
+- `BillingPortal` uses a customer-scoped session from your backend for Core GraphQL reads.
+- Your backend chooses the customer and authorizes the selected external subscription ID.
 
 ## Install
 
 ```bash
-npm install @nozle-js/react react react-dom @stripe/stripe-js @stripe/react-stripe-js
+npm install @nozle-js/react@0.10.0 react react-dom @stripe/stripe-js @stripe/react-stripe-js
 ```
 
 ## Merchant-backed checkout
@@ -47,23 +48,25 @@ export function BillingPage({ csrfToken }: { csrfToken: string }) {
 
 The merchant endpoint authenticates the user, derives the Nozle customer from the authenticated user or team, validates the plan and HTTPS return URL, and calls Nozle with a restricted server-side `sk_`. Any browser-supplied customer identifier must be ignored or rejected.
 
-`createCheckout` may return a hosted URL, an embedded Stripe client secret, `type: "completed"`, or `type: "scheduled"`. Paid plans activate only after Nozle processes verified Stripe success; a browser redirect is not proof of payment.
+`createCheckout` returns a `stripe`, `razorpay`, `hosted`, `processing`, `completed`, or `scheduled` result. Nozle payment fulfillment determines activation; Razorpay requires capture. A browser redirect or callback alone does not prove activation.
 
 ## Components
 
 - `PricingTable` and `usePlans` read the public catalog with the publishable key.
 - `CheckoutButton`, `UpgradeButton`, `UpgradeModal`, and the default `PricingTable` CTA call the merchant's `createCheckout` callback.
-- `Checkout` renders Stripe hosted/embedded checkout results supplied by the merchant.
+- `Checkout` renders provider checkout results and accepts merchant verification/status callbacks directly.
+- `BillingPortal`, `CancellationControl`, and `PlanChangeControl` provide customer subscription management through authenticated merchant adapters.
 - Gates, usage displays, `PlanBadge`, and `PaymentMethodDisplay` are presentational and consume caller-supplied data.
 
-Customer billing, invoices, cancellation, top-ups, subscriptions, entitlements, and credits belong behind authenticated merchant endpoints. Never put an `sk_`, master key, or internal credential in browser code.
+Authenticate portal sessions and management actions on your merchant backend. Return customer-scoped portal tokens at runtime; never embed an `sk_`, master key, or portal token in a static browser bundle.
 
-## Native billing portal and cancellation
+## Native billing portal and subscription management
 
 `BillingPortal` renders subscriptions, current usage, invoices/PDFs, billing details, and
 wallets directly in React. It does not require `BillingProvider` or Tailwind. Reads use a
 customer-scoped Core session; optional `cancellationActions` enable Cancel + Keep through
-your authenticated merchant backend and the Node.js or Python SDK.
+your authenticated merchant backend and the Node.js or Python SDK. Optional `planChangeActions`
+add quoted upgrades, scheduled downgrades, exact pending-change withdrawal, and payment recovery.
 
 ```tsx
 import {
@@ -139,6 +142,20 @@ Customize with `className`, `style`, `nonce`, and CSS variables `--nozle-portal-
 `--nozle-portal-muted-background`, and `--nozle-portal-border`. UI copy is English; `locale`
 formats amounts/dates. Errors use `code: "session" | "unauthorized" | "request" | "changed"`.
 
-This milestone adds Cancel + Keep. Portal-integrated upgrades, downgrade selection/withdrawal,
-and saved-payment-method management remain separate increments. Existing standalone checkout
-components remain available.
+### Plan changes and payment recovery
+
+Pass `planChangeActions` to `BillingPortal`, or use the standalone `PlanChangeControl`.
+Its adapter provides `load`, `status`, `preview`, `apply`, and `withdraw`; use
+`verifyCheckout` and `getCheckoutStatus` for scoped payment verification/recovery.
+The Node.js `0.9.0` and Python `0.9.0` SDKs provide the matching backend methods.
+
+Load eligible plans for the selected external subscription, confirm the signed quote,
+and retain the same quote and idempotency key for uncertain retries. Upgrades activate
+after required payment is fulfilled; downgrades use end-of-period timing with `keep_anchor`.
+Withdrawal targets the exact internal pending UUID. Reload authoritative subscription
+and checkout state after submission or a page reload.
+
+See the [billing portal guide](https://docs.nozle.dev/sdks/react/billing-portal) for
+complete typed adapters, standalone controls, and the runnable Node/Python integrations.
+The hosted Nozle backend supports these flows; self-hosted deployments need the matching
+subscription-management endpoints and cancellation-date guard.

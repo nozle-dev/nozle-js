@@ -51,3 +51,14 @@ existing Stripe `clientSecret`/`publishableKey` props remain supported.
 
 Razorpay in this release is INR-only. Invoice-based UPI AutoPay registration is
 explicit; one-time card or UPI payments do not establish recurring authorization.
+
+
+## Subscription self-service releases
+
+`@nozle-js/react@0.10.0` adds the native `BillingPortal`, `CancellationControl`, and
+`PlanChangeControl`. `@nozle-js/node@0.9.0` supplies subscription options, signed quotes,
+exact pending-change withdrawal, and scoped checkout recovery. The Python backend
+integration is available in `nozle-sdk==0.9.0`.
+
+See [the integration guide](https://docs.nozle.dev/sdks/react/billing-portal) for
+Cancel/Keep, paid upgrades, scheduled downgrades, and merchant authentication.
