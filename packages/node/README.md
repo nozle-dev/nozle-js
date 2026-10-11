@@ -5,10 +5,12 @@ Server-side Node.js SDK for usage tracking, entitlement checks, margin intellige
 ## Install
 
 ```bash
-npm install @nozle-js/node
+npm install @nozle-js/node@0.9.1
 ```
 
 Works with both JavaScript and TypeScript. Requires Node.js 18+.
+
+Version `0.9.1` converts RFC 3339 Feature Event timestamps to the Unix-second format Core accepts, including events created by the OpenAI and Anthropic wrappers. See the [changelog](../../CHANGELOG.md).
 
 ## Quick Start
 
@@ -381,10 +383,6 @@ import type {
 } from "@nozle-js/node";
 ```
 
-## License
-
-Proprietary
-
 ## React billing portal subscription management
 
 See the [runnable authenticated merchant integration](../../examples/billing-portal/README.md) for Cancel, Keep, payment-backed upgrades, scheduled downgrades, and exact pending-change withdrawal through the React billing portal. It reuses the existing transition methods and derives customer identity from the merchant session. For end-of-period cancellation, optional `expectedEffectiveAt` preserves the exact preview timestamp and rejects a changed date atomically on compatible Engine/Core deployments. Existing calls without this option remain compatible.
@@ -396,3 +394,7 @@ Version `0.9.0` adds `subscriptionOptions(customerId, subscriptionId)`,
 Use the existing checkout/transition methods with the selected subscription, signed quote,
 and a stable action key. Scope `checkoutStatus` and `verifyCheckout` with both customer and
 subscription identifiers. See the [method examples](https://docs.nozle.dev/sdks/node/billing#subscription-self-service).
+
+## License
+
+MIT. See [LICENSE](LICENSE).

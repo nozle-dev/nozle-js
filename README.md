@@ -1,64 +1,84 @@
+# Nozle JavaScript SDKs
 
-### Razorpay checkout
+This monorepo contains the Nozle SDK for Node.js backends and the React package for public pricing, checkout, and billing screens. Use the Node package with a secret key on your server. Use the React package with a publishable key and authenticated callbacks to your own backend.
 
-Use the same checkout API for Stripe and Razorpay. Select the customer's payment
-provider in Core; the SDK returns a discriminated response (`stripe`, `razorpay`,
-`hosted`, `processing`, `completed`, or `scheduled`). Existing checkout arguments
-remain supported.
+| Package | Current release | Use it for |
+| --- | --- | --- |
+| [`@nozle-js/node`](packages/node/README.md) | `0.9.1` | Billing, subscriptions, credits, usage and Cost Events, entitlements, margins, and OpenAI/Anthropic capture |
+| [`@nozle-js/react`](packages/react/README.md) | `0.10.0` | Public catalog, checkout UI, billing portal, and customer-facing controls |
+
+## Install
+
+```bash
+npm install @nozle-js/node@0.9.1
+npm install @nozle-js/react@0.10.0 react react-dom @stripe/stripe-js @stripe/react-stripe-js
+```
+
+Install only the package your application needs. The React package runs in the browser; all customer-scoped writes and reads that need a secret key belong on your backend.
+
+## Backend quick start
 
 ```ts
-// Merchant backend only. Bind the customer and checkout IDs to the signed-in user.
-const checkout = await nozle.checkout(customerId, 'pro', returnUrl, {
-  idempotencyKey: attemptId,
-  registerMandate: true, // optional, explicit UPI AutoPay authorization
-});
-const invoiceCheckout = await nozle.checkoutInvoice(invoiceId, {
-  idempotencyKey: attemptId,
-});
-const status = await nozle.verifyCheckout(checkoutId, {
-  razorpay_order_id, razorpay_payment_id, razorpay_signature,
-});
-const refreshed = await nozle.checkoutStatus(checkoutId);
+import { Nozle } from "@nozle-js/node";
+
+const nozle = new Nozle({ apiKey: process.env.NOZLE_SECRET_KEY! });
+
+// Derive this ID from your authenticated user or organization.
+const customerId = "customer-123";
+const plans = await nozle.plans();
+console.log(plans.map((plan) => plan.code));
+const { allowed } = await nozle.can(customerId, "code_completion");
+
+if (allowed) {
+  await nozle.track(customerId, "copilot_action", { mode: "planning" });
+}
 ```
 
-React accepts the server response directly. Supply authenticated merchant-backend
-callbacks to `BillingProvider`; never send a Nozle secret key to the browser.
-Your backend must check that the checkout belongs to the signed-in buyer before
-forwarding verification or status requests.
+Set `NOZLE_SECRET_KEY` to an `sk_` key in your server environment. The default Engine and Core URLs are `https://api.nozle.app/engine` and `https://api.nozle.app/core`; override `baseUrl` and `eventsUrl` in the `Nozle` constructor for a local stack. See the [Node package guide](packages/node/README.md) for checkout, credits, subscriptions, Cost Events, and provider wrappers.
+
+## React checkout
+
+`BillingProvider` accepts a publishable key for the catalog and a callback to your authenticated merchant backend for checkout. That backend must derive the customer ID from the signed-in session and verify ownership of checkout and subscription IDs.
 
 ```tsx
-<BillingProvider
-  publishableKey="pk_your_catalog_key"
-  createCheckout={createCheckoutOnYourBackend}
-  verifyCheckout={verifyCheckoutOnYourBackend}
-  getCheckoutStatus={getCheckoutStatusOnYourBackend}
->
-  <CheckoutButton planCode="pro" onSuccess={refreshBilling} />
-</BillingProvider>
+import { BillingProvider, PricingTable } from "@nozle-js/react";
+
+export function BillingPage({ csrfToken }: { csrfToken: string }) {
+  return (
+    <BillingProvider
+      publishableKey="pk_your_catalog_key"
+      createCheckout={async ({ planCode, returnUrl }) => {
+        const response = await fetch("/api/billing/checkout", {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfToken,
+          },
+          body: JSON.stringify({ planCode, returnUrl }),
+        });
+        if (!response.ok) throw new Error("Checkout failed");
+        return response.json();
+      }}
+    >
+      <PricingTable returnUrl={window.location.href} />
+    </BillingProvider>
+  );
+}
 ```
 
-`createCheckout` receives `planCode`, `returnUrl`, and optional `idempotencyKey`
-and `registerMandate`. Forward those options using the Node checkout arguments
-above. `verifyCheckout(checkoutId, proof)` and `getCheckoutStatus(checkoutId)` return
-the Core status response. Razorpay's `key_id` and `order_id` come from the server;
-`razorpayKeyId` is deprecated. Success is emitted once the server confirms both
-capture and fulfillment. Pending collection or credit delivery invokes
-`onProcessing` and displays a pending message. The UI polls for up to 30 seconds;
-UPI AutoPay may require a much longer provider notification/collection window.
-Use the status callback to resume later. `Checkout` also accepts
-`checkout={serverCheckoutResponse}` for Razorpay and processing results;
-existing Stripe `clientSecret`/`publishableKey` props remain supported.
+See the [React package guide](packages/react/README.md) for the complete callback shape, provider responses, and billing portal setup. The [runnable billing portal example](examples/billing-portal/README.md) includes a Node merchant server and React app. Its demo login and file store are examples; use your application's authentication and shared transactional storage in production.
 
-Razorpay in this release is INR-only. Invoice-based UPI AutoPay registration is
-explicit; one-time card or UPI payments do not establish recurring authorization.
+## Guides and releases
 
+- [Nozle documentation](https://docs.nozle.dev)
+- [Node installation and workflows](https://docs.nozle.dev/sdks/node/installation)
+- [React installation and workflows](https://docs.nozle.dev/sdks/react/installation)
+- [Changelog](CHANGELOG.md)
+- [Release process](RELEASING.md)
 
-## Subscription self-service releases
+Node `0.9.1` fixes Feature Event timestamp serialization, including events sent by OpenAI and Anthropic wrappers. React `0.10.0` adds the billing portal and self-service controls. See each package guide for the full API and the changelog for release history.
 
-`@nozle-js/react@0.10.0` adds the native `BillingPortal`, `CancellationControl`, and
-`PlanChangeControl`. `@nozle-js/node@0.9.0` supplies subscription options, signed quotes,
-exact pending-change withdrawal, and scoped checkout recovery. The Python backend
-integration is available in `nozle-sdk==0.9.0`.
+## License
 
-See [the integration guide](https://docs.nozle.dev/sdks/react/billing-portal) for
-Cancel/Keep, paid upgrades, scheduled downgrades, and merchant authentication.
+The Node package is licensed under [MIT](packages/node/LICENSE). The React package is proprietary and is not covered by the Node package's MIT license. Contact Nozle about React licensing.
