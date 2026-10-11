@@ -77,6 +77,36 @@ describe("Nozle", () => {
       expect(transactionId[14]).toBe("7");
     });
 
+    it("sends explicit ISO event timestamps as Unix seconds to Core", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({}));
+      const client = new Nozle({ apiKey: "sk_test" });
+
+      await client.track("cust_1", "api_call", {}, {
+        subscriptionId: "sub_1",
+        timestamp: "2026-07-20T12:00:00.750Z",
+      });
+
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.event.timestamp).toBe("1784548800.750");
+    });
+
+    it("preserves numeric event timestamps and rejects malformed values", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({}));
+      const client = new Nozle({ apiKey: "sk_test" });
+
+      await client.track("cust_1", "api_call", {}, {
+        subscriptionId: "sub_1",
+        timestamp: "1784548800.123",
+      });
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body).event.timestamp).toBe("1784548800.123");
+
+      await expect(client.track("cust_1", "api_call", {}, {
+        subscriptionId: "sub_1",
+        timestamp: "not-a-timestamp",
+      })).rejects.toThrow("timestamp must be RFC3339 or Unix seconds");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it("auto-resolves subscription when not provided", async () => {
       fetchMock
         .mockResolvedValueOnce(jsonResponse({ subscriptions: [{ external_id: "sub_auto" }] }))
