@@ -147,7 +147,7 @@ formats amounts/dates. Errors use `code: "session" | "unauthorized" | "request" 
 Pass `planChangeActions` to `BillingPortal`, or use the standalone `PlanChangeControl`.
 Its adapter provides `load`, `status`, `preview`, `apply`, and `withdraw`; use
 `verifyCheckout` and `getCheckoutStatus` for scoped payment verification/recovery.
-The Node.js `0.9.0` and Python `0.9.0` SDKs provide the matching backend methods.
+The Node.js `0.9.0` and Python `0.9.0` SDKs introduced the matching backend methods. Use `0.9.1` of either backend SDK for the Feature Event timestamp fix used by provider capture.
 
 Load eligible plans for the selected external subscription, confirm the signed quote,
 and retain the same quote and idempotency key for uncertain retries. Upgrades activate
@@ -159,3 +159,7 @@ See the [billing portal guide](https://docs.nozle.dev/sdks/react/billing-portal)
 complete typed adapters, standalone controls, and the runnable Node/Python integrations.
 The hosted Nozle backend supports these flows; self-hosted deployments need the matching
 subscription-management endpoints and cancellation-date guard.
+
+## License
+
+Proprietary. Contact Nozle about licensing.
