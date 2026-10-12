@@ -535,7 +535,7 @@ describe("Nozle", () => {
         jsonResponse({
           credit_systems: [
             {
-              lago_id: "system-1",
+              nozle_id: "system-1",
               code: "ai_credits",
               name: "AI Credits",
               description: null,
@@ -574,7 +574,7 @@ describe("Nozle", () => {
 
     it("reads every Rails-owned credit system page", async () => {
       const coreSystem = (id: string, code: string) => ({
-        lago_id: id,
+        nozle_id: id,
         code,
         name: code,
         description: null,
