@@ -1,6 +1,12 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  waitFor,
+} from "@testing-library/react";
 
 const stripe = vi.hoisted(() => ({
   confirmPayment: vi.fn(),
@@ -34,7 +40,7 @@ vi.mock("@stripe/react-stripe-js", () => ({
   useElements: () => ({}),
 }));
 
-import { Checkout } from "../components/billing/Checkout";
+import { Checkout, useCheckout } from "../index";
 
 describe("Checkout secret routing", () => {
   it("mounts Stripe Embedded Checkout for Checkout Session secrets", () => {
@@ -129,5 +135,46 @@ describe("Checkout secret routing", () => {
         .disabled,
     ).toBe(false);
     expect(view.queryByText("private provider transport details")).toBeNull();
+  });
+});
+
+describe("public useCheckout controls", () => {
+  it("confirms a payment from a custom child control", async () => {
+    cleanup();
+    stripe.confirmPayment.mockReset();
+    stripe.confirmPayment.mockResolvedValueOnce({
+      paymentIntent: { id: "pi_custom", status: "succeeded" },
+    });
+    const onSuccess = vi.fn();
+    function CustomPay() {
+      const { confirmPayment, isProcessing, error } = useCheckout();
+      return (
+        <button disabled={isProcessing} onClick={() => void confirmPayment()}>
+          {error?.message ?? "Custom pay"}
+        </button>
+      );
+    }
+    const view = render(
+      <Checkout
+        clientSecret="pi_test_secret_custom"
+        publishableKey="pk_test"
+        onSuccess={onSuccess}
+      >
+        <CustomPay />
+      </Checkout>,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Custom pay" }));
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith("pi_custom"));
+    expect(stripe.confirmPayment).toHaveBeenCalledOnce();
+    expect(
+      (view.getByRole("button", { name: "Custom pay" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+    cleanup();
+  });
+  it("explains the required checkout context", () => {
+    expect(() => renderHook(() => useCheckout())).toThrow(
+      "useCheckout must be used inside a <Checkout> component",
+    );
   });
 });
