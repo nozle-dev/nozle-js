@@ -572,6 +572,17 @@ describe("Nozle", () => {
       );
     });
 
+    it("leaves id undefined when nozle_id is missing", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ credit_systems: [{ code: "ai", id: "legacy" }], meta: { next_page: null } }),
+      );
+      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://api.example/core" });
+
+      const [system] = await client.creditSystems.list();
+
+      expect(system.id).toBeUndefined();
+    });
+
     it("reads every Rails-owned credit system page", async () => {
       const coreSystem = (id: string, code: string) => ({
         nozle_id: id,
