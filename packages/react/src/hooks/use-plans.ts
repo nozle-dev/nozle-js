@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useBillingContext } from '../provider.js';
+import { useBillingContext } from "../provider.js";
 
 export interface Plan {
   code: string;
@@ -13,9 +13,13 @@ export function usePlans() {
   const { client } = useBillingContext();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    setPlans([]);
     if (!client) {
       setIsLoading(false);
       return;
@@ -28,6 +32,13 @@ export function usePlans() {
         const data = (await response.json()) as { plans?: Plan[] };
         if (!cancelled) setPlans(data.plans ?? []);
       })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setError(
+            cause instanceof Error ? cause : new Error("Failed to load plans"),
+          );
+        }
+      })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
       });
@@ -37,5 +48,5 @@ export function usePlans() {
     };
   }, [client]);
 
-  return { plans, isLoading };
+  return { plans, isLoading, error };
 }
