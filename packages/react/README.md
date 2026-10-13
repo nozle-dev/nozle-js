@@ -58,7 +58,7 @@ Your merchant backend returns whatever result Nozle gives for the customer's con
 | --- | --- | --- |
 | `stripe` | Stripe | Calls `onStripeClientSecret` with the `cs_` Embedded Checkout secret. Render `Checkout` with it |
 | `razorpay` | Razorpay | Loads Razorpay's `checkout.js`, opens the modal, then calls your `verifyCheckout` and polls your `getCheckoutStatus` (30 attempts, one second apart) |
-| `hosted` | Razorpay | Navigates to `payment_url` (HTTPS only), a Razorpay payment link |
+| `hosted` | Razorpay | Declared in the result types; `POST /checkout` does not return it for Razorpay. Invoice payment URLs and credit top-ups return a `payment_url` (an rzp.io payment link) with no checkout id to poll; the React component navigates to `payment_url` (HTTPS only) if one is returned |
 | `processing` | Razorpay or Stripe | Polls `getCheckoutStatus`. For Razorpay it opens the order once ready; Stripe returns `processing` when a quoted upgrade is replayed while its webhook is pending |
 | `completed`, `scheduled` | Either | Calls `onComplete` or `onScheduled`. No payment is collected |
 

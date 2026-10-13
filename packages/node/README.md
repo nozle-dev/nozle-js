@@ -352,7 +352,7 @@ Nozle collects through the payment provider connected to your organization and a
 | --- | --- | --- |
 | `stripe` | Stripe | Send `client_secret` (a `cs_` embedded Checkout Session secret) to the browser |
 | `razorpay` | Razorpay | Open the Razorpay modal with `key_id`, `order_id`, `amount_cents` and `currency`, then verify |
-| `hosted` | Razorpay | Redirect the customer to `payment_url` (a payment link) |
+| `hosted` | Razorpay | Declared in the result types; `POST /checkout` does not return it for Razorpay. Invoice payment URLs and credit top-ups return a `payment_url` (an rzp.io payment link) with no checkout id to poll |
 | `processing` | Razorpay or Stripe | Recover with `checkoutStatus(checkout_id)` instead of starting another checkout. Razorpay returns it while the order is not ready; Stripe returns it when a quoted upgrade is replayed while its webhook is still pending |
 | `completed`, `scheduled` | Either | No payment is due now. Credits covered it, or the change takes effect later |
 
