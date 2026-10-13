@@ -1,5 +1,7 @@
 # @nozle-js/node
 
+Feature Event writes use the Go Engine at `https://api.nozle.app/engine/api/v1/events` (batch: `/events/batch`). Configure `baseUrl` for a custom ingestion endpoint. `eventsUrl` configures Core billing resources and subscription discovery.
+
 Server-side Node.js SDK for usage tracking, entitlement checks, margin intelligence, LLM cost capture, and billing management.
 
 ## Install

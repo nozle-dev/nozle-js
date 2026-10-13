@@ -84,7 +84,7 @@ export class Nozle {
     if (!opts.subscriptionId) {
       opts.subscriptionId = await this.resolveSubscription(customerId);
     }
-    return _track(this.eventsUrl, this.apiKey, customerId, event, metadata, opts, this.timeout);
+    return _track(this.baseUrl, this.apiKey, customerId, event, metadata, opts, this.timeout);
   }
 
   async can(customerId: string, feature: string, metadata?: Record<string, string>): Promise<CanResult> {
