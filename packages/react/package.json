@@ -57,5 +57,6 @@
     "type": "git",
     "url": "git+https://github.com/nozle-dev/nozle-js.git",
     "directory": "packages/react"
-  }
+  },
+  "license": "MIT"
 }
