@@ -14,7 +14,7 @@ in the package settings. No npm token is needed or stored in GitHub.
 
 Reference: <https://docs.npmjs.com/trusted-publishers/>
 
-Current published versions are Node `0.9.1` and React `0.10.0`. The packages
+Current published versions are Node `0.9.1` and React `0.10.1`; the next releases are Node `0.10.0` and React `0.10.2`. The packages
 version independently. Node tags use `node-v<version>`; React tags use
 `react-v<version>`.
 

@@ -42,7 +42,11 @@ export interface StripeCheckoutProps {
   submitLabel?: string;
   /** Called with the paymentIntentId when payment succeeds without redirect */
   onSuccess?: (paymentIntentId: string) => void;
-  /** Called when an embedded Checkout Session completes without a redirect. */
+  /**
+   * Called when an embedded Checkout Session completes without a redirect. It does
+   * not fire when the session redirects to `returnUrl`: show success from the return
+   * page, or reload billing status there.
+   */
   onComplete?: () => void;
   /** Called with the error when payment fails */
   onError?: (error: Error) => void;

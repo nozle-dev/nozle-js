@@ -93,6 +93,11 @@ export interface RazorpayCheckoutResult {
   mandate_max_amount_cents?: number;
 }
 
+/**
+ * The checkout is not ready to collect payment yet: Razorpay while the order is
+ * being created, and Stripe when a quoted upgrade is replayed while its webhook is
+ * still pending. Recover with the checkout status call using `checkout_id`.
+ */
 export interface ProcessingCheckoutResult {
   type: "processing";
   checkout_id: string;
@@ -219,7 +224,7 @@ export type CheckoutResult =
       /** Embedded Checkout Session secret (`cs_...`). Same value as `clientSecret`. */
       client_secret?: string;
       clientSecret?: string;
-      /** Not returned by Nozle, which never issues a Stripe-hosted URL. */
+      /** Not returned by plan and invoice checkout, which never issue a Stripe-hosted URL. */
       url?: string;
       invoice_id?: string;
       /** Set instead of `invoice_id` for a paid upgrade; poll it with `checkoutStatus`. */

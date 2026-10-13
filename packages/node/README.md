@@ -5,7 +5,7 @@ Server-side Node.js SDK for usage tracking, entitlement checks, margin intellige
 ## Install
 
 ```bash
-npm install @nozle-js/node@0.9.1
+npm install @nozle-js/node@0.10.0
 ```
 
 Works with both JavaScript and TypeScript. Requires Node.js 18+.
@@ -214,6 +214,8 @@ const customer = await nozle.customers.upsert({
 });
 ```
 
+If you create customers through the Nozle REST API instead of this SDK, a customer needs `sync_with_provider: true` or a `provider_customer_id`; otherwise its payment provider assignment is dropped.
+
 ## Product credits
 
 Read exact-decimal balances and immutable operation history from the Phase 1 credit engine:
@@ -351,10 +353,10 @@ Nozle collects through the payment provider connected to your organization and a
 | `stripe` | Stripe | Send `client_secret` (a `cs_` embedded Checkout Session secret) to the browser |
 | `razorpay` | Razorpay | Open the Razorpay modal with `key_id`, `order_id`, `amount_cents` and `currency`, then verify |
 | `hosted` | Razorpay | Redirect the customer to `payment_url` (a payment link) |
-| `processing` | Razorpay | Recover with `checkoutStatus(checkout_id)` instead of starting another checkout |
+| `processing` | Razorpay or Stripe | Recover with `checkoutStatus(checkout_id)` instead of starting another checkout. Razorpay returns it while the order is not ready; Stripe returns it when a quoted upgrade is replayed while its webhook is still pending |
 | `completed`, `scheduled` | Either | No payment is due now. Credits covered it, or the change takes effect later |
 
-**Stripe.** Nozle always creates an embedded Checkout Session. It never returns a Stripe-hosted URL or your Stripe publishable key, so the browser needs the `pk_` key for the Stripe account connected in Nozle (the React `Checkout` component takes it as `publishableKey`).
+**Stripe.** Plan and invoice checkout always create an embedded Checkout Session. They never return a Stripe-hosted URL or your Stripe publishable key, so the browser needs the `pk_` key for the Stripe account connected in Nozle (the React `Checkout` component takes it as `publishableKey`). Credit top-up purchases are different: they return a Stripe-hosted `payment_url` (`checkout.stripe.com`, valid for 24 hours).
 
 ```ts
 import { Nozle } from "@nozle-js/node";
@@ -370,6 +372,8 @@ if (result.type === "stripe") {
   // Embedded Checkout completes. A paid upgrade carries plan_upgrade_intent_id.
 }
 ```
+
+Idempotency keys have two Stripe edge cases today. A new-subscription checkout retried while the subscription is still `incomplete` fails with HTTP 422 `validation_errors` containing `subscription_incomplete`, even with the same key; recover by calling `checkoutInvoice()` with the `invoice_id` from the first response. An invoice checkout retried with the same key and a different body currently returns HTTP 500, not 409, so keep the body identical for one key.
 
 **Razorpay.** Razorpay supports only INR. Return the `razorpay` result to the browser, open the modal there, and post the handler's three fields back to your backend. `verifyCheckout()` sends them to Nozle, which checks the signature and fetches the payment from Razorpay; the SDK does not check the signature locally. Verify and status need an `sk_` key.
 

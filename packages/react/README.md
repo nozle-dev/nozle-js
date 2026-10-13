@@ -13,7 +13,7 @@ React components for Nozle's public catalog, checkout, and customer billing port
 ## Install
 
 ```bash
-npm install @nozle-js/react@0.10.0 react react-dom @stripe/stripe-js @stripe/react-stripe-js
+npm install @nozle-js/react@0.10.2 react react-dom @stripe/stripe-js @stripe/react-stripe-js
 ```
 
 ## Merchant-backed checkout
@@ -59,10 +59,10 @@ Your merchant backend returns whatever result Nozle gives for the customer's con
 | `stripe` | Stripe | Calls `onStripeClientSecret` with the `cs_` Embedded Checkout secret. Render `Checkout` with it |
 | `razorpay` | Razorpay | Loads Razorpay's `checkout.js`, opens the modal, then calls your `verifyCheckout` and polls your `getCheckoutStatus` (30 attempts, one second apart) |
 | `hosted` | Razorpay | Navigates to `payment_url` (HTTPS only), a Razorpay payment link |
-| `processing` | Razorpay | Polls `getCheckoutStatus` until the order is ready, then opens it |
+| `processing` | Razorpay or Stripe | Polls `getCheckoutStatus`. For Razorpay it opens the order once ready; Stripe returns `processing` when a quoted upgrade is replayed while its webhook is pending |
 | `completed`, `scheduled` | Either | Calls `onComplete` or `onScheduled`. No payment is collected |
 
-Nozle returns the Stripe secret but not your Stripe publishable key, so pass your own `pk_` key for the connected Stripe account to `Checkout`. For Razorpay, the server supplies `key_id`, `order_id`, amount and currency; `razorpayKeyId` is deprecated. Razorpay supports only INR.
+Plan and invoice checkout return the Stripe secret but never a Stripe-hosted URL or your Stripe publishable key (credit top-up purchases do return a Stripe-hosted `payment_url`, valid for 24 hours), so pass your own `pk_` key for the connected Stripe account to `Checkout`. For Razorpay, the server supplies `key_id`, `order_id`, amount and currency; `razorpayKeyId` is deprecated. Razorpay supports only INR.
 
 ```tsx
 import { useState } from "react";
@@ -118,6 +118,8 @@ export function Upgrade({ csrfToken }: { csrfToken: string }) {
   );
 }
 ```
+
+The Stripe `Checkout` component's `onComplete` does not fire when the session redirects to the `return_url`. Show success from the return page, or reload billing status there, rather than relying on `onComplete` alone. A new-subscription checkout retried while the subscription is still incomplete fails with HTTP 422 `subscription_incomplete`, even with the same idempotency key; your backend can recover with an invoice checkout for the `invoice_id` from the first response. An invoice checkout retried with the same key and a different body currently returns HTTP 500, not 409.
 
 `CheckoutButton` rejects a Razorpay result without `checkout_id`, `key_id` and `order_id`, and fails when `BillingProvider` has no `verifyCheckout`. A modal `payment.failed` event shows "Payment failed. You can retry checkout." For a UPI AutoPay mandate, pass `registerMandate` to `CheckoutButton`; the modal then receives `customer_id` and `recurring: "1"` from the result. Show success only after both `status` and `fulfillment_status` are `succeeded`. See the [Stripe](https://docs.nozle.dev/integrations/stripe) and [Razorpay](https://docs.nozle.dev/integrations/razorpay) integration guides.
 
