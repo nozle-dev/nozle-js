@@ -38,8 +38,6 @@ export interface ScheduledCheckoutResult extends CheckoutSubscriptionResult {
   /** `upgrade` or `downgrade`. */
   transition_direction?: string;
   transition_policy?: string;
-  /** @deprecated Never returned. The pending subscription ID is `subscription_id`. */
-  pending_subscription_id?: string;
 }
 
 export interface RazorpayCheckoutResult {

@@ -135,6 +135,67 @@ describe("Nozle", () => {
       expect(fetchMock).toHaveBeenCalledTimes(3);
     });
 
+    describe("refreshes the cached subscription after the customer's subscriptions change", () => {
+      const lookup = (id: string) => jsonResponse({ subscriptions: [{ external_id: id }] });
+      const trackedSubscription = () => {
+        const calls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/api/v1/events"));
+        return JSON.parse(calls[calls.length - 1][1].body).event.external_subscription_id;
+      };
+      const cases: [string, (c: Nozle) => Promise<unknown>][] = [
+        ["subscribe", (c) => c.subscribe("cust_1", "pro")],
+        ["cancelSubscription", (c) => c.cancelSubscription("cust_1", "sub_old", "immediate")],
+        ["checkout", (c) => c.checkout("cust_1", "pro", "https://app.example.com/done")],
+        ["applySubscriptionTransition", (c) =>
+          c.applySubscriptionTransition(
+            { customerId: "cust_1", subscriptionId: "sub_old", operation: "cancel", timing: "immediate" } as never,
+            "key-1",
+          )],
+        ["checkoutStatus", (c) => c.checkoutStatus("chk_1", { customerId: "cust_1", subscriptionId: "sub_old" })],
+      ];
+      it.each(cases)("%s", async (_name, change) => {
+        fetchMock
+          .mockResolvedValueOnce(lookup("sub_old"))
+          .mockResolvedValueOnce(jsonResponse({}))
+          .mockResolvedValueOnce(jsonResponse({}))
+          .mockResolvedValueOnce(lookup("sub_new"))
+          .mockResolvedValueOnce(jsonResponse({}));
+        const client = new Nozle({ apiKey: "sk_test" });
+        await client.track("cust_1", "event_1");
+        expect(trackedSubscription()).toBe("sub_old");
+        await change(client);
+        await client.track("cust_1", "event_2");
+        expect(trackedSubscription()).toBe("sub_new");
+      });
+
+      it("keeps the cache when the change fails", async () => {
+        fetchMock
+          .mockResolvedValueOnce(lookup("sub_old"))
+          .mockResolvedValueOnce(jsonResponse({}))
+          .mockResolvedValueOnce(jsonResponse({}, 500))
+          .mockResolvedValueOnce(jsonResponse({}));
+        const client = new Nozle({ apiKey: "sk_test" });
+        await client.track("cust_1", "event_1");
+        await expect(client.subscribe("cust_1", "pro")).rejects.toThrow("subscribe failed");
+        await client.track("cust_1", "event_2");
+        expect(trackedSubscription()).toBe("sub_old");
+        expect(fetchMock).toHaveBeenCalledTimes(4);
+      });
+
+      it("checkoutInvoice drops every cached customer", async () => {
+        fetchMock
+          .mockResolvedValueOnce(lookup("sub_old"))
+          .mockResolvedValueOnce(jsonResponse({}))
+          .mockResolvedValueOnce(jsonResponse({}))
+          .mockResolvedValueOnce(lookup("sub_new"))
+          .mockResolvedValueOnce(jsonResponse({}));
+        const client = new Nozle({ apiKey: "sk_test" });
+        await client.track("cust_1", "event_1");
+        await client.checkoutInvoice("inv_1");
+        await client.track("cust_1", "event_2");
+        expect(trackedSubscription()).toBe("sub_new");
+      });
+    });
+
     it("throws when no active subscription found", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ subscriptions: [] }));
       const client = new Nozle({ apiKey: "sk_test" });

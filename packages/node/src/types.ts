@@ -237,8 +237,6 @@ export type CheckoutResult =
     }
   | {
       type: "completed" | "scheduled";
-      /** @deprecated Never returned. The pending subscription ID is `subscription_id`. */
-      pending_subscription_id?: string;
       status: string;
       /** `credits` or `none` on a completed result. */
       payment_source?: string;

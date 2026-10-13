@@ -428,10 +428,11 @@ export function PricingTable({
     }
     let cancelled = false;
     client.catalogFetch('/api/v1/plans').then(async (res) => {
-      if (!cancelled && res.ok) {
-        const data = await res.json();
-        setPlans(data.plans || []);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!cancelled) setPlans(data.plans || []);
+    }).catch((cause: unknown) => {
+      if (!cancelled) setCheckoutError(`Plans could not be loaded: ${cause instanceof Error ? cause.message : 'unknown error'}`);
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [client, propPlans]);
