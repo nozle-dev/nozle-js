@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- `pending_subscription_id` is removed from the Node.js `CheckoutResult` and the React `ScheduledCheckoutResult` types. The API never returned it; the pending subscription ID of a `scheduled` result is `subscription_id`. The `pending_subscription_id` request parameter of `withdrawPendingSubscriptionChange()` is unchanged.
+
 ## Node.js 0.10.0 — 2026-10-13
 
 ### Breaking
