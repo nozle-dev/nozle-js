@@ -189,10 +189,10 @@ balance and are suitable for shadow comparisons before a metric canary.
 ```ts
 const result = await nozle.checkAndDeduct({
   customerId: "cust_123",
-  feature: "code_completion",
   credits: 5,
 });
 
+// `feature` is deprecated: it is accepted for old callers but never sent.
 if (result.allowed) {
   console.log(`Deducted. Remaining: ${result.remaining}`);
 } else {

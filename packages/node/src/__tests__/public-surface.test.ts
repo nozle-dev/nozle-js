@@ -14,7 +14,6 @@ describe("public Node methods omitted from the original suite", () => {
         if (u.pathname.endsWith("/check-and-deduct")) {
           expect(JSON.parse(String(options?.body))).toEqual({
             customer_id: "customer",
-            feature: "requests",
             credits: 1,
           });
           return new Response(JSON.stringify({ allowed: true, remaining: 9 }));
@@ -29,7 +28,7 @@ describe("public Node methods omitted from the original suite", () => {
       (
         await client.checkAndDeduct({
           customerId: "customer",
-          feature: "requests",
+          feature: "requests", // deprecated: accepted but never sent
           credits: 1,
         })
       ).remaining,
@@ -103,5 +102,16 @@ describe("public Node methods omitted from the original suite", () => {
       ["cache_write", 2],
       ["output", 7],
     ]);
+  });
+});
+
+describe("checkAndDeduct", () => {
+  it("sends only customer_id and credits", async () => {
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ allowed: false, remaining: 2 })));
+    vi.stubGlobal("fetch", request);
+    const client = new Nozle({ apiKey: "sk_test" });
+    const result = await client.checkAndDeduct({ customerId: "customer", credits: 5 });
+    expect(result).toEqual({ allowed: false, remaining: 2 });
+    expect(JSON.parse(String(request.mock.calls[0][1].body))).toEqual({ customer_id: "customer", credits: 5 });
   });
 });

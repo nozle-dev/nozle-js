@@ -429,7 +429,6 @@ export class Nozle {
       },
       body: JSON.stringify({
         customer_id: params.customerId,
-        feature: params.feature,
         credits: params.credits,
       }),
       signal: AbortSignal.timeout(this.timeout),

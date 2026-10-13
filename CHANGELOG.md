@@ -15,6 +15,7 @@
 
 ### Deprecated
 
+- Node.js: `feature` on `checkAndDeduct()` is optional and no longer sent. The endpoint never used it, so the deduction depends only on `customerId` and `credits`. Existing calls that pass it keep working.
 - `pending_subscription_id` on `scheduled` checkout results is never returned. Use `subscription_id`. The Stripe `publishable_key`, `stripe_account` and `url` fields are not returned either; use your own Stripe publishable key.
 
 ## Node.js 0.9.1 — 2026-10-11

@@ -459,7 +459,8 @@ export interface CustomerUpsertResult {
 
 export interface CheckAndDeductParams {
   customerId: string;
-  feature: string;
+  /** @deprecated Ignored: it is not sent, because the deduction depends only on the customer's wallet and `credits`. */
+  feature?: string;
   credits: number;
 }
 
