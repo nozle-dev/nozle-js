@@ -2,7 +2,7 @@ import { createTransactionId } from "./identifiers";
 import type { TrackOptions } from "./types";
 
 export async function track(
-  eventsUrl: string,
+  baseUrl: string,
   apiKey: string,
   customerId: string,
   event: string,
@@ -26,7 +26,7 @@ export async function track(
     body.timestamp = eventTimestamp(options.timestamp);
   }
 
-  const res = await fetch(`${eventsUrl}/api/v1/events`, {
+  const res = await fetch(`${baseUrl}/api/v1/events`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,

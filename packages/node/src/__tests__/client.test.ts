@@ -57,7 +57,7 @@ describe("Nozle", () => {
 
       expect(fetchMock).toHaveBeenCalledOnce();
       const [url, opts] = fetchMock.mock.calls[0];
-      expect(url).toBe("https://api.nozle.app/core/api/v1/events");
+      expect(url).toBe("https://api.nozle.app/engine/api/v1/events");
       const body = JSON.parse(opts.body);
       expect(body.event.external_customer_id).toBe("cust_1");
       expect(body.event.code).toBe("api_call");
@@ -78,7 +78,7 @@ describe("Nozle", () => {
       expect(transactionId[14]).toBe("7");
     });
 
-    it("sends explicit ISO event timestamps as Unix seconds to Core", async () => {
+    it("sends explicit ISO event timestamps as Unix seconds to Engine", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({}));
       const client = new Nozle({ apiKey: "sk_test" });
 
@@ -108,15 +108,20 @@ describe("Nozle", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    it("auto-resolves subscription when not provided", async () => {
+    it("resolves subscriptions through Core and submits events through the Engine override", async () => {
       fetchMock
         .mockResolvedValueOnce(jsonResponse({ subscriptions: [{ external_id: "sub_auto" }] }))
         .mockResolvedValueOnce(jsonResponse({}));
 
-      const client = new Nozle({ apiKey: "sk_test" });
+      const client = new Nozle({
+        apiKey: "sk_test", baseUrl: "https://engine.example/", eventsUrl: "https://core.example/",
+      });
       await client.track("cust_1", "api_call");
 
       expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0][0]).toContain("https://core.example/api/v1/subscriptions?");
+      expect(fetchMock.mock.calls[1][0]).toBe("https://engine.example/api/v1/events");
+      expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe("Bearer sk_test");
       const trackBody = JSON.parse(fetchMock.mock.calls[1][1].body);
       expect(trackBody.event.external_subscription_id).toBe("sub_auto");
     });

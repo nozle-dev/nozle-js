@@ -1,6 +1,7 @@
 export interface NozleConfig {
   apiKey: string;
   baseUrl?: string;
+  /** Core billing resources and subscription discovery. Event writes use baseUrl. */
   eventsUrl?: string;
   timeout?: number;
 }

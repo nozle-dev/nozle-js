@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## Node.js 0.11.0 — 2026-10-13
+
+### Changed
+
+- `track()` and provider wrappers submit Feature Events to the Go Engine endpoint at `baseUrl/api/v1/events` (default `https://api.nozle.app/engine/api/v1/events`). Payloads, authentication and transaction IDs are unchanged.
+- Custom event-ingestion deployments must now set `baseUrl`. `eventsUrl` continues to configure Core billing resources and subscription discovery.
+
 ## Node.js 0.10.0 — 2026-10-13
 
 ### Breaking
