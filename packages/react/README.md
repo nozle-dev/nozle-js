@@ -50,6 +50,77 @@ The merchant endpoint authenticates the user, derives the Nozle customer from th
 
 `createCheckout` returns a `stripe`, `razorpay`, `hosted`, `processing`, `completed`, or `scheduled` result. Nozle payment fulfillment determines activation; Razorpay requires capture. A browser redirect or callback alone does not prove activation.
 
+## Payment providers: Stripe and Razorpay
+
+Your merchant backend returns whatever result Nozle gives for the customer's connected provider, and `CheckoutButton` handles each `type`:
+
+| Result `type` | Provider | What `CheckoutButton` does |
+| --- | --- | --- |
+| `stripe` | Stripe | Calls `onStripeClientSecret` with the `cs_` Embedded Checkout secret. Render `Checkout` with it |
+| `razorpay` | Razorpay | Loads Razorpay's `checkout.js`, opens the modal, then calls your `verifyCheckout` and polls your `getCheckoutStatus` (30 attempts, one second apart) |
+| `hosted` | Razorpay | Navigates to `payment_url` (HTTPS only), a Razorpay payment link |
+| `processing` | Razorpay | Polls `getCheckoutStatus` until the order is ready, then opens it |
+| `completed`, `scheduled` | Either | Calls `onComplete` or `onScheduled`. No payment is collected |
+
+Nozle returns the Stripe secret but not your Stripe publishable key, so pass your own `pk_` key for the connected Stripe account to `Checkout`. For Razorpay, the server supplies `key_id`, `order_id`, amount and currency; `razorpayKeyId` is deprecated. Razorpay supports only INR.
+
+```tsx
+import { useState } from "react";
+import { BillingProvider, Checkout, CheckoutButton } from "@nozle-js/react";
+
+export function Upgrade({ csrfToken }: { csrfToken: string }) {
+  const [clientSecret, setClientSecret] = useState<string>();
+  const post = (path: string, body: object) =>
+    fetch(path, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+      body: JSON.stringify(body),
+    }).then((response) => {
+      if (!response.ok) throw new Error("Request failed");
+      return response.json();
+    });
+
+  return (
+    <BillingProvider
+      publishableKey="pk_your_catalog_key"
+      createCheckout={({ planCode, returnUrl, idempotencyKey }) =>
+        post("/api/billing/checkout", { planCode, returnUrl, idempotencyKey })
+      }
+      // Razorpay only. Your backend calls nozle.verifyCheckout / nozle.checkoutStatus
+      // with an sk_ key and the customer and subscription scope it derived.
+      verifyCheckout={(checkoutId, verification) =>
+        post(`/api/billing/checkout/${checkoutId}/verify`, verification)
+      }
+      getCheckoutStatus={(checkoutId) =>
+        fetch(`/api/billing/checkout/${checkoutId}`, { credentials: "include" }).then(
+          (response) => {
+            if (!response.ok) throw new Error("Status failed");
+            return response.json();
+          },
+        )
+      }
+    >
+      <CheckoutButton
+        planCode="pro_monthly"
+        onStripeClientSecret={setClientSecret}
+        onSuccess={() => window.location.reload()}
+        onComplete={() => window.location.reload()}
+      />
+      {clientSecret && (
+        <Checkout
+          clientSecret={clientSecret}
+          publishableKey="pk_live_your_stripe_key"
+          onComplete={() => window.location.reload()}
+        />
+      )}
+    </BillingProvider>
+  );
+}
+```
+
+`CheckoutButton` rejects a Razorpay result without `checkout_id`, `key_id` and `order_id`, and fails when `BillingProvider` has no `verifyCheckout`. A modal `payment.failed` event shows "Payment failed. You can retry checkout." For a UPI AutoPay mandate, pass `registerMandate` to `CheckoutButton`; the modal then receives `customer_id` and `recurring: "1"` from the result. Show success only after both `status` and `fulfillment_status` are `succeeded`. See the [Stripe](https://docs.nozle.dev/integrations/stripe) and [Razorpay](https://docs.nozle.dev/integrations/razorpay) integration guides.
+
 ## Components
 
 - `PricingTable` and `usePlans` read the public catalog with the publishable key.

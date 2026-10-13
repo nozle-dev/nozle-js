@@ -4,6 +4,7 @@ import { CostEventsNamespace } from "./cost-events";
 import { CreditSystemsNamespace } from "./credit-systems";
 import { EntitiesNamespace } from "./entities";
 import { EntitySubscriptionsNamespace } from "./entity-subscriptions";
+import { NozleApiError } from "./errors";
 import { EventsNamespace } from "./events";
 import { MarginClient } from "./margin";
 import { track as _track } from "./track";
@@ -111,6 +112,7 @@ export class Nozle {
     if (options.quoteId !== undefined && (!options.quoteId.trim() || !options.subscriptionId))
       throw new Error("checkout quoteId requires an explicit subscriptionId");
     return this.checkoutRequest(
+      "checkout",
       "POST",
       "",
       {
@@ -137,6 +139,7 @@ export class Nozle {
     if (!invoiceId.trim())
       throw new Error("checkoutInvoice requires invoiceId");
     return this.checkoutRequest(
+      "checkoutInvoice",
       "POST",
       "",
       {
@@ -156,7 +159,11 @@ export class Nozle {
   ): Promise<CheckoutStatus> {
     if (!checkoutId.trim())
       throw new Error("verifyCheckout requires checkoutId");
+    for (const field of ["razorpay_order_id", "razorpay_payment_id", "razorpay_signature"] as const)
+      if (typeof verification?.[field] !== "string" || !verification[field].trim())
+        throw new Error(`verifyCheckout requires ${field}`);
     return this.checkoutRequest(
+      "verifyCheckout",
       "POST",
       `/${encodeURIComponent(checkoutId)}/verify${this.checkoutScopeQuery(scope)}`,
       verification,
@@ -166,7 +173,7 @@ export class Nozle {
   async checkoutStatus(checkoutId: string, scope?: SubscriptionCheckoutScope): Promise<CheckoutStatus> {
     if (!checkoutId.trim())
       throw new Error("checkoutStatus requires checkoutId");
-    return this.checkoutRequest("GET", `/${encodeURIComponent(checkoutId)}${this.checkoutScopeQuery(scope)}`);
+    return this.checkoutRequest("checkoutStatus", "GET", `/${encodeURIComponent(checkoutId)}${this.checkoutScopeQuery(scope)}`);
   }
 
   private checkoutScopeQuery(scope?: SubscriptionCheckoutScope): string {
@@ -211,6 +218,7 @@ export class Nozle {
   }
 
   private async checkoutRequest<T>(
+    operation: string,
     method: string,
     suffix: string,
     body?: unknown,
@@ -235,7 +243,13 @@ export class Nozle {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!res.ok)
-      throw new Error(`checkout failed: ${res.status} ${res.statusText}`);
+      throw new NozleApiError(
+        operation,
+        res,
+        await Promise.resolve()
+          .then(() => res.json())
+          .catch(() => undefined),
+      );
     return res.json();
   }
 
