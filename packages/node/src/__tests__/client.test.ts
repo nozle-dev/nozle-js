@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Nozle } from "../client";
+import { NozleApiError } from "../errors";
 import type { CancellationPolicy } from "../types";
 
 const fetchMock = vi.fn();
@@ -526,6 +527,37 @@ describe("Nozle", () => {
 
       const [url] = fetchMock.mock.calls[0];
       expect(url.toString()).toContain("granularity=week");
+    });
+
+    it("keeps the engine code on a rejected date range", async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: "Bad Request",
+        json: async () => ({ code: "invalid_date_range", error: "the end of the range must be after its start" }),
+      });
+      const client = new Nozle({ apiKey: "sk_test" });
+      const error = (await client.margin
+        .summary({ from: "2026-10-10", to: "2026-10-01" })
+        .catch((e: unknown) => e)) as NozleApiError;
+      expect(error).toBeInstanceOf(NozleApiError);
+      expect(error.message).toBe("margin/summary failed: 400 Bad Request");
+      expect(error.status).toBe(400);
+      expect(error.code).toBe("invalid_date_range");
+      expect(error.hasCode("invalid_date_range")).toBe(true);
+    });
+
+    it("keeps the plain message when the error body is not JSON", async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        json: async () => {
+          throw new SyntaxError("bad json");
+        },
+      });
+      const client = new Nozle({ apiKey: "sk_test" });
+      await expect(client.margin.summary()).rejects.toThrow("margin/summary failed: 502 Bad Gateway");
     });
   });
 

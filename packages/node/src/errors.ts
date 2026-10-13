@@ -1,10 +1,10 @@
 /**
- * Error thrown when a checkout call returns a non-2xx response. The message keeps the
+ * Error thrown when a checkout or margin call returns a non-2xx response. The message keeps the
  * `<operation> failed: <status> <statusText>` form; `code` and `errorDetails` carry what Nozle returned.
  */
 export class NozleApiError extends Error {
   readonly status: number;
-  /** Top-level `code`, for example `payment_provider_required` or `validation_errors`. */
+  /** Top-level `code`, for example `payment_provider_required`, `validation_errors` or `invalid_date_range`. */
   readonly code?: string;
   /** Raw `error_details` object of a `validation_errors` response, for example `{ base: ["razorpay_requires_inr"] }`. */
   readonly errorDetails?: Record<string, unknown>;
