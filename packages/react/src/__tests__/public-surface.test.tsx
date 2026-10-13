@@ -22,6 +22,7 @@ import {
   PlanBadge,
   PaymentMethodDisplay,
   PlanComparison,
+  PricingTable,
   getUsageMeterColor,
   usePlans,
   useNozleClient,
@@ -221,6 +222,25 @@ describe("public catalog hook", () => {
     const { result } = renderHook(() => usePlans(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.error?.message).toBe("HTTP 503");
+  });
+  it.each([
+    ["an HTTP error", () => vi.fn().mockResolvedValue(new Response("{}", { status: 503 })), "HTTP 503"],
+    ["a transport failure", () => vi.fn().mockRejectedValue(new TypeError("Failed to fetch")), "Failed to fetch"],
+  ])("PricingTable shows %s from its own catalog request and never rejects unhandled", async (_name, makeFetch, message) => {
+    vi.stubGlobal("fetch", makeFetch());
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    const onCheckoutError = vi.fn();
+    render(
+      <BillingProvider publishableKey="pk_contract">
+        <PricingTable onCheckoutError={onCheckoutError} />
+      </BillingProvider>,
+    );
+    expect((await screen.findByRole("alert")).textContent).toBe(`Plans could not be loaded: ${message}`);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    process.off("unhandledRejection", unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
+    expect(onCheckoutError).not.toHaveBeenCalled();
   });
   it("contains transport failures and ignores stale requests when the provider changes", async () => {
     let resolveOld!: (value: Response) => void;
