@@ -1,7 +1,7 @@
 import type { CreditSystem } from "./types";
 
 interface CoreCreditSystem {
-  lago_id: string;
+  nozle_id?: string;
   code: string;
   name: string;
   description?: string | null;
@@ -51,7 +51,7 @@ export class CreditSystemsNamespace {
 
 function normalizeCreditSystem(system: CoreCreditSystem): CreditSystem {
   return {
-    id: system.lago_id,
+    id: system.nozle_id as string,
     code: system.code,
     name: system.name,
     description: system.description ?? null,

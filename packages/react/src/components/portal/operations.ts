@@ -1,5 +1,5 @@
 // Customer-scoped operations shared with the hosted portal's GraphQL contract.
-// Source: lago/front/src/components/customerPortal and pages/customerPortal.
+// Source: front/src/components/customerPortal and pages/customerPortal.
 export type Cents = string | number;
 export interface Page<T> {
   collection: T[];

@@ -1,4 +1,5 @@
 export { Nozle } from "./client";
+export { NozleApiError } from "./errors";
 export { MarginClient } from "./margin";
 export { EventsNamespace } from "./events";
 export { CostEventsNamespace } from "./cost-events";

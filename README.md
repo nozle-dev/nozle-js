@@ -4,14 +4,14 @@ This monorepo contains the Nozle SDK for Node.js backends and the React package 
 
 | Package | Current release | Use it for |
 | --- | --- | --- |
-| [`@nozle-js/node`](packages/node/README.md) | `0.9.1` | Billing, subscriptions, credits, usage and Cost Events, entitlements, margins, and OpenAI/Anthropic capture |
-| [`@nozle-js/react`](packages/react/README.md) | `0.10.0` | Public catalog, checkout UI, billing portal, and customer-facing controls |
+| [`@nozle-js/node`](packages/node/README.md) | `0.10.0` | Billing, subscriptions, credits, usage and Cost Events, entitlements, margins, and OpenAI/Anthropic capture |
+| [`@nozle-js/react`](packages/react/README.md) | `0.10.2` | Public catalog, checkout UI, billing portal, and customer-facing controls |
 
 ## Install
 
 ```bash
-npm install @nozle-js/node@0.9.1
-npm install @nozle-js/react@0.10.0 react react-dom @stripe/stripe-js @stripe/react-stripe-js
+npm install @nozle-js/node@0.10.0
+npm install @nozle-js/react@0.10.2 react react-dom @stripe/stripe-js @stripe/react-stripe-js
 ```
 
 Install only the package your application needs. The React package runs in the browser; all customer-scoped writes and reads that need a secret key belong on your backend.
@@ -67,6 +67,8 @@ export function BillingPage({ csrfToken }: { csrfToken: string }) {
 }
 ```
 
+Both Stripe and Razorpay flow through the same `checkout()` call. Stripe returns an embedded Checkout Session secret (`type: "stripe"`); Razorpay returns an order for the Razorpay modal (`type: "razorpay"`) or a payment link (`type: "hosted"`), which your backend confirms with `verifyCheckout()` and `checkoutStatus()`. The Node guide shows both flows side by side, and the React guide shows `CheckoutButton` handling each result. See the [Stripe](https://docs.nozle.dev/integrations/stripe) and [Razorpay](https://docs.nozle.dev/integrations/razorpay) integration guides.
+
 See the [React package guide](packages/react/README.md) for the complete callback shape, provider responses, and billing portal setup. The [runnable billing portal example](examples/billing-portal/README.md) includes a Node merchant server and React app. Its demo login and file store are examples; use your application's authentication and shared transactional storage in production.
 
 ## Guides and releases
@@ -77,7 +79,7 @@ See the [React package guide](packages/react/README.md) for the complete callbac
 - [Changelog](CHANGELOG.md)
 - [Release process](RELEASING.md)
 
-Node `0.9.1` fixes Feature Event timestamp serialization, including events sent by OpenAI and Anthropic wrappers. React `0.10.0` adds the billing portal and self-service controls. See each package guide for the full API and the changelog for release history.
+Node `0.10.0` reads `nozle_id` for credit systems (breaking against servers that still send the old key), adds `NozleApiError`, and documents Stripe and Razorpay checkout. React `0.10.2` adds checkout result types and documents the same checkout flows. See each package guide for the full API and the changelog for release history.
 
 ## License
 

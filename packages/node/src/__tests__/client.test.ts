@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Nozle } from "../client";
+import { NozleApiError } from "../errors";
 import type { CancellationPolicy } from "../types";
 
 const fetchMock = vi.fn();
@@ -132,6 +133,67 @@ describe("Nozle", () => {
 
       // 1 subscription lookup + 2 track calls = 3 fetches (not 4)
       expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    describe("refreshes the cached subscription after the customer's subscriptions change", () => {
+      const lookup = (id: string) => jsonResponse({ subscriptions: [{ external_id: id }] });
+      const trackedSubscription = () => {
+        const calls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/api/v1/events"));
+        return JSON.parse(calls[calls.length - 1][1].body).event.external_subscription_id;
+      };
+      const cases: [string, (c: Nozle) => Promise<unknown>][] = [
+        ["subscribe", (c) => c.subscribe("cust_1", "pro")],
+        ["cancelSubscription", (c) => c.cancelSubscription("cust_1", "sub_old", "immediate")],
+        ["checkout", (c) => c.checkout("cust_1", "pro", "https://app.example.com/done")],
+        ["applySubscriptionTransition", (c) =>
+          c.applySubscriptionTransition(
+            { customerId: "cust_1", subscriptionId: "sub_old", operation: "cancel", timing: "immediate" } as never,
+            "key-1",
+          )],
+        ["checkoutStatus", (c) => c.checkoutStatus("chk_1", { customerId: "cust_1", subscriptionId: "sub_old" })],
+      ];
+      it.each(cases)("%s", async (_name, change) => {
+        fetchMock
+          .mockResolvedValueOnce(lookup("sub_old"))
+          .mockResolvedValueOnce(jsonResponse({}))
+          .mockResolvedValueOnce(jsonResponse({}))
+          .mockResolvedValueOnce(lookup("sub_new"))
+          .mockResolvedValueOnce(jsonResponse({}));
+        const client = new Nozle({ apiKey: "sk_test" });
+        await client.track("cust_1", "event_1");
+        expect(trackedSubscription()).toBe("sub_old");
+        await change(client);
+        await client.track("cust_1", "event_2");
+        expect(trackedSubscription()).toBe("sub_new");
+      });
+
+      it("keeps the cache when the change fails", async () => {
+        fetchMock
+          .mockResolvedValueOnce(lookup("sub_old"))
+          .mockResolvedValueOnce(jsonResponse({}))
+          .mockResolvedValueOnce(jsonResponse({}, 500))
+          .mockResolvedValueOnce(jsonResponse({}));
+        const client = new Nozle({ apiKey: "sk_test" });
+        await client.track("cust_1", "event_1");
+        await expect(client.subscribe("cust_1", "pro")).rejects.toThrow("subscribe failed");
+        await client.track("cust_1", "event_2");
+        expect(trackedSubscription()).toBe("sub_old");
+        expect(fetchMock).toHaveBeenCalledTimes(4);
+      });
+
+      it("checkoutInvoice drops every cached customer", async () => {
+        fetchMock
+          .mockResolvedValueOnce(lookup("sub_old"))
+          .mockResolvedValueOnce(jsonResponse({}))
+          .mockResolvedValueOnce(jsonResponse({}))
+          .mockResolvedValueOnce(lookup("sub_new"))
+          .mockResolvedValueOnce(jsonResponse({}));
+        const client = new Nozle({ apiKey: "sk_test" });
+        await client.track("cust_1", "event_1");
+        await client.checkoutInvoice("inv_1");
+        await client.track("cust_1", "event_2");
+        expect(trackedSubscription()).toBe("sub_new");
+      });
     });
 
     it("throws when no active subscription found", async () => {
@@ -527,6 +589,37 @@ describe("Nozle", () => {
       const [url] = fetchMock.mock.calls[0];
       expect(url.toString()).toContain("granularity=week");
     });
+
+    it("keeps the engine code on a rejected date range", async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: "Bad Request",
+        json: async () => ({ code: "invalid_date_range", error: "the end of the range must be after its start" }),
+      });
+      const client = new Nozle({ apiKey: "sk_test" });
+      const error = (await client.margin
+        .summary({ from: "2026-10-10", to: "2026-10-01" })
+        .catch((e: unknown) => e)) as NozleApiError;
+      expect(error).toBeInstanceOf(NozleApiError);
+      expect(error.message).toBe("margin/summary failed: 400 Bad Request");
+      expect(error.status).toBe(400);
+      expect(error.code).toBe("invalid_date_range");
+      expect(error.hasCode("invalid_date_range")).toBe(true);
+    });
+
+    it("keeps the plain message when the error body is not JSON", async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        json: async () => {
+          throw new SyntaxError("bad json");
+        },
+      });
+      const client = new Nozle({ apiKey: "sk_test" });
+      await expect(client.margin.summary()).rejects.toThrow("margin/summary failed: 502 Bad Gateway");
+    });
   });
 
   describe("credit systems and balances", () => {
@@ -535,7 +628,7 @@ describe("Nozle", () => {
         jsonResponse({
           credit_systems: [
             {
-              lago_id: "system-1",
+              nozle_id: "system-1",
               code: "ai_credits",
               name: "AI Credits",
               description: null,
@@ -572,9 +665,20 @@ describe("Nozle", () => {
       );
     });
 
+    it("leaves id undefined when nozle_id is missing", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ credit_systems: [{ code: "ai", id: "legacy" }], meta: { next_page: null } }),
+      );
+      const client = new Nozle({ apiKey: "sk_test", eventsUrl: "https://api.example/core" });
+
+      const [system] = await client.creditSystems.list();
+
+      expect(system.id).toBeUndefined();
+    });
+
     it("reads every Rails-owned credit system page", async () => {
       const coreSystem = (id: string, code: string) => ({
-        lago_id: id,
+        nozle_id: id,
         code,
         name: code,
         description: null,

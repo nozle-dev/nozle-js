@@ -4,6 +4,7 @@ import { CostEventsNamespace } from "./cost-events";
 import { CreditSystemsNamespace } from "./credit-systems";
 import { EntitiesNamespace } from "./entities";
 import { EntitySubscriptionsNamespace } from "./entity-subscriptions";
+import { NozleApiError } from "./errors";
 import { EventsNamespace } from "./events";
 import { MarginClient } from "./margin";
 import { track as _track } from "./track";
@@ -110,7 +111,8 @@ export class Nozle {
       throw new Error("checkout requires a non-empty subscriptionId");
     if (options.quoteId !== undefined && (!options.quoteId.trim() || !options.subscriptionId))
       throw new Error("checkout quoteId requires an explicit subscriptionId");
-    return this.checkoutRequest(
+    const result = await this.checkoutRequest<CheckoutResult>(
+      "checkout",
       "POST",
       "",
       {
@@ -128,6 +130,8 @@ export class Nozle {
       },
       options.idempotencyKey,
     );
+    this.subCache.delete(customerId); // the paid or scheduled change may replace the active subscription
+    return result;
   }
 
   async checkoutInvoice(
@@ -136,7 +140,8 @@ export class Nozle {
   ): Promise<CheckoutResult> {
     if (!invoiceId.trim())
       throw new Error("checkoutInvoice requires invoiceId");
-    return this.checkoutRequest(
+    const result = await this.checkoutRequest<CheckoutResult>(
+      "checkoutInvoice",
       "POST",
       "",
       {
@@ -147,6 +152,8 @@ export class Nozle {
       },
       options.idempotencyKey,
     );
+    this.subCache.clear(); // an invoice carries no customer id here, so drop every entry
+    return result;
   }
 
   async verifyCheckout(
@@ -156,17 +163,25 @@ export class Nozle {
   ): Promise<CheckoutStatus> {
     if (!checkoutId.trim())
       throw new Error("verifyCheckout requires checkoutId");
-    return this.checkoutRequest(
+    for (const field of ["razorpay_order_id", "razorpay_payment_id", "razorpay_signature"] as const)
+      if (typeof verification?.[field] !== "string" || !verification[field].trim())
+        throw new Error(`verifyCheckout requires ${field}`);
+    const status = await this.checkoutRequest<CheckoutStatus>(
+      "verifyCheckout",
       "POST",
       `/${encodeURIComponent(checkoutId)}/verify${this.checkoutScopeQuery(scope)}`,
       verification,
     );
+    if (scope) this.subCache.delete(scope.customerId);
+    return status;
   }
 
   async checkoutStatus(checkoutId: string, scope?: SubscriptionCheckoutScope): Promise<CheckoutStatus> {
     if (!checkoutId.trim())
       throw new Error("checkoutStatus requires checkoutId");
-    return this.checkoutRequest("GET", `/${encodeURIComponent(checkoutId)}${this.checkoutScopeQuery(scope)}`);
+    const status = await this.checkoutRequest<CheckoutStatus>("checkoutStatus", "GET", `/${encodeURIComponent(checkoutId)}${this.checkoutScopeQuery(scope)}`);
+    if (scope) this.subCache.delete(scope.customerId); // payment may have activated a new subscription
+    return status;
   }
 
   private checkoutScopeQuery(scope?: SubscriptionCheckoutScope): string {
@@ -211,6 +226,7 @@ export class Nozle {
   }
 
   private async checkoutRequest<T>(
+    operation: string,
     method: string,
     suffix: string,
     body?: unknown,
@@ -235,7 +251,13 @@ export class Nozle {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!res.ok)
-      throw new Error(`checkout failed: ${res.status} ${res.statusText}`);
+      throw new NozleApiError(
+        operation,
+        res,
+        await Promise.resolve()
+          .then(() => res.json())
+          .catch(() => undefined),
+      );
     return res.json();
   }
 
@@ -256,6 +278,7 @@ export class Nozle {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!res.ok) throw new Error(`subscribe failed: ${res.status} ${res.statusText}`);
+    this.subCache.delete(customerId);
     return res.json();
   }
 
@@ -288,6 +311,7 @@ export class Nozle {
     if (!res.ok) {
       throw new Error(`cancelSubscription failed: ${res.status} ${res.statusText}`);
     }
+    this.subCache.delete(customerId);
     return res.json();
   }
 
@@ -331,6 +355,7 @@ export class Nozle {
     if (!res.ok) {
       throw new Error(`applySubscriptionTransition failed: ${res.status} ${res.statusText}`);
     }
+    this.subCache.delete(params.customerId);
     return res.json();
   }
 
@@ -415,7 +440,6 @@ export class Nozle {
       },
       body: JSON.stringify({
         customer_id: params.customerId,
-        feature: params.feature,
         credits: params.credits,
       }),
       signal: AbortSignal.timeout(this.timeout),

@@ -82,22 +82,43 @@ export interface RazorpayCheckoutResult {
   amount_cents: number;
   currency: string;
   expires_at?: string;
+  /** Set for an invoice checkout. A paid upgrade returns `plan_upgrade_intent_id` instead. */
   invoice_id?: string;
+  plan_upgrade_intent_id?: string;
+  external_entity_id?: string;
+  external_subscription_id?: string;
+  /** Mandate checkout only: the Razorpay customer to pass to the modal with `recurring: "1"`. */
   customer_id?: string;
   recurring?: boolean;
   mandate_max_amount_cents?: number;
 }
 
+/**
+ * The checkout is not ready to collect payment yet: Razorpay while the order is
+ * being created, and Stripe when a quoted upgrade is replayed while its webhook is
+ * still pending. Recover with the checkout status call using `checkout_id`.
+ */
 export interface ProcessingCheckoutResult {
   type: "processing";
   checkout_id: string;
   status: string;
+  amount_cents?: number;
+  currency?: string;
+  expires_at?: string;
+  invoice_id?: string;
+  plan_upgrade_intent_id?: string;
 }
 
+/** A Razorpay payment link. Redirect the customer to `payment_url`. */
 export interface HostedCheckoutResult {
   type: "hosted";
   payment_url: string;
   checkout_id?: string;
+  amount_cents?: number;
+  currency?: string;
+  expires_at?: string;
+  invoice_id?: string;
+  plan_upgrade_intent_id?: string;
 }
 
 export interface CheckoutOptions {
@@ -196,12 +217,18 @@ export type CheckoutResult =
   | HostedCheckoutResult
   | {
       type: "stripe";
+      /** Not returned by Nozle. Use your own Stripe publishable key for the connected account. */
       publishable_key?: string;
+      /** Not returned by Nozle. */
       stripe_account?: string;
+      /** Embedded Checkout Session secret (`cs_...`). Same value as `clientSecret`. */
       client_secret?: string;
       clientSecret?: string;
+      /** Not returned by plan and invoice checkout, which never issue a Stripe-hosted URL. */
       url?: string;
       invoice_id?: string;
+      /** Set instead of `invoice_id` for a paid upgrade; poll it with `checkoutStatus`. */
+      plan_upgrade_intent_id?: string;
       amount_cents?: number;
       currency?: string;
       external_entity_id?: string;
@@ -210,10 +237,16 @@ export type CheckoutResult =
     }
   | {
       type: "completed" | "scheduled";
-      pending_subscription_id?: string;
       status: string;
+      /** `credits` or `none` on a completed result. */
+      payment_source?: string;
       subscription_id?: string;
       plan_code?: string;
+      invoice_id?: string;
+      amount_cents?: number;
+      /** Scheduled result: `upgrade` or `downgrade`. */
+      transition_direction?: string;
+      transition_policy?: string;
       external_entity_id?: string;
       external_subscription_id?: string;
       checkout_id?: string;
@@ -429,7 +462,8 @@ export interface CustomerUpsertResult {
 
 export interface CheckAndDeductParams {
   customerId: string;
-  feature: string;
+  /** @deprecated Ignored: it is not sent, because the deduction depends only on the customer's wallet and `credits`. */
+  feature?: string;
   credits: number;
 }
 

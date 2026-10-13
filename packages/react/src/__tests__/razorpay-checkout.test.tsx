@@ -248,4 +248,77 @@ describe('Razorpay checkout confirmation', () => {
     await Promise.all([first, second]);
     expect(loaded).toHaveBeenCalledOnce();
   });
+
+  it('passes the mandate customer and recurring flag to the modal only for a mandate checkout', async () => {
+    install();
+    const mandate: RazorpayCheckoutResult = {
+      ...checkout,
+      customer_id: 'cust_razorpay',
+      recurring: true,
+      mandate_max_amount_cents: 500000,
+      expires_at: '2026-10-14T09:30:00.000Z',
+    };
+    let seen: Record<string, unknown> = {};
+    window.Razorpay = class {
+      constructor(value: Record<string, unknown>) {
+        seen = value;
+      }
+      open() {}
+      close() {}
+      on() {}
+    } as unknown as typeof window.Razorpay;
+    void handleCheckoutResult(mandate, { verifyCheckout: vi.fn() });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(seen).toMatchObject({
+      key: 'rzp_test_public',
+      order_id: 'order_stored',
+      amount: 10000,
+      currency: 'INR',
+      customer_id: 'cust_razorpay',
+      recurring: '1',
+    });
+    void handleCheckoutResult(checkout, { verifyCheckout: vi.fn() });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(seen).not.toHaveProperty('recurring');
+    expect(seen).not.toHaveProperty('customer_id');
+  });
+
+  it('rejects with a retry message when the modal reports payment.failed', async () => {
+    let failed!: () => void;
+    const close = vi.fn();
+    window.Razorpay = class {
+      open() {}
+      close = close;
+      on(event: string, callback: () => void) {
+        if (event === 'payment.failed') failed = callback;
+      }
+    } as unknown as typeof window.Razorpay;
+    const promise = handleCheckoutResult(checkout, { verifyCheckout: vi.fn() });
+    await Promise.resolve();
+    await Promise.resolve();
+    failed();
+    await expect(promise).rejects.toThrow('Payment failed. You can retry checkout.');
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('hands a Stripe Embedded Checkout secret to the caller and requires a handler for it', async () => {
+    const onStripeClientSecret = vi.fn();
+    await handleCheckoutResult(
+      {
+        type: 'stripe',
+        client_secret: 'cs_test_1',
+        clientSecret: 'cs_test_1',
+        plan_upgrade_intent_id: 'intent-1',
+        amount_cents: 1000,
+        currency: 'USD',
+      },
+      { onStripeClientSecret },
+    );
+    expect(onStripeClientSecret).toHaveBeenCalledExactlyOnceWith('cs_test_1');
+    await expect(
+      handleCheckoutResult({ type: 'stripe', client_secret: 'cs_test_1' }, {}),
+    ).rejects.toThrow('onStripeClientSecret is required');
+  });
 });
