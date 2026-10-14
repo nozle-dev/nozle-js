@@ -493,6 +493,10 @@ class CustomersNamespace {
     if (!params.externalId?.trim()) {
       throw new Error("customers.upsert requires externalId");
     }
+    const billing = params.billingConfiguration;
+    if (billing && !billing.paymentProvider?.trim()) {
+      throw new Error("customers.upsert billingConfiguration requires paymentProvider");
+    }
     const res = await fetch(`${this.baseUrl}/api/v1/customers`, {
       method: "POST",
       headers: {
@@ -504,6 +508,13 @@ class CustomersNamespace {
           external_id: params.externalId,
           name: params.name,
           email: params.email,
+          billing_configuration: billing && {
+            payment_provider: billing.paymentProvider,
+            payment_provider_code: billing.paymentProviderCode,
+            provider_customer_id: billing.providerCustomerId,
+            sync_with_provider: billing.syncWithProvider,
+            provider_payment_methods: billing.providerPaymentMethods,
+          },
         },
       }),
       signal: AbortSignal.timeout(this.timeout),

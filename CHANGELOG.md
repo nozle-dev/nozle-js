@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## Node.js 0.12.0 — 2026-10-14
+
+### Added
+
+- `customers.upsert()` accepts `billingConfiguration` (`paymentProvider`, `paymentProviderCode`, `providerCustomerId`, `syncWithProvider`, `providerPaymentMethods`) and sends it as Core's `billing_configuration`, so a customer can be linked to an existing Stripe customer in the same call. Upserts without it send the same body as before.
+
 ## Node.js 0.11.0 — 2026-10-13
 
 ### Changed

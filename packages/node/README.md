@@ -214,9 +214,19 @@ const customer = await nozle.customers.upsert({
   name: "Acme Corp",
   email: "billing@acme.com",
 });
+
+// Link a customer that already exists in Stripe, without creating a new one
+await nozle.customers.upsert({
+  externalId: "cust_123",
+  billingConfiguration: {
+    paymentProvider: "stripe",
+    paymentProviderCode: "stripe_main",
+    providerCustomerId: "cus_ABC123",
+  },
+});
 ```
 
-If you create customers through the Nozle REST API instead of this SDK, a customer needs `sync_with_provider: true` or a `provider_customer_id`; otherwise its payment provider assignment is dropped.
+A payment provider assignment needs `providerCustomerId` or `syncWithProvider: true`; otherwise Core drops it. The same applies to `provider_customer_id` and `sync_with_provider` when you call the REST API directly.
 
 ## Product credits
 

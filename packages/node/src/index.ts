@@ -49,6 +49,7 @@ export type {
   MarginQueryParams,
   TrendParams,
   PingResult,
+  CustomerBillingConfiguration,
   CustomerUpsertParams,
   CustomerUpsertResult,
   CheckAndDeductParams,
