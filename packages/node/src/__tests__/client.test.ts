@@ -332,6 +332,41 @@ describe("Nozle", () => {
       });
     });
 
+    it("links an existing provider customer through billingConfiguration", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ customer: { external_id: "acme" } }));
+      const client = new Nozle({ apiKey: "sk_merchant" });
+
+      await client.customers.upsert({
+        externalId: "acme",
+        billingConfiguration: {
+          paymentProvider: "stripe",
+          paymentProviderCode: "main",
+          providerCustomerId: "cus_123",
+        },
+      });
+
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+        customer: {
+          external_id: "acme",
+          billing_configuration: {
+            payment_provider: "stripe",
+            payment_provider_code: "main",
+            provider_customer_id: "cus_123",
+          },
+        },
+      });
+    });
+
+    it("rejects billingConfiguration without paymentProvider before network I/O", async () => {
+      await expect(
+        new Nozle({ apiKey: "sk_merchant" }).customers.upsert({
+          externalId: "acme",
+          billingConfiguration: { paymentProvider: "", providerCustomerId: "cus_123" },
+        }),
+      ).rejects.toThrow("requires paymentProvider");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it("never sends customer upserts to Engine", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ customer: { external_id: "cust-1" } }));
       const client = new Nozle({

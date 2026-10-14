@@ -449,10 +449,23 @@ export interface PingResult {
   version?: string;
 }
 
+export interface CustomerBillingConfiguration {
+  /** Payment provider type, e.g. `"stripe"`. */
+  paymentProvider: string;
+  /** Code of the payment provider connection in Nozle. */
+  paymentProviderCode?: string;
+  /** Existing customer ID at the provider, e.g. a Stripe `cus_…`. Links it without creating a new one. */
+  providerCustomerId?: string;
+  /** Create the customer at the provider when no `providerCustomerId` is given. */
+  syncWithProvider?: boolean;
+  providerPaymentMethods?: string[];
+}
+
 export interface CustomerUpsertParams {
   externalId: string;
   name?: string;
   email?: string;
+  billingConfiguration?: CustomerBillingConfiguration;
 }
 
 export interface CustomerUpsertResult {
