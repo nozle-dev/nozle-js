@@ -12,8 +12,10 @@ export { UsageNamespace } from "./usage";
 export { wrapOpenAI } from "./wrap-openai";
 export type { WrapOptions } from "./wrap-openai";
 export { wrapAnthropic } from "./wrap-anthropic";
-export { normalizeOpenAIUsage, normalizeAnthropicUsage } from "./provider-usage";
-export type { ProviderTokenType, ProviderTokenUsage } from "./provider-usage";
+export { normalizeOpenAIUsage, normalizeAnthropicUsage, normalizeGeminiUsage, detectUsage } from "./provider-usage";
+export type { ProviderTokenType, ProviderTokenUsage, ProviderUsageFormat, DetectedUsage, RecordUsageParams } from "./provider-usage";
+export { captureFetch } from "./capture-fetch";
+export type { CaptureFetchOptions, CaptureRequest } from "./capture-fetch";
 export type {
   NozleConfig,
   TrackOptions,

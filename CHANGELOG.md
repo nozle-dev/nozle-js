@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Node.js: `nozle.captureFetch(options, fetch?)` returns a `fetch` that records the token usage of every successful LLM response. Pass it as the `fetch` option of the OpenAI or Anthropic SDK, a Vercel AI SDK provider, LangChain, or any client that accepts one. Usage is recognised by the response shape: OpenAI-compatible `usage` (any OpenAI-compatible API, including the Responses API), Anthropic `usage` and Gemini `usageMetadata`. Streams are read as the app reads them; chat completion streams are asked for usage (`stream_options.include_usage`, turn off with `includeStreamUsage: false`). The customer comes from `customerId` (a string or a function per request) or the `X-Nozle-Customer-Id` request header, which is not sent to the provider. Recording never changes or fails the provider response; failures go to `onError`.
+- Node.js: `nozle.recordUsage({ customerId, model, inputTokens, outputTokens, ... })` records usage your code read itself, and rejects if it could not be recorded.
+
+### Changed
+
+- Node.js: usage events recorded by `wrapOpenAI`, `wrapAnthropic` and `captureFetch` use the provider's response id as the transaction id (`llm-<format>-<id>`), so the same response is never recorded twice. Events also carry `provider_host` when known.
+
 ## Node.js 0.12.0 — 2026-10-14
 
 ### Added
