@@ -43,8 +43,10 @@ export interface CanResult {
   feature_type?: string;
   configuration?: Record<string, string>;
   used: number;
-  limit?: number;
-  remaining?: number;
+  /** `null` when the feature has no limit. */
+  limit: number | null;
+  /** `null` when the feature has no limit. */
+  remaining: number | null;
   overage?: boolean;
   economics?: CanEconomics;
   policy?: CanPolicy;
@@ -175,7 +177,6 @@ export interface SubscriptionOptions {
     timing: "immediate" | "end_of_period";
   }>;
   checkout?: { id: string; status: string; plan_code: string } | null;
-  blocked_reason?: string | null;
 }
 
 export interface SubscriptionChangePreview {
@@ -455,7 +456,6 @@ export interface TrendParams extends MarginQueryParams {
 export interface PingResult {
   ok: boolean;
   engine: string;
-  version?: string;
 }
 
 export interface CustomerBillingConfiguration {
