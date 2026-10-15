@@ -1,3 +1,4 @@
+import { apiError } from "./errors";
 import { createCostEventId } from "./identifiers";
 import type { CostEventAccepted, CostEventParams } from "./types";
 
@@ -48,7 +49,7 @@ export class CostEventsNamespace {
     });
 
     if (!response.ok) {
-      throw new Error(`costEvents.track failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`costEvents.track`, response);
     }
 
     const body = (await response.json()) as CostEventAccepted;

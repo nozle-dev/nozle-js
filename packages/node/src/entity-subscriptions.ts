@@ -1,3 +1,4 @@
+import { apiError } from "./errors";
 import type {
   CheckoutResult,
   EntitySubscription,
@@ -36,7 +37,7 @@ export class EntitySubscriptionsNamespace {
         signal: AbortSignal.timeout(this.timeout),
       },
     );
-    if (!response.ok) throw requestError("entitySubscriptions.list", response);
+    if (!response.ok) throw await apiError("entitySubscriptions.list", response);
     return response.json() as Promise<EntitySubscriptionList>;
   }
 
@@ -96,7 +97,7 @@ export class EntitySubscriptionsNamespace {
         signal: AbortSignal.timeout(this.timeout),
       },
     );
-    if (!response.ok) throw requestError(operation, response);
+    if (!response.ok) throw await apiError(operation, response);
     const payload = (await response.json()) as {
       entity_subscription_checkout: EntitySubscriptionCheckoutManyResult;
     };
@@ -134,7 +135,7 @@ export class EntitySubscriptionsNamespace {
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!response.ok) throw requestError(operation, response);
+    if (!response.ok) throw await apiError(operation, response);
     return response.json() as Promise<EntitySubscriptionCancelResult>;
   }
 
@@ -146,7 +147,7 @@ export class EntitySubscriptionsNamespace {
       headers: { Authorization: `Bearer ${this.apiKey}` },
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!response.ok) throw requestError(operation, response);
+    if (!response.ok) throw await apiError(operation, response);
   }
 
   private async change(
@@ -174,7 +175,7 @@ export class EntitySubscriptionsNamespace {
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!response.ok) throw requestError(operation, response);
+    if (!response.ok) throw await apiError(operation, response);
     return response.json() as Promise<CheckoutResult>;
   }
 
@@ -189,7 +190,7 @@ export class EntitySubscriptionsNamespace {
       headers: { Authorization: `Bearer ${this.apiKey}` },
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!response.ok) throw requestError(operation, response);
+    if (!response.ok) throw await apiError(operation, response);
     const payload = (await response.json()) as { entity_subscription: EntitySubscription };
     return payload.entity_subscription;
   }
@@ -222,6 +223,3 @@ function validateIdempotencyKey(key: string, operation: string): void {
   }
 }
 
-function requestError(operation: string, response: Response): Error {
-  return new Error(`${operation} failed: ${response.status} ${response.statusText}`);
-}

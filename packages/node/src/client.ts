@@ -4,7 +4,7 @@ import { CostEventsNamespace } from "./cost-events";
 import { CreditSystemsNamespace } from "./credit-systems";
 import { EntitiesNamespace } from "./entities";
 import { EntitySubscriptionsNamespace } from "./entity-subscriptions";
-import { NozleApiError } from "./errors";
+import { apiError } from "./errors";
 import { EventsNamespace } from "./events";
 import { MarginClient } from "./margin";
 import { track as _track } from "./track";
@@ -96,7 +96,7 @@ export class Nozle {
       headers: { Authorization: `Bearer ${this.apiKey}` },
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`plans failed: ${res.status} ${res.statusText}`);
+    if (!res.ok) throw await apiError(`plans`, res);
     const data = await res.json();
     return data.plans ?? [];
   }
@@ -221,7 +221,7 @@ export class Nozle {
         ...(idempotencyKey && { "Idempotency-Key": idempotencyKey }) },
       ...(body !== undefined && { body: JSON.stringify(body) }), signal: AbortSignal.timeout(this.timeout),
     });
-    if (!response.ok) throw new Error(`subscriptionManagement failed: ${response.status} ${response.statusText}`);
+    if (!response.ok) throw await apiError(`subscriptionManagement`, response);
     return response.json();
   }
 
@@ -251,13 +251,7 @@ export class Nozle {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!res.ok)
-      throw new NozleApiError(
-        operation,
-        res,
-        await Promise.resolve()
-          .then(() => res.json())
-          .catch(() => undefined),
-      );
+      throw await apiError(operation, res);
     return res.json();
   }
 
@@ -277,7 +271,7 @@ export class Nozle {
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`subscribe failed: ${res.status} ${res.statusText}`);
+    if (!res.ok) throw await apiError(`subscribe`, res);
     this.subCache.delete(customerId);
     return res.json();
   }
@@ -309,7 +303,7 @@ export class Nozle {
       },
     );
     if (!res.ok) {
-      throw new Error(`cancelSubscription failed: ${res.status} ${res.statusText}`);
+      throw await apiError(`cancelSubscription`, res);
     }
     this.subCache.delete(customerId);
     return res.json();
@@ -329,7 +323,7 @@ export class Nozle {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!res.ok) {
-      throw new Error(`previewSubscriptionTransition failed: ${res.status} ${res.statusText}`);
+      throw await apiError(`previewSubscriptionTransition`, res);
     }
     return res.json();
   }
@@ -353,7 +347,7 @@ export class Nozle {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!res.ok) {
-      throw new Error(`applySubscriptionTransition failed: ${res.status} ${res.statusText}`);
+      throw await apiError(`applySubscriptionTransition`, res);
     }
     this.subCache.delete(params.customerId);
     return res.json();
@@ -427,7 +421,7 @@ export class Nozle {
       headers: { Authorization: `Bearer ${this.apiKey}` },
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`ping failed: ${res.status} ${res.statusText}`);
+    if (!res.ok) throw await apiError(`ping`, res);
     return res.json();
   }
 
@@ -444,7 +438,7 @@ export class Nozle {
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`checkAndDeduct failed: ${res.status} ${res.statusText}`);
+    if (!res.ok) throw await apiError(`checkAndDeduct`, res);
     return res.json();
   }
 
@@ -459,7 +453,7 @@ export class Nozle {
         signal: AbortSignal.timeout(this.timeout),
       },
     );
-    if (!res.ok) throw new Error(`subscription lookup failed: ${res.status}`);
+    if (!res.ok) throw await apiError("subscription lookup", res);
 
     const data = await res.json();
     const subs = data.subscriptions ?? [];
@@ -519,7 +513,7 @@ class CustomersNamespace {
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`customers.upsert failed: ${res.status} ${res.statusText}`);
+    if (!res.ok) throw await apiError(`customers.upsert`, res);
     const payload = (await res.json()) as { customer: CustomerUpsertResult };
     return payload.customer;
   }

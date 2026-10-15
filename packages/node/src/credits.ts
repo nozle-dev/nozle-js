@@ -1,3 +1,4 @@
+import { apiError } from "./errors";
 import type {
   CreditBalance,
   CreditBalances,
@@ -32,7 +33,7 @@ export class CreditsNamespace {
       },
     );
     if (!response.ok) {
-      throw new Error(`credits.getBalance failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`credits.getBalance`, response);
     }
     return response.json() as Promise<CreditBalance>;
   }
@@ -48,7 +49,7 @@ export class CreditsNamespace {
       },
     );
     if (!response.ok) {
-      throw new Error(`credits.listBalances failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`credits.listBalances`, response);
     }
     return response.json() as Promise<CreditBalances>;
   }
@@ -74,7 +75,7 @@ export class CreditsNamespace {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`credits.listOperations failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`credits.listOperations`, response);
     }
     return response.json() as Promise<CreditOperationPage>;
   }
@@ -96,9 +97,7 @@ export class CreditsNamespace {
       },
     );
     if (!response.ok) {
-      throw new Error(
-        `credits.getEntityBalance failed: ${response.status} ${response.statusText}`,
-      );
+      throw await apiError(`credits.getEntityBalance`, response);
     }
     return response.json() as Promise<EntityCreditBalance>;
   }
@@ -113,9 +112,7 @@ export class CreditsNamespace {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(
-        `credits.listEntityBalances failed: ${response.status} ${response.statusText}`,
-      );
+      throw await apiError(`credits.listEntityBalances`, response);
     }
     return response.json() as Promise<EntityCreditBalances>;
   }
@@ -138,9 +135,7 @@ export class CreditsNamespace {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(
-        `credits.listEntityOperations failed: ${response.status} ${response.statusText}`,
-      );
+      throw await apiError(`credits.listEntityOperations`, response);
     }
     return response.json() as Promise<EntityCreditOperationPage>;
   }
@@ -192,7 +187,7 @@ export class CreditsNamespace {
       },
     );
     if (!response.ok) {
-      throw new Error(`credits.${operation} failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`credits.${operation}`, response);
     }
     return response.json() as Promise<EntityCreditTransferResult>;
   }

@@ -1,4 +1,4 @@
-import { NozleApiError } from "./errors";
+import { apiError } from "./errors";
 import type { MarginQueryParams, TrendParams } from "./types";
 
 export class MarginClient {
@@ -26,13 +26,7 @@ export class MarginClient {
     });
 
     if (!res.ok) {
-      throw new NozleApiError(
-        `margin${path}`,
-        res,
-        await Promise.resolve()
-          .then(() => res.json())
-          .catch(() => undefined),
-      );
+      throw await apiError(`margin${path}`, res);
     }
 
     return res.json();

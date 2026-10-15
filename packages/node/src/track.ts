@@ -1,3 +1,4 @@
+import { apiError } from "./errors";
 import { createTransactionId } from "./identifiers";
 import type { TrackOptions } from "./types";
 
@@ -37,7 +38,7 @@ export async function track(
   });
 
   if (!res.ok) {
-    throw new Error(`track failed: ${res.status} ${res.statusText}`);
+    throw await apiError(`track`, res);
   }
 
   return transactionId;

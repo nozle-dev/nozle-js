@@ -1,3 +1,4 @@
+import { apiError } from "./errors";
 import type {
   CustomerEntity,
   CustomerEntityBulkMutationResult,
@@ -23,7 +24,7 @@ export class EntitiesNamespace {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`entities.get failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`entities.get`, response);
     }
     const payload = (await response.json()) as { entity: CustomerEntity };
     return payload.entity;
@@ -51,7 +52,7 @@ export class EntitiesNamespace {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`entities.list failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`entities.list`, response);
     }
     return response.json() as Promise<CustomerEntityPage>;
   }
@@ -82,7 +83,7 @@ export class EntitiesNamespace {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`entities.upsert failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`entities.upsert`, response);
     }
     return response.json() as Promise<CustomerEntityMutationResult>;
   }
@@ -174,7 +175,7 @@ export class EntitiesNamespace {
       },
     );
     if (!response.ok) {
-      throw new Error(`entities.bulkUpsert failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`entities.bulkUpsert`, response);
     }
     return response.json() as Promise<CustomerEntityBulkMutationResult>;
   }

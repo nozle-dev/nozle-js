@@ -1,3 +1,4 @@
+import { apiError } from "./errors";
 import type { CanResult } from "./types";
 
 export async function can(
@@ -21,7 +22,7 @@ export async function can(
   });
 
   if (!res.ok) {
-    throw new Error(`can check failed: ${res.status} ${res.statusText}`);
+    throw await apiError(`can check`, res);
   }
 
   return res.json();

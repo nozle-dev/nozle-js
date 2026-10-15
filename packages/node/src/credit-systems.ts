@@ -1,3 +1,4 @@
+import { apiError } from "./errors";
 import type { CreditSystem } from "./types";
 
 interface CoreCreditSystem {
@@ -38,7 +39,7 @@ export class CreditSystemsNamespace {
         signal: AbortSignal.timeout(this.timeout),
       });
       if (!response.ok) {
-        throw new Error(`creditSystems.list failed: ${response.status} ${response.statusText}`);
+        throw await apiError(`creditSystems.list`, response);
       }
       const data = (await response.json()) as CoreCreditSystemPage;
       systems.push(...(data.credit_systems ?? []).map(normalizeCreditSystem));

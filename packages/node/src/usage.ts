@@ -1,3 +1,4 @@
+import { apiError } from "./errors";
 import type {
   UsageCheckParams,
   UsageCheckResult,
@@ -34,7 +35,7 @@ export class UsageNamespace {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`usage.check failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`usage.check`, response);
     }
     return response.json() as Promise<UsageCheckResult>;
   }
@@ -69,7 +70,7 @@ export class UsageNamespace {
       signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`usage.track failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`usage.track`, response);
     }
     return response.json() as Promise<UsageTrackResult>;
   }
