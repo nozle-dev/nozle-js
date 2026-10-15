@@ -173,14 +173,24 @@ async function readStream(stream: ReadableStream<Uint8Array>): Promise<DetectedU
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let finished = false;
   const line = (text: string) => {
-    if (!text.startsWith("data:")) return;
+    if (finished || !text.startsWith("data:")) return;
     const data = text.slice(5).trim();
-    if (!data || data === "[DONE]") return;
+    // "[DONE]" ends an OpenAI-style stream; nothing after it belongs to the response.
+    if (data === "[DONE]") finished = true;
+    if (!data || finished) return;
     collector.add(parseJson(data));
   };
   for (;;) {
-    const { value, done } = await reader.read();
+    let chunk: ReadableStreamReadResult<Uint8Array>;
+    try {
+      chunk = await reader.read();
+    } catch {
+      // The app aborted the request; usage already seen still counts.
+      break;
+    }
+    const { value, done } = chunk;
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     let end: number;
