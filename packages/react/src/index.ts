@@ -62,14 +62,24 @@ export type {
   PricingPlan,
 } from "./components/pricing/PricingTable.js";
 
+export { planFeatures } from "./components/pricing/plan-features.js";
+export type {
+  CatalogCharge,
+  CatalogCreditGrantRule,
+  CatalogEntitlement,
+  CatalogPrivilege,
+} from "./components/pricing/plan-features.js";
+
 export { PlanCard } from "./components/pricing/PlanCard.js";
-export type { Plan, PlanCardProps } from "./components/pricing/PlanCard.js";
+export type { PlanCardProps } from "./components/pricing/PlanCard.js";
 
 export { PlanComparison } from "./components/pricing/PlanComparison.js";
 export type {
   ComparisonFeature,
   PlanComparisonProps,
 } from "./components/pricing/PlanComparison.js";
+export { comparisonRows } from "./components/pricing/plan-features.js";
+export type { ComparisonRow } from "./components/pricing/plan-features.js";
 
 export { CheckoutButton } from "./components/billing/CheckoutButton.js";
 export type { CheckoutButtonProps } from "./components/billing/CheckoutButton.js";

@@ -7,37 +7,32 @@
 "use client";
 import React from "react";
 
-import type { Plan } from "./PlanCard.js";
+import type { PricingPlan } from "./PricingTable.js";
+import {
+  comparisonRows,
+  formatPlanPrice,
+  intervalLabel,
+  type ComparisonRow,
+} from "./plan-features.js";
 
-export interface ComparisonFeature {
-  key: string;
-  label: string;
-  values: Record<string, string | boolean>;
-}
+export type ComparisonFeature = ComparisonRow;
 
 export interface PlanComparisonProps {
-  plans: Plan[];
-  features: ComparisonFeature[];
+  /** Plans from the public catalog. The rows are built from their entitlements and credit grants. */
+  plans: PricingPlan[];
+  /** Optional. Replaces the rows built from the plans. `values` is keyed by plan code. */
+  features?: ComparisonFeature[];
 }
 
 /**
- * PlanComparison renders a side-by-side feature comparison table.
- *
- * Usage:
- * ```tsx
- * <PlanComparison
- *   plans={plans}
- *   features={[
- *     { key: 'api_calls', label: 'API Calls', values: { starter: '10K', pro: '100K' } },
- *     { key: 'analytics', label: 'Analytics', values: { starter: false, pro: true } },
- *   ]}
- * />
- * ```
+ * PlanComparison renders a side-by-side comparison of catalog plans. A plan that does not have an
+ * entitlement shows a cross, so the table shows the real difference between plans.
  */
 export function PlanComparison({
   plans,
-  features,
+  features: featureOverride,
 }: PlanComparisonProps): React.ReactElement {
+  const features = featureOverride ?? comparisonRows(plans);
   return (
     <div
       style={{
@@ -69,7 +64,7 @@ export function PlanComparison({
             </th>
             {plans.map((plan) => (
               <th
-                key={plan.id}
+                key={plan.code}
                 style={{
                   padding: "0.75rem 1rem",
                   textAlign: "center",
@@ -79,6 +74,14 @@ export function PlanComparison({
                 }}
               >
                 {plan.name}
+                <div
+                  style={{
+                    fontWeight: 400,
+                    color: "var(--nozle-muted-foreground, var(--muted-foreground))",
+                  }}
+                >
+                  {formatPlanPrice(plan.amount_cents, plan.amount_currency)} / {intervalLabel(plan.interval)}
+                </div>
               </th>
             ))}
           </tr>
@@ -96,10 +99,10 @@ export function PlanComparison({
                 {feature.label}
               </td>
               {plans.map((plan) => {
-                const value = feature.values[plan.id];
+                const value = feature.values[plan.code];
                 return (
                   <td
-                    key={plan.id}
+                    key={plan.code}
                     style={{
                       padding: "0.75rem 1rem",
                       textAlign: "center",
