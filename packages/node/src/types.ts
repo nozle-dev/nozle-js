@@ -34,8 +34,10 @@ export interface CanResult {
   feature_type?: string;
   configuration?: Record<string, string>;
   used: number;
-  limit?: number;
-  remaining?: number;
+  /** `null` when the feature has no limit. */
+  limit: number | null;
+  /** `null` when the feature has no limit. */
+  remaining: number | null;
   overage?: boolean;
   economics?: CanEconomics;
   policy?: CanPolicy;
