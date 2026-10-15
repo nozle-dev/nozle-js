@@ -1,5 +1,6 @@
 import { request, type RequestPolicy } from "./http";
 import { can as _can } from "./can";
+import { captureFetch as _captureFetch, type CaptureFetchOptions } from "./capture-fetch";
 import { CreditsNamespace } from "./credits";
 import { CostEventsNamespace } from "./cost-events";
 import { CreditSystemsNamespace } from "./credit-systems";
@@ -8,6 +9,7 @@ import { EntitySubscriptionsNamespace } from "./entity-subscriptions";
 import { apiError } from "./errors";
 import { EventsNamespace } from "./events";
 import { MarginClient } from "./margin";
+import { recordUsage as _recordUsage, type RecordUsageParams } from "./provider-usage";
 import { track as _track } from "./track";
 import { UsageNamespace } from "./usage";
 import type {
@@ -416,6 +418,20 @@ export class Nozle {
       expected_effective_at: params.expectedEffectiveAt,
       quote_id: params.quoteId,
     };
+  }
+
+  /**
+   * Returns a `fetch` that records the token usage of every LLM response it sees. Pass it as the
+   * `fetch` option of the OpenAI or Anthropic SDK, a Vercel AI SDK provider, LangChain, or any
+   * client that accepts one. See {@link CaptureFetchOptions}.
+   */
+  captureFetch(options: CaptureFetchOptions = {}, fetchImpl: typeof fetch = globalThis.fetch): typeof fetch {
+    return _captureFetch(this, options, fetchImpl);
+  }
+
+  /** Records one LLM call's token usage that your code read itself. */
+  recordUsage(params: RecordUsageParams): Promise<void> {
+    return _recordUsage(this, params);
   }
 
   async ping(): Promise<PingResult> {
