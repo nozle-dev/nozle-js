@@ -1,5 +1,6 @@
 export interface NozleConfig {
-  apiKey: string;
+  /** Organization credential. Defaults to the NOZLE_SECRET_KEY environment variable. */
+  apiKey?: string;
   /** Root URL of the Nozle API. Engine calls go to `${host}/engine` and Core calls to `${host}/core`. Defaults to https://api.nozle.app. */
   host?: string;
   /** Engine URL. Overrides the engine address derived from `host`. */

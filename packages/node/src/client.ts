@@ -58,8 +58,10 @@ export class Nozle {
   private readonly timeout: number;
   private subCache = new Map<string, string>();
 
-  constructor(config: NozleConfig) {
-    this.apiKey = config.apiKey;
+  constructor(config: NozleConfig = {}) {
+    const apiKey = config.apiKey ?? (typeof process === "undefined" ? undefined : process.env?.NOZLE_SECRET_KEY);
+    if (apiKey === undefined) throw new Error("Nozle: pass apiKey or set the NOZLE_SECRET_KEY environment variable");
+    this.apiKey = apiKey;
     const host = trimTrailingSlashes(config.host ?? "https://api.nozle.app");
     this.baseUrl = trimTrailingSlashes(config.baseUrl ?? `${host}/engine`);
     this.eventsUrl = trimTrailingSlashes(config.eventsUrl ?? `${host}/core`);

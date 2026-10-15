@@ -27,6 +27,20 @@ describe("Nozle", () => {
     expect(client.eventsUrl).toBe("https://api.nozle.app/core");
   });
 
+  it("reads the key from NOZLE_SECRET_KEY and lets an explicit key win", () => {
+    vi.stubEnv("NOZLE_SECRET_KEY", "sk_env");
+    expect(new Nozle().apiKey).toBe("sk_env");
+    expect(new Nozle({ baseUrl: "https://e.example" }).apiKey).toBe("sk_env");
+    expect(new Nozle({ apiKey: "sk_explicit" }).apiKey).toBe("sk_explicit");
+    vi.unstubAllEnvs();
+  });
+
+  it("throws when no key is passed and NOZLE_SECRET_KEY is unset", () => {
+    vi.stubEnv("NOZLE_SECRET_KEY", undefined);
+    expect(() => new Nozle()).toThrow("NOZLE_SECRET_KEY");
+    vi.unstubAllEnvs();
+  });
+
   it("derives both service URLs from host", () => {
     const client = new Nozle({ apiKey: "sk_test", host: "http://localhost:8888//" });
     expect(client.baseUrl).toBe("http://localhost:8888/engine");
