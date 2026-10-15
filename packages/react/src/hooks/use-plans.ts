@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 import { useBillingContext } from "../provider.js";
+import type {
+  CatalogCharge,
+  CatalogCreditGrantRule,
+  CatalogEntitlement,
+} from "../components/pricing/plan-features.js";
 
 export interface Plan {
   code: string;
@@ -7,6 +12,11 @@ export interface Plan {
   amount_cents: number;
   amount_currency: string;
   interval: string;
+  description?: string | null;
+  /** The public catalog also returns these. They are absent from an older or reduced response. */
+  entitlements?: CatalogEntitlement[];
+  credit_grant_rules?: CatalogCreditGrantRule[];
+  charges?: CatalogCharge[];
 }
 
 export function usePlans() {

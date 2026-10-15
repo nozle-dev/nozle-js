@@ -6,6 +6,14 @@ import {
   type CheckoutResult,
 } from '../../provider.js';
 import { handleCheckoutResult } from '../billing/CheckoutButton.js';
+import {
+  intervalLabel,
+  planFeatures,
+  sortPlansByPrice,
+  type CatalogCharge,
+  type CatalogCreditGrantRule,
+  type CatalogEntitlement,
+} from './plan-features.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -16,12 +24,26 @@ export interface PricingPlan {
   amount_currency: string;
   interval: string;
   description?: string;
+  /** Present in the public catalog. The table turns these into each card's feature list. */
+  entitlements?: CatalogEntitlement[];
+  credit_grant_rules?: CatalogCreditGrantRule[];
+  charges?: CatalogCharge[];
 }
 
 export interface PricingTableProps {
   currentPlanCode?: string;
   plans?: PricingPlan[];
-  features?: string[][];
+  /**
+   * Optional. By default each card lists what its plan gives, read from the catalog. Pass an array
+   * (aligned to the rendered plan order) or an object keyed by plan code to replace the lines of
+   * a plan.
+   */
+  features?: string[][] | Record<string, string[]>;
+  /**
+   * Optional. Orders the plans. By default they are sorted by base price, cheapest first, with custom
+   * (enterprise) plans last.
+   */
+  sort?: (a: PricingPlan, b: PricingPlan) => number;
   onSelect?: (plan: PricingPlan) => void;
   returnUrl?: string;
   onStripeClientSecret?: (clientSecret: string) => void;
@@ -34,6 +56,15 @@ export interface PricingTableProps {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function featureLines(
+  override: PricingTableProps['features'],
+  plan: PricingPlan,
+  index: number,
+): string[] {
+  const given = Array.isArray(override) ? override[index] : override?.[plan.code];
+  return given ?? planFeatures(plan);
+}
 
 const SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', JPY: '¥' };
 
@@ -106,14 +137,6 @@ function Toggle({ isAnnual, onChange }: { isAnnual: boolean; onChange: (v: boole
         </button>
         <button onClick={() => onChange(true)} style={tab(isAnnual)} aria-pressed={isAnnual}>
           Annual
-          <span style={{
-            marginLeft: '6px',
-            fontSize: '0.7rem',
-            fontWeight: 600,
-            color: isAnnual ? C.hl : C.muted,
-          }}>
-            Save 20%
-          </span>
         </button>
       </div>
     </div>
@@ -149,7 +172,7 @@ function Card({
     ? '0 8px 24px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.03)'
     : '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)';
 
-  const interval = plan.interval === 'yearly' ? '/year' : '/month';
+  const interval = `/${intervalLabel(plan.interval)}`;
 
   const handleClick = () => {
     if (isCurrent) return;
@@ -400,6 +423,7 @@ export function PricingTable({
   currentPlanCode,
   plans: propPlans,
   features,
+  sort,
   onSelect,
   returnUrl,
   onStripeClientSecret,
@@ -471,10 +495,13 @@ export function PricingTable({
     }
   }
 
-  const hasAnnual = plans.some(p => p.interval === 'yearly');
+  const ordered = sort
+    ? [...plans].sort(sort)
+    : [...sortPlansByPrice(plans.filter((p) => !isEnterprise(p))), ...plans.filter(isEnterprise)];
+  const hasAnnual = ordered.some(p => p.interval === 'yearly');
   const filtered = showToggle && hasAnnual
-    ? plans.filter(p => p.interval === (isAnnual ? 'yearly' : 'monthly') || isEnterprise(p))
-    : plans;
+    ? ordered.filter(p => p.interval === (isAnnual ? 'yearly' : 'monthly') || isEnterprise(p))
+    : ordered;
 
   if (loading) return <Skeleton />;
 
@@ -500,7 +527,7 @@ export function PricingTable({
           <Card
             key={plan.code}
             plan={plan}
-            features={features?.[i]}
+            features={featureLines(features, plan, i)}
             isCurrent={currentPlan === plan.code}
             isHighlighted={highlightPlan === plan.code}
             isEnt={isEnterprise(plan)}

@@ -147,12 +147,7 @@ describe("merchant checkout components", () => {
     const onSelect = vi.fn();
     render(
       <PlanCard
-        id="pro"
-        name="Pro"
-        monthlyPrice={50}
-        annualPrice={500}
-        features={[]}
-        isAnnual={false}
+        plan={{ code: "pro", name: "Pro", amount_cents: 5000, amount_currency: "USD", interval: "monthly" }}
         isCurrent={false}
         returnUrl="https://merchant.example/card"
         onSelect={onSelect}

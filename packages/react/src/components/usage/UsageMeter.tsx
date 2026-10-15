@@ -18,7 +18,8 @@ export function getUsageMeterColor(percentage: number): string {
 
 export interface UsageMeterProps {
   used: number;
-  limit: number;
+  /** `null` or `undefined` means the feature has no limit. */
+  limit?: number | null;
   label?: string;
   showText?: boolean;
 }
@@ -29,7 +30,8 @@ export function UsageMeter({
   label,
   showText = true,
 }: UsageMeterProps) {
-  const percentage = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+  const unlimited = limit == null;
+  const percentage = !unlimited && limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
   const color = getUsageMeterColor(percentage);
 
   return (
@@ -39,7 +41,7 @@ export function UsageMeter({
           <span>{label}</span>
           {showText && (
             <span style={{ color }}>
-              {used.toLocaleString()} / {limit.toLocaleString()}
+              {used.toLocaleString()} / {unlimited ? "Unlimited" : limit.toLocaleString()}
             </span>
           )}
         </div>

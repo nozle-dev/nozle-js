@@ -7,44 +7,35 @@
 "use client";
 import React from "react";
 
-import type { ReactNode } from "react";
 import type { CreateCheckoutInput } from "../../provider.js";
+import type { PricingPlan } from "./PricingTable.js";
+import { formatPlanPrice, intervalLabel, planFeatures } from "./plan-features.js";
 
-export interface Plan {
-  id: string;
-  name: string;
-  monthlyPrice: number;
-  annualPrice: number;
-  features: string[];
-  description?: string;
-}
-
-export interface PlanCardProps extends Plan {
-  isAnnual: boolean;
+export interface PlanCardProps {
+  /** A plan from the public catalog. Its price and feature lines are read from it. */
+  plan: PricingPlan;
+  /** Optional. Replaces the lines read from the plan. */
+  features?: string[];
   isCurrent: boolean;
   returnUrl?: string;
   onSelect?: (input: CreateCheckoutInput) => void;
-  children?: ReactNode;
 }
 
 /**
- * PlanCard renders a single pricing plan.
+ * PlanCard renders a single pricing plan from the catalog.
  * Highlighted with aria-current="true" when isCurrent=true.
  */
 export function PlanCard({
-  id,
-  name,
-  monthlyPrice,
-  annualPrice,
-  features,
-  description,
-  isAnnual,
+  plan,
+  features: featureOverride,
   isCurrent,
   returnUrl,
   onSelect,
 }: PlanCardProps): React.ReactElement {
-  const price = isAnnual ? annualPrice : monthlyPrice;
-  const interval = isAnnual ? "year" : "month";
+  const { code: id, name, description } = plan;
+  const price = formatPlanPrice(plan.amount_cents, plan.amount_currency);
+  const interval = intervalLabel(plan.interval);
+  const features = featureOverride ?? planFeatures(plan);
 
   return (
     <div
@@ -95,7 +86,7 @@ export function PlanCard({
             color: "var(--nozle-foreground, var(--foreground))",
           }}
         >
-          ${price}
+          {price}
         </span>
         <span
           style={{
