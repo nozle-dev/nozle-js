@@ -1,3 +1,5 @@
+import { request, type RequestPolicy } from "./http";
+import { apiError } from "./errors";
 import type {
   UsageCheckParams,
   UsageCheckResult,
@@ -10,12 +12,12 @@ export class UsageNamespace {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-    private readonly timeout: number,
+    private readonly policy: RequestPolicy,
   ) {}
 
   async check(params: UsageCheckParams): Promise<UsageCheckResult> {
     validateUsageParams(params);
-    const response = await fetch(`${this.baseUrl}/api/v1/usage/check`, {
+    const response = await request(this.policy, `${this.baseUrl}/api/v1/usage/check`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -31,10 +33,9 @@ export class UsageNamespace {
         properties: params.properties ?? {},
         occurred_at: params.occurredAt ?? new Date().toISOString(),
       }),
-      signal: AbortSignal.timeout(this.timeout),
-    });
+    }, { idempotent: true });
     if (!response.ok) {
-      throw new Error(`usage.check failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`usage.check`, response);
     }
     return response.json() as Promise<UsageCheckResult>;
   }
@@ -49,7 +50,7 @@ export class UsageNamespace {
       throw new Error("usage.track idempotencyKey must not exceed 255 bytes");
     }
 
-    const response = await fetch(`${this.baseUrl}/api/v1/usage/track`, {
+    const response = await request(this.policy, `${this.baseUrl}/api/v1/usage/track`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -66,10 +67,9 @@ export class UsageNamespace {
         properties: params.properties ?? {},
         timestamp: params.timestamp ?? new Date().toISOString(),
       }),
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`usage.track failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`usage.track`, response);
     }
     return response.json() as Promise<UsageTrackResult>;
   }

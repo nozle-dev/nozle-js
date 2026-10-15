@@ -1,3 +1,5 @@
+import { request, type RequestPolicy } from "./http";
+import { apiError } from "./errors";
 import { createCostEventId } from "./identifiers";
 import type { CostEventAccepted, CostEventParams } from "./types";
 
@@ -5,7 +7,7 @@ export class CostEventsNamespace {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-    private readonly timeout: number,
+    private readonly policy: RequestPolicy,
   ) {}
 
   createCostEventId(): string {
@@ -24,7 +26,7 @@ export class CostEventsNamespace {
     }
 
     const costEventId = params.costEventId?.trim() || createCostEventId();
-    const response = await fetch(`${this.baseUrl}/api/v1/cost-events`, {
+    const response = await request(this.policy, `${this.baseUrl}/api/v1/cost-events`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -44,11 +46,10 @@ export class CostEventsNamespace {
         properties: params.properties ?? {},
         ...(params.timestamp !== undefined && { timestamp: params.timestamp }),
       }),
-      signal: AbortSignal.timeout(this.timeout),
-    });
+    }, { idempotent: true });
 
     if (!response.ok) {
-      throw new Error(`costEvents.track failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`costEvents.track`, response);
     }
 
     const body = (await response.json()) as CostEventAccepted;

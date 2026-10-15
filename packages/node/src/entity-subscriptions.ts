@@ -1,3 +1,5 @@
+import { request, type RequestPolicy } from "./http";
+import { apiError } from "./errors";
 import type {
   CheckoutResult,
   EntitySubscription,
@@ -13,7 +15,7 @@ export class EntitySubscriptionsNamespace {
   constructor(
     private readonly coreUrl: string,
     private readonly apiKey: string,
-    private readonly timeout: number,
+    private readonly policy: RequestPolicy,
   ) {}
 
   async ensure(customerId: string, entityId: string): Promise<EntitySubscription> {
@@ -29,14 +31,13 @@ export class EntitySubscriptionsNamespace {
   async list(customerId: string): Promise<EntitySubscriptionList> {
     this.requireSecret("entitySubscriptions.list");
     requireValue(customerId, "customerId", "entitySubscriptions.list");
-    const response = await fetch(
+    const response = await request(this.policy, 
       `${this.coreUrl}/api/v1/customers/${encodeURIComponent(customerId)}/entity-subscriptions`,
       {
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
-    if (!response.ok) throw requestError("entitySubscriptions.list", response);
+    if (!response.ok) throw await apiError("entitySubscriptions.list", response);
     return response.json() as Promise<EntitySubscriptionList>;
   }
 
@@ -74,7 +75,7 @@ export class EntitySubscriptionsNamespace {
       entityIds.add(entityId);
     }
 
-    const response = await fetch(
+    const response = await request(this.policy, 
       `${this.coreUrl}/api/v1/customers/${encodeURIComponent(customerId)}/entity-subscriptions/checkout`,
       {
         method: "POST",
@@ -93,10 +94,9 @@ export class EntitySubscriptionsNamespace {
             })),
           },
         }),
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
-    if (!response.ok) throw requestError(operation, response);
+    if (!response.ok) throw await apiError(operation, response);
     const payload = (await response.json()) as {
       entity_subscription_checkout: EntitySubscriptionCheckoutManyResult;
     };
@@ -119,7 +119,7 @@ export class EntitySubscriptionsNamespace {
     const operation = "entitySubscriptions.cancel";
     this.validatePath(customerId, entityId, operation);
     validateIdempotencyKey(params.idempotencyKey, operation);
-    const response = await fetch(`${this.entityPath(customerId, entityId)}/cancel`, {
+    const response = await request(this.policy, `${this.entityPath(customerId, entityId)}/cancel`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -132,21 +132,19 @@ export class EntitySubscriptionsNamespace {
         refund_mode: params.refundMode,
         final_invoice_action: params.finalInvoiceAction,
       }),
-      signal: AbortSignal.timeout(this.timeout),
     });
-    if (!response.ok) throw requestError(operation, response);
+    if (!response.ok) throw await apiError(operation, response);
     return response.json() as Promise<EntitySubscriptionCancelResult>;
   }
 
   async remove(customerId: string, entityId: string): Promise<void> {
     const operation = "entitySubscriptions.remove";
     this.validatePath(customerId, entityId, operation);
-    const response = await fetch(this.entityPath(customerId, entityId), {
+    const response = await request(this.policy, this.entityPath(customerId, entityId), {
       method: "DELETE",
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
-    if (!response.ok) throw requestError(operation, response);
+    if (!response.ok) throw await apiError(operation, response);
   }
 
   private async change(
@@ -159,7 +157,7 @@ export class EntitySubscriptionsNamespace {
     this.validatePath(customerId, entityId, operation);
     requireValue(params.planCode, "planCode", operation);
     if (params.idempotencyKey) validateIdempotencyKey(params.idempotencyKey, operation);
-    const response = await fetch(`${this.entityPath(customerId, entityId)}/${action}`, {
+    const response = await request(this.policy, `${this.entityPath(customerId, entityId)}/${action}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -172,9 +170,8 @@ export class EntitySubscriptionsNamespace {
           register_mandate: params.registerMandate,
         billing_time: params.billingTime,
       }),
-      signal: AbortSignal.timeout(this.timeout),
     });
-    if (!response.ok) throw requestError(operation, response);
+    if (!response.ok) throw await apiError(operation, response);
     return response.json() as Promise<CheckoutResult>;
   }
 
@@ -184,12 +181,11 @@ export class EntitySubscriptionsNamespace {
     entityId: string,
     operation: string,
   ): Promise<EntitySubscription> {
-    const response = await fetch(this.entityPath(customerId, entityId), {
+    const response = await request(this.policy, this.entityPath(customerId, entityId), {
       method,
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
-    if (!response.ok) throw requestError(operation, response);
+    if (!response.ok) throw await apiError(operation, response);
     const payload = (await response.json()) as { entity_subscription: EntitySubscription };
     return payload.entity_subscription;
   }
@@ -222,6 +218,3 @@ function validateIdempotencyKey(key: string, operation: string): void {
   }
 }
 
-function requestError(operation: string, response: Response): Error {
-  return new Error(`${operation} failed: ${response.status} ${response.statusText}`);
-}

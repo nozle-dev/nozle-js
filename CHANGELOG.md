@@ -5,8 +5,13 @@
 ### Added
 
 - Node.js: `apiKey` is optional. When it is not passed, `new Nozle()` reads the `NOZLE_SECRET_KEY` environment variable and throws if that is not set either. An explicit `apiKey` is used as before.
-
 - Node.js: `host` option (default `https://api.nozle.app`). It fills in `baseUrl` (`${host}/engine`) and `eventsUrl` (`${host}/core`) when they are not given. `baseUrl` and `eventsUrl` keep their meaning and win over `host`.
+- Node.js: opt-in retries. Set `maxRetries` (default `0`, no retries) and optionally `retryDelayMs` (default 500, doubling up to 10 seconds, or the `Retry-After` header when sent) on `new Nozle({...})`. Network errors, timeouts, `429` and `5xx` are retried, only for requests that are safe to repeat: reads, calls that carry an `Idempotency-Key` (such as `usage.track`), event, cost event and customer writes, and the read-only `usage.check` and subscription transition preview. `subscribe()`, `checkout()`, `checkAndDeduct()` and other writes without a key are never retried. The `timeout` option now applies to each attempt.
+
+### Changed
+
+- Every call that gets a non-2xx response now throws `NozleApiError` (`status`, `code`, `errorDetails`, `hasCode()`), not only checkout and margin calls. This covers `track`, `usage.track`, `usage.check`, `can`, `costEvents.track`, `subscribe`, `cancelSubscription`, `ping`, `plans`, `checkAndDeduct`, the subscription lookup, `customers`, `creditSystems`, `credits`, `entities` and `entitySubscriptions`. The message keeps its `<operation> failed: <status> <statusText>` form, and the class still extends `Error`, so existing `catch` code keeps working; the subscription lookup message now carries the status text too.
+- `NozleApiError` adds `requestId` (the `X-Request-Id` response header, which Core sends and the Engine does not yet) and `retryAfter` (seconds, from `Retry-After`).
 
 ## Node.js 0.12.0 — 2026-10-14
 

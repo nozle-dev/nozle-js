@@ -7,7 +7,12 @@ export interface NozleConfig {
   baseUrl?: string;
   /** Core billing resources and subscription discovery. Overrides the Core address derived from `host`. */
   eventsUrl?: string;
+  /** Per-attempt timeout in milliseconds. Default 10000. */
   timeout?: number;
+  /** Extra attempts after a network error, timeout, 429 or 5xx. Default 0: no retries. Only requests that are safe to repeat are retried: reads, calls with an idempotency key, and event, cost event and customer writes. */
+  maxRetries?: number;
+  /** First retry delay in milliseconds, doubled each retry up to 10 seconds, or the `Retry-After` header when sent. Default 500. */
+  retryDelayMs?: number;
 }
 
 export interface TrackOptions {
