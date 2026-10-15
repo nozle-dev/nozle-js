@@ -39,6 +39,10 @@ export class UsageNamespace {
     return response.json() as Promise<UsageCheckResult>;
   }
 
+  // Timestamps the SDK filled in, by idempotency key, so a retry of the same key sends the same request.
+  // shortcut: lives in this client's memory, so a retry from another process must pass `timestamp`; keeps the last 1000 keys.
+  private readonly generatedTimestamps = new Map<string, string>();
+
   async track(params: UsageTrackParams, options: UsageTrackOptions): Promise<UsageTrackResult> {
     requireSecretKey(this.apiKey, "usage.track");
     validateUsageParams(params);
@@ -64,7 +68,7 @@ export class UsageNamespace {
           credit_system_code: params.creditSystemCode,
         }),
         properties: params.properties ?? {},
-        timestamp: params.timestamp ?? new Date().toISOString(),
+        timestamp: params.timestamp ?? this.timestampFor(options.idempotencyKey),
       }),
       signal: AbortSignal.timeout(this.timeout),
     });
@@ -72,6 +76,17 @@ export class UsageNamespace {
       throw new Error(`usage.track failed: ${response.status} ${response.statusText}`);
     }
     return response.json() as Promise<UsageTrackResult>;
+  }
+
+  private timestampFor(idempotencyKey: string): string {
+    const known = this.generatedTimestamps.get(idempotencyKey);
+    if (known) return known;
+    const generated = new Date().toISOString();
+    this.generatedTimestamps.set(idempotencyKey, generated);
+    if (this.generatedTimestamps.size > 1000) {
+      this.generatedTimestamps.delete(this.generatedTimestamps.keys().next().value as string);
+    }
+    return generated;
   }
 }
 
