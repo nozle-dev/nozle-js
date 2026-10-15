@@ -15,6 +15,8 @@ export { wrapAnthropic } from "./wrap-anthropic";
 export { normalizeOpenAIUsage, normalizeAnthropicUsage, normalizeGeminiUsage, detectUsage } from "./provider-usage";
 export type { ProviderTokenType, ProviderTokenUsage, ProviderUsageFormat, DetectedUsage, RecordUsageParams } from "./provider-usage";
 export { captureFetch } from "./capture-fetch";
+export { createBillingHandler, BILLING_ROUTES } from "./billing-handler";
+export type { BillingHandlerOptions } from "./billing-handler";
 export type { CaptureFetchOptions, CaptureRequest } from "./capture-fetch";
 export type {
   NozleConfig,
@@ -97,4 +99,6 @@ export type {
   UsageDeduction,
   UsageCheckResult,
   UsageTrackResult,
+  CoreSubscription,
+  CustomerUsage,
 } from "./types";

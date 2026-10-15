@@ -779,3 +779,9 @@ export interface UsageTrackResult {
   reason?: string;
   deductions?: UsageDeduction[];
 }
+
+/** One subscription as Core returns it (`GET /subscriptions`). */
+export type CoreSubscription = import("./generated/openapi").components["schemas"]["SubscriptionObject"];
+
+/** A customer's usage for one billing period (Core `current_usage`, or one `past_usage` period). */
+export type CustomerUsage = import("./generated/openapi").components["schemas"]["CustomerUsageObject"];

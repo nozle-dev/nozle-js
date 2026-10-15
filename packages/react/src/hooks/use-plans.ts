@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useBillingContext } from "../provider.js";
 import type {
   CatalogCharge,
@@ -19,44 +19,28 @@ export interface Plan {
   charges?: CatalogCharge[];
 }
 
+/** The public plan catalog, read with the publishable key and cached by TanStack Query. */
 export function usePlans() {
-  const { client } = useBillingContext();
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-    setPlans([]);
-    if (!client) {
-      setIsLoading(false);
-      return;
-    }
-
-    void client
-      .catalogFetch("/api/v1/plans")
-      .then(async (response) => {
+  const { client, queryClient } = useBillingContext();
+  const query = useQuery(
+    {
+      queryKey: ["nozle", "plans", client.baseUrl, client.publishableKey],
+      queryFn: async ({ signal }) => {
+        const response = await client.catalogFetch("/api/v1/plans", { signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = (await response.json()) as { plans?: Plan[] };
-        if (!cancelled) setPlans(data.plans ?? []);
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) {
-          setError(
-            cause instanceof Error ? cause : new Error("Failed to load plans"),
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [client]);
-
-  return { plans, isLoading, error };
+        return data.plans ?? [];
+      },
+      staleTime: 5 * 60_000,
+      // The pricing page shows a load error at once; the app can call refetch().
+      retry: false,
+    },
+    queryClient,
+  );
+  return {
+    plans: query.data ?? [],
+    isLoading: query.isPending,
+    error: (query.error as Error | null) ?? null,
+    refetch: query.refetch,
+  };
 }

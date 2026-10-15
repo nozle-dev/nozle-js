@@ -4,6 +4,9 @@
 
 ### Added
 
+- React: customer billing hooks built on TanStack Query: `useSubscription`, `useEntitlement(featureCode)`, `useCreditBalance(creditSystemCode?)`, `useCreditHistory()` (paged, `operations` ready for `CreditHistory`), `useUsage({ period })` (current period for `UsageBreakdown`, past periods for `UsageTrend`), `useUpgradePreview(planCode)` and `useBillingRefresh()`. They read your backend route set as `BillingProvider billingEndpoint` (with `billingHeaders` for a CSRF token), so the browser holds no secret key and sees only the signed-in customer. `BillingProvider` takes an optional `queryClient` to share your app's cache; the hooks pass their client explicitly and never replace your `QueryClientProvider`. Failed requests throw `BillingRequestError` (`status`, `code`, `requestId`); a 4xx is not retried.
+- Node.js: `createBillingHandler(nozle, { getCustomerId })` returns a web-standard `(request) => Response` handler that serves those hooks (routes `subscription`, `entitlement`, `credits`, `credit-history`, `usage`, `preview`) with your secret key. The customer always comes from `getCustomerId`, never from the request. Works in Next.js route handlers, Hono, Remix, Bun and Deno.
+- Node.js: `getSubscriptions(customerId)`, `currentUsage(customerId, { subscriptionId? })` and `pastUsage(customerId, { subscriptionId?, periods? })` read Core subscriptions and usage; their types (`CoreSubscription`, `CustomerUsage`) come from the OpenAPI spec.
 - Node.js: `apiKey` is optional. When it is not passed, `new Nozle()` reads the `NOZLE_SECRET_KEY` environment variable and throws if that is not set either. An explicit `apiKey` is used as before.
 - Node.js: `host` option (default `https://api.nozle.app`). It fills in `baseUrl` (`${host}/engine`) and `eventsUrl` (`${host}/core`) when they are not given. `baseUrl` and `eventsUrl` keep their meaning and win over `host`.
 - Node.js: opt-in retries. Set `maxRetries` (default `0`, no retries) and optionally `retryDelayMs` (default 500, doubling up to 10 seconds, or the `Retry-After` header when sent) on `new Nozle({...})`. Network errors, timeouts, `429` and `5xx` are retried, only for requests that are safe to repeat: reads, calls that carry an `Idempotency-Key` (such as `usage.track`), event, cost event and customer writes, and the read-only `usage.check` and subscription transition preview. `subscribe()`, `checkout()`, `checkAndDeduct()` and other writes without a key are never retried. The `timeout` option now applies to each attempt.
@@ -19,6 +22,7 @@
 
 ### Breaking
 
+- React: `@tanstack/react-query` (v5) is a peer dependency. `usePlans` uses it and keeps its return shape, plus `refetch`.
 - React: `PlanCard` takes `plan` (a catalog plan) with `isCurrent`, `returnUrl`, `onSelect` and the optional `features`. It no longer takes `id`, `name`, `monthlyPrice`, `annualPrice`, `description`, `isAnnual` or `children`, and the `Plan` type export is removed.
 - React: `PlanComparison` takes `plans` (catalog plans) and the optional `features`. A plan that lacks an entitlement shows a cross. `features` rows are keyed by plan `code`, not `id`.
 

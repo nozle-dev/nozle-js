@@ -37,8 +37,10 @@ export {
   useBillingContext,
   useOptionalBillingContext,
   useNozleClient,
+  BillingRequestError,
 } from "./provider.js";
 export type {
+  BillingFetch,
   BillingContextValue,
   BillingProviderProps,
   CheckoutResult,
@@ -51,6 +53,16 @@ export type {
 } from "./provider.js";
 
 export { usePlans } from "./hooks/use-plans.js";
+export {
+  useSubscription,
+  useEntitlement,
+  useCreditBalance,
+  useCreditHistory,
+  useUsage,
+  useUpgradePreview,
+  useBillingRefresh,
+} from "./hooks/use-billing.js";
+export type { BillingSubscription, EntitlementResult, UpgradePreview } from "./hooks/use-billing.js";
 export type { Plan as CatalogPlan } from "./hooks/use-plans.js";
 
 export { useCheckout as useCheckoutSession } from "./hooks/use-checkout.js";

@@ -15,6 +15,8 @@ import { UsageNamespace } from "./usage";
 import type {
   NozleConfig,
   CanResult,
+  CoreSubscription,
+  CustomerUsage,
   TrackOptions,
   Plan,
   CheckoutResult,
@@ -456,6 +458,47 @@ export class Nozle {
     });
     if (!res.ok) throw await apiError(`checkAndDeduct`, res);
     return res.json();
+  }
+
+  /** The customer's active subscriptions, from Core. */
+  async getSubscriptions(customerId: string): Promise<CoreSubscription[]> {
+    if (!this.apiKey.startsWith("sk_")) throw new Error("getSubscriptions requires a secret key");
+    if (!customerId.trim()) throw new Error("getSubscriptions requires customerId");
+    const res = await request(this.policy,
+      `${this.eventsUrl}/api/v1/subscriptions?external_customer_id=${encodeURIComponent(customerId)}&status[]=active`,
+      { headers: { Authorization: `Bearer ${this.apiKey}` } },
+    );
+    if (!res.ok) throw await apiError("getSubscriptions", res);
+    return ((await res.json()) as { subscriptions?: CoreSubscription[] }).subscriptions ?? [];
+  }
+
+  /** Usage of the current billing period. Without `subscriptionId`, the one active subscription is used. */
+  async currentUsage(customerId: string, options: { subscriptionId?: string } = {}): Promise<CustomerUsage> {
+    if (!this.apiKey.startsWith("sk_")) throw new Error("currentUsage requires a secret key");
+    const subscriptionId = options.subscriptionId ?? (await this.resolveSubscription(customerId));
+    const res = await request(this.policy,
+      `${this.eventsUrl}/api/v1/customers/${encodeURIComponent(customerId)}/current_usage?external_subscription_id=${encodeURIComponent(subscriptionId)}`,
+      { headers: { Authorization: `Bearer ${this.apiKey}` } },
+    );
+    if (!res.ok) throw await apiError("currentUsage", res);
+    return ((await res.json()) as { customer_usage: CustomerUsage }).customer_usage;
+  }
+
+  /** Usage of past billing periods, newest first. `periods` limits how many (Core default otherwise). */
+  async pastUsage(
+    customerId: string,
+    options: { subscriptionId?: string; periods?: number } = {},
+  ): Promise<CustomerUsage[]> {
+    if (!this.apiKey.startsWith("sk_")) throw new Error("pastUsage requires a secret key");
+    const subscriptionId = options.subscriptionId ?? (await this.resolveSubscription(customerId));
+    const query = new URLSearchParams({ external_subscription_id: subscriptionId });
+    if (options.periods !== undefined) query.set("periods_count", String(options.periods));
+    const res = await request(this.policy,
+      `${this.eventsUrl}/api/v1/customers/${encodeURIComponent(customerId)}/past_usage?${query}`,
+      { headers: { Authorization: `Bearer ${this.apiKey}` } },
+    );
+    if (!res.ok) throw await apiError("pastUsage", res);
+    return ((await res.json()) as { usage_periods?: CustomerUsage[] }).usage_periods ?? [];
   }
 
   private async resolveSubscription(customerId: string): Promise<string> {

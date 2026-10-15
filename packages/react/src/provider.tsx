@@ -4,8 +4,10 @@ import React, {
   createContext,
   useContext,
   useMemo,
+  useState,
   type ReactNode,
 } from "react";
+import { QueryClient } from "@tanstack/react-query";
 
 export interface CheckoutSubscriptionResult {
   external_entity_id?: string;
@@ -186,11 +188,66 @@ function createClient(publishableKey: string, baseUrl: string): NozleClient {
   };
 }
 
+/** A failed request to your billing endpoint. `code` is the error code the endpoint returned. */
+export class BillingRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | undefined,
+    readonly requestId?: string,
+  ) {
+    super(`Billing request failed: ${status}${code ? ` ${code}` : ""}`);
+    this.name = "BillingRequestError";
+  }
+}
+
+export type BillingFetch = <T>(route: string, params?: Record<string, string | number | undefined>) => Promise<T>;
+
 export interface BillingContextValue {
   client: NozleClient;
   createCheckout?: CreateCheckout;
   verifyCheckout?: VerifyCheckout;
   getCheckoutStatus?: GetCheckoutStatus;
+  /** The query client the billing hooks use: the `queryClient` prop, or one the provider made. */
+  queryClient: QueryClient;
+  /** Reads a route of your billing endpoint; undefined when `billingEndpoint` is not set. */
+  billingFetch?: BillingFetch;
+  billingEndpoint?: string;
+}
+
+function createBillingFetch(
+  endpoint: string,
+  headers?: () => HeadersInit | Promise<HeadersInit>,
+): BillingFetch {
+  const base = endpoint.replace(/\/+$/, "");
+  return async <T,>(route: string, params: Record<string, string | number | undefined> = {}) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== "") query.set(key, String(value));
+    }
+    const search = query.toString();
+    const response = await fetch(`${base}/${route}${search ? `?${search}` : ""}`, {
+      credentials: "same-origin",
+      headers: { Accept: "application/json", ...(headers ? await headers() : {}) },
+    });
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as { code?: string; request_id?: string };
+      throw new BillingRequestError(response.status, body.code, body.request_id);
+    }
+    return (await response.json()) as T;
+  };
+}
+
+function createQueryClient(): QueryClient {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 30_000,
+        // Retry only failures that may pass on a second try; a 4xx will not.
+        retry: (count, error) =>
+          count < 2 && !(error instanceof BillingRequestError && error.status < 500),
+      },
+    },
+  });
 }
 
 export const BillingContext = createContext<BillingContextValue | null>(null);
@@ -201,6 +258,20 @@ export interface BillingProviderProps {
   verifyCheckout?: VerifyCheckout;
   getCheckoutStatus?: GetCheckoutStatus;
   baseUrl?: string;
+  /**
+   * Path of your backend route that serves the customer hooks (`useSubscription`,
+   * `useEntitlement`, `useCreditBalance`, `useCreditHistory`, `useUsage`, `useUpgradePreview`),
+   * for example `/api/nozle`. Serve it with `createBillingHandler` from `@nozle-js/node`.
+   */
+  billingEndpoint?: string;
+  /** Extra headers for billing endpoint requests, such as a CSRF token. */
+  billingHeaders?: () => HeadersInit | Promise<HeadersInit>;
+  /**
+   * Your app's TanStack Query client, to share its cache and devtools. Without it the provider
+   * makes its own. The hooks pass their client explicitly, so they never use or replace a
+   * `QueryClientProvider` of your app.
+   */
+  queryClient?: QueryClient;
   children: ReactNode;
 }
 
@@ -210,6 +281,9 @@ export function BillingProvider({
   verifyCheckout,
   getCheckoutStatus,
   baseUrl = "https://api.nozle.app/engine",
+  billingEndpoint,
+  billingHeaders,
+  queryClient,
   children,
 }: BillingProviderProps): React.ReactElement {
   if (!publishableKey.startsWith("pk_")) {
@@ -222,9 +296,23 @@ export function BillingProvider({
     () => createClient(publishableKey, baseUrl),
     [publishableKey, baseUrl],
   );
+  const [ownQueryClient] = useState(createQueryClient);
+  const activeQueryClient = queryClient ?? ownQueryClient;
+  const billingFetch = useMemo(
+    () => (billingEndpoint ? createBillingFetch(billingEndpoint, billingHeaders) : undefined),
+    [billingEndpoint, billingHeaders],
+  );
   const contextValue = useMemo(
-    () => ({ client, createCheckout, verifyCheckout, getCheckoutStatus }),
-    [client, createCheckout, verifyCheckout, getCheckoutStatus],
+    () => ({
+      client,
+      createCheckout,
+      verifyCheckout,
+      getCheckoutStatus,
+      queryClient: activeQueryClient,
+      billingFetch,
+      billingEndpoint,
+    }),
+    [client, createCheckout, verifyCheckout, getCheckoutStatus, activeQueryClient, billingFetch, billingEndpoint],
   );
 
   return React.createElement(
