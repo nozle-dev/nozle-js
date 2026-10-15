@@ -120,10 +120,11 @@ export {
 } from "./components/usage/UsageMeter.js";
 export type { UsageMeterProps } from "./components/usage/UsageMeter.js";
 
-export { UsageDashboard } from "./components/usage/UsageDashboard.js";
+export { UsageDashboard, usageItems } from "./components/usage/UsageDashboard.js";
 export type {
   UsageDashboardProps,
   UsageDashboardFeature,
+  UsageResult,
 } from "./components/usage/UsageDashboard.js";
 
 export { UsageAlert } from "./components/usage/UsageAlert.js";
@@ -150,3 +151,16 @@ export type {
   VerifyCheckout,
   GetCheckoutStatus,
 } from "./provider.js";
+
+export { CreditBalance } from "./components/credits/CreditBalance.js";
+export type {
+  CreditBalanceData,
+  CreditBalanceProps,
+  CreditBalanceSource,
+} from "./components/credits/CreditBalance.js";
+
+export { CreditHistory } from "./components/credits/CreditHistory.js";
+export type {
+  CreditHistoryProps,
+  CreditOperationData,
+} from "./components/credits/CreditHistory.js";

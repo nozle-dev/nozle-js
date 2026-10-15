@@ -1,0 +1,86 @@
+"use client";
+
+import React from "react";
+import { formatDecimalString } from "../../core/decimal.js";
+
+/** The fields of the SDK's credit operation (`nozle.credits.operations`) that this component reads. */
+export interface CreditOperationData {
+  id: string;
+  type: "consume" | "grant" | "adjustment" | "expire" | "revoke" | "refund" | "transfer";
+  status: "succeeded" | "denied" | "reversed";
+  credit_amount: string;
+  feature_code: string | null;
+  occurred_at: string;
+}
+
+export interface CreditHistoryProps {
+  operations?: CreditOperationData[];
+  isLoading?: boolean;
+  error?: Error | string | null;
+  emptyMessage?: string;
+  /** When true a "Load more" button is shown. Fetch the next page with the SDK's `next_cursor`. */
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+}
+
+const TYPE_LABELS: Record<CreditOperationData["type"], string> = {
+  consume: "Used",
+  grant: "Granted",
+  adjustment: "Adjustment",
+  expire: "Expired",
+  revoke: "Revoked",
+  refund: "Refunded",
+  transfer: "Transfer",
+};
+
+const border = "1px solid var(--nozle-border, var(--border))";
+const muted = "var(--nozle-muted-foreground, var(--muted-foreground))";
+const cell = { padding: "0.5rem 0.75rem", borderBottom: border, textAlign: "left" as const };
+
+function when(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+}
+
+export function CreditHistory({
+  operations = [],
+  isLoading = false,
+  error = null,
+  emptyMessage = "No credit activity yet.",
+  hasMore = false,
+  onLoadMore,
+}: CreditHistoryProps): React.ReactElement {
+  if (error) return <p role="alert">{typeof error === "string" ? error : error.message}</p>;
+  if (isLoading && operations.length === 0) return <div role="status" aria-label="Loading credit history" style={{ height: 120, borderRadius: 8, background: "var(--nozle-border, var(--border))" }} />;
+  if (operations.length === 0) return <p role="status">{emptyMessage}</p>;
+
+  return (
+    <div style={{ overflowX: "auto", color: "var(--nozle-foreground, var(--foreground))" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
+        <thead>
+          <tr>
+            {["When", "Type", "Feature", "Credits", "Status"].map((heading) => (
+              <th key={heading} style={{ ...cell, color: muted, fontWeight: 500 }}>{heading}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {operations.map((operation) => (
+            <tr key={operation.id}>
+              <td style={cell}>{when(operation.occurred_at)}</td>
+              <td style={cell}>{TYPE_LABELS[operation.type] ?? operation.type}</td>
+              <td style={cell}>{operation.feature_code ?? "—"}</td>
+              <td style={cell}>{formatDecimalString(operation.credit_amount)}</td>
+              <td style={{ ...cell, color: operation.status === "succeeded" ? undefined : muted }}>{operation.status}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {hasMore && onLoadMore && (
+        <button type="button" onClick={onLoadMore} disabled={isLoading} style={{ marginTop: "0.75rem" }}>
+          {isLoading ? "Loading…" : "Load more"}
+        </button>
+      )}
+    </div>
+  );
+}

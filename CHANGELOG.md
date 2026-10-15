@@ -7,6 +7,8 @@
 - React: `PricingTable`, `PlanCard` and `PlanComparison` read what each plan gives from the public catalog: entitlements, credit grants and the usage prices of every charge model except `custom` and `dynamic`. `PricingTable` accepts an optional `features` (an array aligned to the rendered plans, or an object keyed by plan code), `PlanCard` an optional `features` list and `PlanComparison` optional `features` rows. When passed, they replace the generated lines.
 - React: `planFeatures(plan)` and `comparisonRows(plans)` return the same lines and rows for your own layout. The `CatalogEntitlement`, `CatalogCreditGrantRule`, `CatalogCharge`, `CatalogPrivilege` and `ComparisonRow` types are exported, and `CatalogPlan` and `PricingPlan` declare the optional `entitlements`, `credit_grant_rules` and `charges` fields.
 
+- React: `CreditBalance` and `CreditHistory` render the SDK's credit balance and credit operations (`CreditBalanceData`, `CreditOperationData`), each with loading, error and empty states; `CreditHistory` has a load-more button for the SDK's `next_cursor`. `usageItems(entitlements, results)` builds `UsageDashboard` rows from a plan's metered entitlements and `can()` results. `UsageDashboard` takes `error` and `emptyMessage`, and `UsageMeter` and `UsageDashboard` accept a `null` or missing `limit` and show `Unlimited`.
+
 ### Breaking
 
 - React: `PlanCard` takes `plan` (a catalog plan) with `isCurrent`, `returnUrl`, `onSelect` and the optional `features`. It no longer takes `id`, `name`, `monthlyPrice`, `annualPrice`, `description`, `isAnnual` or `children`, and the `Plan` type export is removed.
