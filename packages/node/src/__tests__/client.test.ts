@@ -27,6 +27,22 @@ describe("Nozle", () => {
     expect(client.eventsUrl).toBe("https://api.nozle.app/core");
   });
 
+  it("derives both service URLs from host", () => {
+    const client = new Nozle({ apiKey: "sk_test", host: "http://localhost:8888//" });
+    expect(client.baseUrl).toBe("http://localhost:8888/engine");
+    expect(client.eventsUrl).toBe("http://localhost:8888/core");
+  });
+
+  it("lets baseUrl and eventsUrl override the host", () => {
+    const client = new Nozle({
+      apiKey: "sk_test",
+      host: "http://localhost:8888",
+      baseUrl: "https://engine.example",
+    });
+    expect(client.baseUrl).toBe("https://engine.example");
+    expect(client.eventsUrl).toBe("http://localhost:8888/core");
+  });
+
   it("strips trailing slashes", () => {
     const client = new Nozle({
       apiKey: "sk_test",

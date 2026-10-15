@@ -60,8 +60,9 @@ export class Nozle {
 
   constructor(config: NozleConfig) {
     this.apiKey = config.apiKey;
-    this.baseUrl = trimTrailingSlashes(config.baseUrl ?? "https://api.nozle.app/engine");
-    this.eventsUrl = trimTrailingSlashes(config.eventsUrl ?? "https://api.nozle.app/core");
+    const host = trimTrailingSlashes(config.host ?? "https://api.nozle.app");
+    this.baseUrl = trimTrailingSlashes(config.baseUrl ?? `${host}/engine`);
+    this.eventsUrl = trimTrailingSlashes(config.eventsUrl ?? `${host}/core`);
     this.timeout = config.timeout ?? 10_000;
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.timeout);
     this.events = new EventsNamespace();
