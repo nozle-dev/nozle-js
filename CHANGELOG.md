@@ -13,6 +13,10 @@
 - Every call that gets a non-2xx response now throws `NozleApiError` (`status`, `code`, `errorDetails`, `hasCode()`), not only checkout and margin calls. This covers `track`, `usage.track`, `usage.check`, `can`, `costEvents.track`, `subscribe`, `cancelSubscription`, `ping`, `plans`, `checkAndDeduct`, the subscription lookup, `customers`, `creditSystems`, `credits`, `entities` and `entitySubscriptions`. The message keeps its `<operation> failed: <status> <statusText>` form, and the class still extends `Error`, so existing `catch` code keeps working; the subscription lookup message now carries the status text too.
 - `NozleApiError` adds `requestId` (the `X-Request-Id` response header, which Core sends and the Engine does not yet) and `retryAfter` (seconds, from `Retry-After`).
 
+### Fixed
+
+- `usage.track()` reuses the timestamp it filled in when the same idempotency key is sent again on the same client, so a retry no longer fails with 409 `idempotency_key_reused`. The client remembers the last 1000 keys; a retry from another process or after a restart must pass `timestamp`.
+
 ## Node.js 0.12.0 — 2026-10-14
 
 ### Added

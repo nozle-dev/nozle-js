@@ -904,6 +904,32 @@ describe("Nozle", () => {
       });
     });
 
+    it("reuses the generated timestamp when the same idempotency key is retried", async () => {
+      vi.useFakeTimers();
+      try {
+        fetchMock.mockImplementation(async () => jsonResponse({ allowed: true, operation_id: "op", remaining: "1" }));
+        const client = new Nozle({ apiKey: "sk_test" });
+        const params = { customerId: "acme", featureCode: "emails" };
+
+        vi.setSystemTime(new Date("2026-10-15T10:00:00.000Z"));
+        await client.usage.track(params, { idempotencyKey: "k1" });
+        vi.setSystemTime(new Date("2026-10-15T10:00:05.000Z"));
+        await client.usage.track(params, { idempotencyKey: "k1" });
+        await client.usage.track(params, { idempotencyKey: "k2" });
+        await client.usage.track({ ...params, timestamp: "2026-01-01T00:00:00Z" }, { idempotencyKey: "k3" });
+
+        const stamps = fetchMock.mock.calls.map(([, options]) => JSON.parse(options.body).timestamp);
+        expect(stamps).toEqual([
+          "2026-10-15T10:00:00.000Z",
+          "2026-10-15T10:00:00.000Z",
+          "2026-10-15T10:00:05.000Z",
+          "2026-01-01T00:00:00Z",
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("tracks atomically with the caller's idempotency key and millisecond timestamp", async () => {
       fetchMock.mockResolvedValueOnce(
         jsonResponse({
