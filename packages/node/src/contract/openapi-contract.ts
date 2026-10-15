@@ -23,7 +23,8 @@ import type {
 } from "../types";
 
 type Schemas = components["schemas"];
-type Fits<Api, Sdk> = [Api] extends [Sdk] ? true : false;
+// The API value fits the SDK type, and the SDK type declares no key the API schema lacks.
+type Fits<Api, Sdk> = [Api] extends [Sdk] ? ([Exclude<keyof Sdk, keyof Api>] extends [never] ? true : false) : false;
 type Expect<T extends true> = T;
 
 export type OpenApiContract = [

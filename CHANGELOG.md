@@ -6,9 +6,13 @@
 
 - Node.js: `CanResult.limit` and `CanResult.remaining` are typed `number | null`. The API has always sent `null` for a feature without a limit, while the type said `number | undefined`. Code that checked `=== undefined` for "no limit" should check `== null`.
 
+### Removed
+
+- Node.js: `PingResult.version` and `SubscriptionOptions.blocked_reason` are removed from the types. The API has never sent either field.
+
 ### Added
 
-- Node.js: a compile-time contract between the SDK's types and the API schemas. `npm run generate:openapi` regenerates `src/generated/openapi.ts` from the published spec (or `NOZLE_OPENAPI_SPEC`), and `npm run typecheck` fails when an SDK type promises a field the API does not send or types it differently. The generated file is not part of the published package.
+- Node.js: a compile-time contract between the SDK's types and the API schemas. `npm run generate:openapi` regenerates `src/generated/openapi.ts` from the published spec (or `NOZLE_OPENAPI_SPEC`), and `npm run typecheck` fails when an SDK type declares a key the API schema does not have, promises a field the API does not send, or types it differently. The generated file is not part of the published package.
 
 ## Node.js 0.12.0 — 2026-10-14
 
