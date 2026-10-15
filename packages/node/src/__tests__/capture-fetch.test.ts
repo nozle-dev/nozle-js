@@ -198,3 +198,38 @@ describe("recordUsage", () => {
     await expect(recordUsage(nozle as any, { customerId: "c", model: "m", inputTokens: 1, outputTokens: 1 })).rejects.toThrow("down");
   });
 });
+
+describe("missing Feature check", () => {
+  it("reports once per client and code when no Feature has the event code, and still records", async () => {
+    const nozle = { ...tracker(), eventsUrl: "https://core.example", apiKey: "sk_test" };
+    const lookups = vi.fn(async () => new Response("{}", { status: 404 }));
+    vi.stubGlobal("fetch", lookups);
+    const onError = vi.fn();
+    const provider = vi.fn(async () => json({ id: `c-${Math.random()}`, usage: { prompt_tokens: 1, completion_tokens: 1 } }));
+    const fetch = captureFetch(nozle as any, { customerId: "cust_1", featureCode: "llm_tokens", onError }, provider as any);
+
+    await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", body: "{}" });
+    await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", body: "{}" });
+
+    await vi.waitFor(() => expect(nozle.track).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(onError.mock.calls[0][0]).toMatchObject({ code: "feature_not_found" });
+    expect(lookups).toHaveBeenCalledTimes(1);
+    expect(String((lookups.mock.calls[0] as any)[0])).toBe("https://core.example/api/v1/features/llm_tokens");
+    vi.unstubAllGlobals();
+  });
+
+  it("stays silent when the Feature exists or the check cannot run", async () => {
+    for (const status of [200, 403, 500]) {
+      const nozle = { ...tracker(), eventsUrl: "https://core.example", apiKey: "sk_test" };
+      vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status })));
+      const onError = vi.fn();
+      const provider = vi.fn(async () => json({ id: "c", usage: { prompt_tokens: 1, completion_tokens: 1 } }));
+      await captureFetch(nozle as any, { customerId: "c", onError }, provider as any)("https://x/v1/chat/completions", { method: "POST", body: "{}" });
+      await vi.waitFor(() => expect(nozle.track).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 20));
+      expect(onError).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    }
+  });
+});

@@ -6,6 +6,8 @@ export interface WrapOptions {
   metricCode?: string;
   feature?: string;
   costMeterCode?: string;
+  /** Receives recording failures and a missing Feature for `metricCode`. Without it they are silent. */
+  onError?: (error: unknown) => void;
 }
 
 export function wrapOpenAI<T extends { chat: { completions: { create: Function } } }>(
@@ -41,6 +43,7 @@ export function wrapOpenAI<T extends { chat: { completions: { create: Function }
         requestId: (result as any).id,
         usage: normalizeOpenAIUsage(usage),
         latencyMs: Date.now() - start,
+        onError: opts.onError,
       });
     }
     return result;
@@ -79,6 +82,7 @@ async function* wrapStream(
       requestId,
       usage: normalizeOpenAIUsage(usage),
       latencyMs: Date.now() - start,
+      onError: opts.onError,
     });
   }
 }

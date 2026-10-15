@@ -31,7 +31,10 @@ export interface CaptureFetchOptions {
    * they otherwise leave out. Default true. Turn it off for a server that rejects the field.
    */
   includeStreamUsage?: boolean;
-  /** Called when usage could not be read or recorded. The provider response is never affected. */
+  /**
+   * Called when usage could not be read or recorded, and once per event code when no Feature has
+   * that code (`code: "feature_not_found"`). The provider response is never affected.
+   */
   onError?: (error: unknown) => void;
 }
 
@@ -87,8 +90,7 @@ export function captureFetch(
         requestId: found.id,
         usage: found.usage,
         latencyMs: Date.now() - started,
-      }).then((results) => {
-        for (const result of results) if (result.status === "rejected") report(result.reason);
+        onError: report,
       });
     };
 

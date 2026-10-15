@@ -31,6 +31,7 @@ export function wrapAnthropic<T extends { messages: { create: Function } }>(
         requestId: (result as any).id,
         usage: normalizeAnthropicUsage(usage),
         latencyMs: Date.now() - start,
+        onError: opts.onError,
       });
     }
     return result;
@@ -74,6 +75,7 @@ async function* wrapStream(
       requestId,
       usage: normalizeAnthropicUsage(usage),
       latencyMs: Date.now() - start,
+      onError: opts.onError,
     });
   }
 }
