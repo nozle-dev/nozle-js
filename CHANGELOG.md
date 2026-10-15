@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Node.js: a request contract test (`request-contract.test.ts`) checks the body of SDK calls against the API request schema: no unknown key, no `null` where the schema does not allow it, enum values only. `scripts/sync_openapi_requests.py` refreshes the schemas from `nozle-openapi.yaml`. Node.js already leaves out options you do not set, because `JSON.stringify` drops `undefined`; the test keeps it that way.
+
 ## Node.js 0.12.0 — 2026-10-14
 
 ### Added
