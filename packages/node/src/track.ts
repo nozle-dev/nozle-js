@@ -1,3 +1,4 @@
+import { request, type RequestPolicy } from "./http";
 import { apiError } from "./errors";
 import { createTransactionId } from "./identifiers";
 import type { TrackOptions } from "./types";
@@ -7,9 +8,9 @@ export async function track(
   apiKey: string,
   customerId: string,
   event: string,
-  metadata?: Record<string, unknown>,
-  options?: TrackOptions,
-  timeout = 10_000,
+  metadata: Record<string, unknown> | undefined,
+  options: TrackOptions | undefined,
+  policy: RequestPolicy,
 ): Promise<string> {
   const transactionId = options?.transactionId ?? createTransactionId();
   const body: Record<string, unknown> = {
@@ -27,15 +28,14 @@ export async function track(
     body.timestamp = eventTimestamp(options.timestamp);
   }
 
-  const res = await fetch(`${baseUrl}/api/v1/events`, {
+  const res = await request(policy, `${baseUrl}/api/v1/events`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ event: body }),
-    signal: AbortSignal.timeout(timeout),
-  });
+  }, { idempotent: true });
 
   if (!res.ok) {
     throw await apiError(`track`, res);

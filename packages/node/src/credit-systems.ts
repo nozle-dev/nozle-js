@@ -1,3 +1,4 @@
+import { request, type RequestPolicy } from "./http";
 import { apiError } from "./errors";
 import type { CreditSystem } from "./types";
 
@@ -21,7 +22,7 @@ export class CreditSystemsNamespace {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-    private readonly timeout: number,
+    private readonly policy: RequestPolicy,
   ) {}
 
   async list(): Promise<CreditSystem[]> {
@@ -34,9 +35,8 @@ export class CreditSystemsNamespace {
       url.searchParams.set("page", String(page));
       url.searchParams.set("per_page", "100");
 
-      const response = await fetch(url, {
+      const response = await request(this.policy, url, {
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(this.timeout),
       });
       if (!response.ok) {
         throw await apiError(`creditSystems.list`, response);

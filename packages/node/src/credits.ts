@@ -1,3 +1,4 @@
+import { request, type RequestPolicy } from "./http";
 import { apiError } from "./errors";
 import type {
   CreditBalance,
@@ -16,7 +17,7 @@ export class CreditsNamespace {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-    private readonly timeout: number,
+    private readonly policy: RequestPolicy,
   ) {}
 
   async getBalance(customerId: string, creditSystemCode: string): Promise<CreditBalance> {
@@ -25,11 +26,10 @@ export class CreditsNamespace {
       throw new Error("credits.getBalance requires creditSystemCode");
     }
 
-    const response = await fetch(
+    const response = await request(this.policy, 
       `${this.baseUrl}/api/v1/customers/${encodeURIComponent(customerId)}/credit-systems/${encodeURIComponent(creditSystemCode)}/balance`,
       {
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
     if (!response.ok) {
@@ -41,11 +41,10 @@ export class CreditsNamespace {
   async listBalances(customerId: string): Promise<CreditBalances> {
     if (!customerId.trim()) throw new Error("credits.listBalances requires customerId");
 
-    const response = await fetch(
+    const response = await request(this.policy, 
       `${this.baseUrl}/api/v1/customers/${encodeURIComponent(customerId)}/credit-systems`,
       {
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
     if (!response.ok) {
@@ -70,9 +69,8 @@ export class CreditsNamespace {
     if (query.limit !== undefined) url.searchParams.set("limit", String(query.limit));
     if (query.cursor) url.searchParams.set("cursor", query.cursor);
 
-    const response = await fetch(url, {
+    const response = await request(this.policy, url, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
       throw await apiError(`credits.listOperations`, response);
@@ -89,11 +87,10 @@ export class CreditsNamespace {
     if (!creditSystemCode.trim()) {
       throw new Error("credits.getEntityBalance requires creditSystemCode");
     }
-    const response = await fetch(
+    const response = await request(this.policy, 
       `${this.entityCreditBaseUrl(customerId, entityId)}/${encodeURIComponent(creditSystemCode)}/balance`,
       {
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
     if (!response.ok) {
@@ -107,9 +104,8 @@ export class CreditsNamespace {
     entityId: string,
   ): Promise<EntityCreditBalances> {
     validateEntityCreditPath(customerId, entityId, "credits.listEntityBalances");
-    const response = await fetch(this.entityCreditBaseUrl(customerId, entityId), {
+    const response = await request(this.policy, this.entityCreditBaseUrl(customerId, entityId), {
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
       throw await apiError(`credits.listEntityBalances`, response);
@@ -130,9 +126,8 @@ export class CreditsNamespace {
     if (query.creditSystemCode) url.searchParams.set("credit_system_code", query.creditSystemCode);
     if (query.limit !== undefined) url.searchParams.set("limit", String(query.limit));
     if (query.cursor) url.searchParams.set("cursor", query.cursor);
-    const response = await fetch(url, {
+    const response = await request(this.policy, url, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
       throw await apiError(`credits.listEntityOperations`, response);
@@ -170,7 +165,7 @@ export class CreditsNamespace {
     validateTransferParams(params, `credits.${operation}`);
     validateIdempotencyKey(options, `credits.${operation}`);
     const suffix = operation === "allocate" ? "credit-allocations" : "credit-deallocations";
-    const response = await fetch(
+    const response = await request(this.policy, 
       `${this.baseUrl}/api/v1/customers/${encodeURIComponent(customerId)}/entities/${encodeURIComponent(entityId)}/${suffix}`,
       {
         method: "POST",
@@ -183,7 +178,6 @@ export class CreditsNamespace {
           credit_system: params.creditSystemCode,
           amount: params.amount,
         }),
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
     if (!response.ok) {
