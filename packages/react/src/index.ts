@@ -78,7 +78,7 @@ export type {
   ComparisonFeature,
   PlanComparisonProps,
 } from "./components/pricing/PlanComparison.js";
-export { comparisonRows } from "./components/pricing/plan-features.js";
+export { comparisonRows, sortPlansByPrice } from "./components/pricing/plan-features.js";
 export type { ComparisonRow } from "./components/pricing/plan-features.js";
 
 export { CheckoutButton } from "./components/billing/CheckoutButton.js";

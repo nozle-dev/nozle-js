@@ -230,3 +230,29 @@ export function comparisonRows(plans: ComparisonPlan[]): ComparisonRow[] {
   }
   return all;
 }
+
+export interface SortablePlan {
+  amount_cents: number;
+  amount_currency: string;
+}
+
+/**
+ * The default plan order: cheapest base price first, so a free plan comes first. Plans in different
+ * currencies stay grouped in the order each currency first appears, because their amounts cannot be
+ * compared. Plans with the same price keep the order the catalog returned them in.
+ */
+export function sortPlansByPrice<T extends SortablePlan>(plans: T[]): T[] {
+  const currencyRank = new Map<string, number>();
+  for (const plan of plans) {
+    if (!currencyRank.has(plan.amount_currency)) currencyRank.set(plan.amount_currency, currencyRank.size);
+  }
+  return plans
+    .map((plan, index) => ({ plan, index }))
+    .sort(
+      (a, b) =>
+        (currencyRank.get(a.plan.amount_currency) as number) - (currencyRank.get(b.plan.amount_currency) as number) ||
+        a.plan.amount_cents - b.plan.amount_cents ||
+        a.index - b.index,
+    )
+    .map(({ plan }) => plan);
+}

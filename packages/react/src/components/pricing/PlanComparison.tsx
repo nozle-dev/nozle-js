@@ -12,6 +12,7 @@ import {
   comparisonRows,
   formatPlanPrice,
   intervalLabel,
+  sortPlansByPrice,
   type ComparisonRow,
 } from "./plan-features.js";
 
@@ -22,6 +23,8 @@ export interface PlanComparisonProps {
   plans: PricingPlan[];
   /** Optional. Replaces the rows built from the plans. `values` is keyed by plan code. */
   features?: ComparisonFeature[];
+  /** Optional. Orders the plans. By default they are sorted by base price, cheapest first. */
+  sort?: (a: PricingPlan, b: PricingPlan) => number;
 }
 
 /**
@@ -29,9 +32,11 @@ export interface PlanComparisonProps {
  * entitlement shows a cross, so the table shows the real difference between plans.
  */
 export function PlanComparison({
-  plans,
+  plans: catalogPlans,
   features: featureOverride,
+  sort,
 }: PlanComparisonProps): React.ReactElement {
+  const plans = sort ? [...catalogPlans].sort(sort) : sortPlansByPrice(catalogPlans);
   const features = featureOverride ?? comparisonRows(plans);
   return (
     <div

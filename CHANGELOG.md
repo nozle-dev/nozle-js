@@ -9,6 +9,8 @@
 
 - React: `CreditBalance` and `CreditHistory` render the SDK's credit balance and credit operations (`CreditBalanceData`, `CreditOperationData`), each with loading, error and empty states; `CreditHistory` has a load-more button for the SDK's `next_cursor`. `usageItems(entitlements, results)` builds `UsageDashboard` rows from a plan's metered entitlements and `can()` results. `UsageDashboard` takes `error` and `emptyMessage`, and `UsageMeter` and `UsageDashboard` accept a `null` or missing `limit` and show `Unlimited`.
 
+- React: `PricingTable` and `PlanComparison` sort plans by base price, cheapest first (`PricingTable` puts custom plans last), instead of showing the catalog's newest-first order. Plans in different currencies stay grouped, and ties keep the catalog order. Pass `sort` to use your own order. `sortPlansByPrice(plans)` is exported. A `features` array is aligned to the sorted order.
+
 ### Breaking
 
 - React: `PlanCard` takes `plan` (a catalog plan) with `isCurrent`, `returnUrl`, `onSelect` and the optional `features`. It no longer takes `id`, `name`, `monthlyPrice`, `annualPrice`, `description`, `isAnnual` or `children`, and the `Plan` type export is removed.

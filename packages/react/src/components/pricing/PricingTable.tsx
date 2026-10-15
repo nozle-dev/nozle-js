@@ -9,6 +9,7 @@ import { handleCheckoutResult } from '../billing/CheckoutButton.js';
 import {
   intervalLabel,
   planFeatures,
+  sortPlansByPrice,
   type CatalogCharge,
   type CatalogCreditGrantRule,
   type CatalogEntitlement,
@@ -38,6 +39,11 @@ export interface PricingTableProps {
    * a plan.
    */
   features?: string[][] | Record<string, string[]>;
+  /**
+   * Optional. Orders the plans. By default they are sorted by base price, cheapest first, with custom
+   * (enterprise) plans last.
+   */
+  sort?: (a: PricingPlan, b: PricingPlan) => number;
   onSelect?: (plan: PricingPlan) => void;
   returnUrl?: string;
   onStripeClientSecret?: (clientSecret: string) => void;
@@ -417,6 +423,7 @@ export function PricingTable({
   currentPlanCode,
   plans: propPlans,
   features,
+  sort,
   onSelect,
   returnUrl,
   onStripeClientSecret,
@@ -488,10 +495,13 @@ export function PricingTable({
     }
   }
 
-  const hasAnnual = plans.some(p => p.interval === 'yearly');
+  const ordered = sort
+    ? [...plans].sort(sort)
+    : [...sortPlansByPrice(plans.filter((p) => !isEnterprise(p))), ...plans.filter(isEnterprise)];
+  const hasAnnual = ordered.some(p => p.interval === 'yearly');
   const filtered = showToggle && hasAnnual
-    ? plans.filter(p => p.interval === (isAnnual ? 'yearly' : 'monthly') || isEnterprise(p))
-    : plans;
+    ? ordered.filter(p => p.interval === (isAnnual ? 'yearly' : 'monthly') || isEnterprise(p))
+    : ordered;
 
   if (loading) return <Skeleton />;
 

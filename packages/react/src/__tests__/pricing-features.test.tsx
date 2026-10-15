@@ -2,7 +2,7 @@ import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { PricingTable } from "../components/pricing/PricingTable";
-import { comparisonRows, planFeatures } from "../components/pricing/plan-features";
+import { comparisonRows, planFeatures, sortPlansByPrice } from "../components/pricing/plan-features";
 
 afterEach(cleanup);
 
@@ -144,5 +144,30 @@ describe("comparisonRows", () => {
       { key: "entitlement:support", label: "Support", values: { pro: "priority", free: false } },
       { key: "credit:ai_credits", label: "ai credits", values: { pro: "500 ai credits every month", free: false } },
     ]);
+  });
+});
+
+describe("plan order", () => {
+  const mk = (code: string, amount_cents: number, amount_currency = "USD") => ({
+    code, name: code, amount_cents, amount_currency, interval: "monthly",
+  });
+  const headings = () => screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+
+  it("sorts plans cheapest first and keeps ties in catalog order", () => {
+    expect(sortPlansByPrice([mk("team", 6000), mk("free", 0), mk("a", 3000), mk("b", 3000)]).map((p) => p.code)).toEqual(["free", "a", "b", "team"]);
+  });
+
+  it("keeps currencies grouped in the order they first appear", () => {
+    expect(sortPlansByPrice([mk("inr_pro", 99900, "INR"), mk("usd_pro", 1500), mk("inr_free", 0, "INR")]).map((p) => p.code)).toEqual(["inr_free", "inr_pro", "usd_pro"]);
+  });
+
+  it("shows PricingTable plans cheapest first with custom plans last", () => {
+    render(<PricingTable plans={[mk("enterprise", 0), mk("team", 6000), mk("free", 0), mk("pro", 999)]} showToggle={false} />);
+    expect(headings()).toEqual(["free", "pro", "team", "enterprise"]);
+  });
+
+  it("lets a sort function replace the order", () => {
+    render(<PricingTable plans={[mk("free", 0), mk("pro", 999)]} showToggle={false} sort={(a, b) => b.amount_cents - a.amount_cents} />);
+    expect(headings()).toEqual(["pro", "free"]);
   });
 });
