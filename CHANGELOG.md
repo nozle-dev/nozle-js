@@ -11,6 +11,8 @@
 
 - React: `PricingTable` and `PlanComparison` sort plans by base price, cheapest first (`PricingTable` puts custom plans last), instead of showing the catalog's newest-first order. Plans in different currencies stay grouped, and ties keep the catalog order. Pass `sort` to use your own order. `sortPlansByPrice(plans)` is exported. A `features` array is aligned to the sorted order.
 
+- React: `UsageBreakdown` (a table of each feature's units and amount for one period, with the total) and `UsageTrend` (a bar chart of the amount, or the units of one `featureCode`, per period) render the usage your backend reads from Core's `current_usage` and `past_usage` (`CustomerUsageData`, `ChargeUsageData`). Both have loading, error and empty states and no chart library.
+
 ### Breaking
 
 - React: `PlanCard` takes `plan` (a catalog plan) with `isCurrent`, `returnUrl`, `onSelect` and the optional `features`. It no longer takes `id`, `name`, `monthlyPrice`, `annualPrice`, `description`, `isAnnual` or `children`, and the `Plan` type export is removed.

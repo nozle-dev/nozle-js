@@ -164,3 +164,10 @@ export type {
   CreditHistoryProps,
   CreditOperationData,
 } from "./components/credits/CreditHistory.js";
+
+export { UsageBreakdown } from "./components/usage/UsageBreakdown.js";
+export type { UsageBreakdownProps } from "./components/usage/UsageBreakdown.js";
+
+export { UsageTrend } from "./components/usage/UsageTrend.js";
+export type { UsageTrendProps } from "./components/usage/UsageTrend.js";
+export type { ChargeUsageData, CustomerUsageData } from "./components/usage/usage-data.js";
