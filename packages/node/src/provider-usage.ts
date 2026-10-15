@@ -24,6 +24,8 @@ interface CaptureProviderUsageParams {
   requestId?: unknown;
   usage: ProviderTokenUsage;
   latencyMs: number;
+  /** Receives delivery failures and a missing Feature for `featureCode`. Without it they are silent. */
+  onError?: (error: unknown) => void;
 }
 
 /** Token usage found in one provider response, with the response's own id and model. */
@@ -189,7 +191,52 @@ export function captureProviderUsage(params: CaptureProviderUsageParams): Promis
 
   // Provider responses must never fail because telemetry delivery failed. Both
   // endpoints are durably acknowledged and support out-of-order parent linking.
-  return Promise.allSettled([featureEvent, ...detailedCostEvents]);
+  const settled = Promise.allSettled([featureEvent, ...detailedCostEvents]);
+  if (params.onError) {
+    const report = params.onError;
+    void settled.then((results) => {
+      for (const result of results) if (result.status === "rejected") safely(report, result.reason);
+    });
+    void checkFeatureOnce(params.nozle, params.featureCode, report);
+  }
+  return settled;
+}
+
+const checkedFeatures = new WeakMap<object, Set<string>>();
+
+/**
+ * Reports once per client and event code when no Feature has that code: the usage is then stored
+ * but never billed. Reads Core's GET /features/{code}; any other answer, including a key without
+ * read permission, stays silent.
+ */
+async function checkFeatureOnce(nozle: Nozle, featureCode: string, report: (error: unknown) => void): Promise<void> {
+  if (!nozle.eventsUrl || !nozle.apiKey) return;
+  let seen = checkedFeatures.get(nozle);
+  if (!seen) checkedFeatures.set(nozle, (seen = new Set()));
+  if (seen.has(featureCode)) return;
+  seen.add(featureCode);
+  try {
+    const response = await fetch(`${nozle.eventsUrl}/api/v1/features/${encodeURIComponent(featureCode)}`, {
+      headers: { Authorization: `Bearer ${nozle.apiKey}` },
+    });
+    if (response.status === 404) {
+      const error = new Error(
+        `No Feature has the code "${featureCode}", so this usage is stored but not billed. ` +
+          "Create a metered Feature with that code: https://docs.nozle.dev/guides/ai/token-billing",
+      );
+      safely(report, Object.assign(error, { name: "NozleSetupError", code: "feature_not_found" }));
+    }
+  } catch {
+    // A failed check never affects recording.
+  }
+}
+
+function safely(report: (error: unknown) => void, error: unknown): void {
+  try {
+    report(error);
+  } catch {
+    // The provider response must not depend on the error callback.
+  }
 }
 
 function tokenCount(value: unknown): number {
