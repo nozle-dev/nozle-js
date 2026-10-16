@@ -149,6 +149,9 @@ export type {
   UsageAlertFeature,
 } from "./components/usage/UsageAlert.js";
 
+export { CurrentPlan, currentPlanMeters } from "./components/billing/CurrentPlan.js";
+export type { CurrentPlanProps, CurrentPlanDetail } from "./components/billing/CurrentPlan.js";
+
 export { PlanBadge } from "./components/billing/PlanBadge.js";
 export type { PlanBadgeProps } from "./components/billing/PlanBadge.js";
 
