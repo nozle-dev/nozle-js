@@ -14,6 +14,7 @@ import { track as _track } from "./track";
 import { UsageNamespace } from "./usage";
 import { WebhooksNamespace } from "./webhooks";
 import { InvoicesNamespace } from "./invoices";
+import { AlertsNamespace } from "./alerts";
 import type {
   NozleConfig,
   CanResult,
@@ -66,6 +67,8 @@ export class Nozle {
   readonly webhooks: WebhooksNamespace;
   /** A customer's invoices, their PDFs and a preview of the next one. */
   readonly invoices: InvoicesNamespace;
+  /** Usage and wallet-balance alerts; Nozle sends `alert.triggered` when one fires. */
+  readonly alerts: AlertsNamespace;
 
   private readonly policy: RequestPolicy;
   private subCache = new Map<string, string>();
@@ -93,6 +96,7 @@ export class Nozle {
     this.usage = new UsageNamespace(this.baseUrl, this.apiKey, this.policy);
     this.webhooks = new WebhooksNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.invoices = new InvoicesNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.alerts = new AlertsNamespace(this.eventsUrl, this.apiKey, this.policy);
   }
 
   async track(

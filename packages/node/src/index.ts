@@ -11,6 +11,8 @@ export { EntitySubscriptionsNamespace } from "./entity-subscriptions";
 export { UsageNamespace } from "./usage";
 export { WebhooksNamespace, WebhookVerificationError, createWebhookHandler } from "./webhooks";
 export { InvoicesNamespace } from "./invoices";
+export { AlertsNamespace } from "./alerts";
+export type { Alert, AlertTarget, AlertThreshold, AlertType, CreateAlertInput, UpdateAlertInput } from "./alerts";
 export type { Invoice, InvoicePage, ListInvoicesOptions, PreviewInvoiceInput } from "./invoices";
 export type { NozleWebhookEvent, VerifyWebhookInput, WebhookHandlerOptions, WebhookHeaders, WebhookVerificationCode } from "./webhooks";
 export { wrapOpenAI } from "./wrap-openai";
