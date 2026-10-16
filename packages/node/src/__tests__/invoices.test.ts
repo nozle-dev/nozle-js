@@ -38,23 +38,6 @@ describe("invoices", () => {
     expect(await nozle().invoices.downloadUrl("inv_2")).toBeNull();
   });
 
-  it("previews the next invoice of subscriptions, or the first one of a plan", async () => {
-    const bodies: unknown[] = [];
-    stub({
-      "POST /core/api/v1/invoices/preview": (init) => {
-        bodies.push(JSON.parse(String(init.body)));
-        return Response.json({ invoice });
-      },
-    });
-    await nozle().invoices.preview({ customerId: "cus_1", subscriptionIds: ["sub_1"] });
-    await nozle().invoices.preview({ customerId: "cus_1", planCode: "pro", billingTime: "anniversary" });
-    expect(bodies).toEqual([
-      { customer: { external_id: "cus_1" }, subscriptions: { external_ids: ["sub_1"] } },
-      { customer: { external_id: "cus_1" }, plan_code: "pro", billing_time: "anniversary" },
-    ]);
-    await expect(nozle().invoices.preview({ customerId: "cus_1" })).rejects.toThrow("subscriptionIds or planCode");
-  });
-
   it("needs a secret key", async () => {
     await expect(new Nozle({ apiKey: "pk_test", host: "https://api.example" }).invoices.get("inv_1")).rejects.toThrow("secret key");
   });

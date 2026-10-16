@@ -65,7 +65,7 @@ export class Nozle {
   readonly usage: UsageNamespace;
   /** Verifies webhooks Nozle sends to your endpoint. */
   readonly webhooks: WebhooksNamespace;
-  /** A customer's invoices, their PDFs and a preview of the next one. */
+  /** A customer's invoices and their PDFs. */
   readonly invoices: InvoicesNamespace;
   /** Usage and wallet-balance alerts; Nozle sends `alert.triggered` when one fires. */
   readonly alerts: AlertsNamespace;

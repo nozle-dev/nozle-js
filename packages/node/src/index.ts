@@ -13,7 +13,7 @@ export { WebhooksNamespace, WebhookVerificationError, createWebhookHandler } fro
 export { InvoicesNamespace } from "./invoices";
 export { AlertsNamespace } from "./alerts";
 export type { Alert, AlertTarget, AlertThreshold, AlertType, CreateAlertInput, UpdateAlertInput } from "./alerts";
-export type { Invoice, InvoicePage, ListInvoicesOptions, PreviewInvoiceInput } from "./invoices";
+export type { Invoice, InvoicePage, ListInvoicesOptions } from "./invoices";
 export type { NozleWebhookEvent, VerifyWebhookInput, WebhookHandlerOptions, WebhookHeaders, WebhookVerificationCode } from "./webhooks";
 export { wrapOpenAI } from "./wrap-openai";
 export type { WrapOptions } from "./wrap-openai";

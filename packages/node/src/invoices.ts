@@ -20,18 +20,6 @@ export interface ListInvoicesOptions {
   perPage?: number;
 }
 
-export interface PreviewInvoiceInput {
-  customerId: string;
-  /**
-   * Preview the next invoice of these subscriptions. Without them, `planCode` previews the first
-   * invoice of a new subscription to that plan.
-   */
-  subscriptionIds?: string[];
-  planCode?: string;
-  /** `calendar` or `anniversary`, for a new subscription. */
-  billingTime?: string;
-}
-
 export class InvoicesNamespace {
   constructor(
     private readonly coreUrl: string,
@@ -73,22 +61,6 @@ export class InvoicesNamespace {
     const text = await response.text();
     if (!text) return null;
     return (JSON.parse(text) as { invoice?: Invoice }).invoice?.file_url ?? null;
-  }
-
-  /** What the next invoice would be, computed now and not saved. */
-  async preview(input: PreviewInvoiceInput): Promise<Invoice> {
-    if (!input.customerId.trim()) throw new Error("invoices.preview requires customerId");
-    if (!input.subscriptionIds?.length && !input.planCode) {
-      throw new Error("invoices.preview requires subscriptionIds or planCode");
-    }
-    const body: Record<string, unknown> = { customer: { external_id: input.customerId } };
-    if (input.subscriptionIds?.length) {
-      body.subscriptions = { external_ids: input.subscriptionIds, ...(input.planCode && { plan_code: input.planCode }) };
-    } else {
-      body.plan_code = input.planCode;
-      if (input.billingTime) body.billing_time = input.billingTime;
-    }
-    return (await this.call<{ invoice: Invoice }>("invoices.preview", "POST", "/api/v1/invoices/preview", body)).invoice;
   }
 
   private raw(method: string, path: string, body?: unknown): Promise<Response> {
