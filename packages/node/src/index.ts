@@ -10,6 +10,8 @@ export { EntitiesNamespace } from "./entities";
 export { EntitySubscriptionsNamespace } from "./entity-subscriptions";
 export { UsageNamespace } from "./usage";
 export { WebhooksNamespace, WebhookVerificationError, createWebhookHandler } from "./webhooks";
+export { InvoicesNamespace } from "./invoices";
+export type { Invoice, InvoicePage, ListInvoicesOptions, PreviewInvoiceInput } from "./invoices";
 export type { NozleWebhookEvent, VerifyWebhookInput, WebhookHandlerOptions, WebhookHeaders, WebhookVerificationCode } from "./webhooks";
 export { wrapOpenAI } from "./wrap-openai";
 export type { WrapOptions } from "./wrap-openai";

@@ -73,6 +73,19 @@ const routes: Record<string, Route> = {
     if (!subscription) throw new RouteError(404, "subscription_not_found", "customer has no active subscription");
     return nozle.previewSubscriptionChange(customerId, subscription.external_id, required(query, "plan"));
   },
+  // Finalized invoices only: drafts can still change and are not the customer's to see.
+  invoices(nozle, customerId, query) {
+    const page = Number(query.get("page") ?? 1);
+    return nozle.invoices.list(customerId, { status: "finalized", page: page > 0 ? page : 1, perPage: 20 });
+  },
+  async "invoice-download"(nozle, customerId, query) {
+    const invoice = await nozle.invoices.get(required(query, "id"));
+    // Another customer's invoice answers exactly like a missing one.
+    if (invoice.customer?.external_id !== customerId) {
+      throw new RouteError(404, "invoice_not_found", "invoice not found");
+    }
+    return { url: await nozle.invoices.downloadUrl(invoice.nozle_id) };
+  },
 };
 
 /** The route names a billing handler serves, as the last segment of the request path. */

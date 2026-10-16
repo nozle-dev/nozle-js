@@ -12,6 +12,8 @@ import {
   useSubscription,
   useUpgradePreview,
   useUsage,
+  useInvoices,
+  useInvoiceDownload,
 } from "../index.js";
 
 const responses: Record<string, unknown> = {
@@ -25,6 +27,8 @@ const responses: Record<string, unknown> = {
   },
   usage: { usage: { amount_cents: 5 }, periods: [{ amount_cents: 1 }], projected: { amount_cents: 5, projected_amount_cents: 12 } },
   preview: { quote_id: "q1" },
+  invoices: { invoices: [{ nozle_id: "inv_1", number: "INV-1" }], meta: { current_page: 2 } },
+  "invoice-download": { url: "https://files.example/inv_1.pdf" },
 };
 
 function stubFetch() {
@@ -145,5 +149,16 @@ describe("billing hooks", () => {
       }),
     ).toThrow(/billingEndpoint/);
     quiet.mockRestore();
+  });
+
+  it("reads a page of invoices and resolves an invoice's PDF URL", async () => {
+    const fetch = stubFetch();
+    const { result } = renderHook(() => ({ invoices: useInvoices({ page: 2 }), download: useInvoiceDownload() }), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(result.current.invoices.data?.invoices[0].number).toBe("INV-1"));
+    expect(fetch.mock.calls.some(([u]) => String(u) === "/api/nozle/invoices?page=2")).toBe(true);
+    await expect(result.current.download("inv_1")).resolves.toBe("https://files.example/inv_1.pdf");
+    expect(fetch.mock.calls.some(([u]) => String(u) === "/api/nozle/invoice-download?id=inv_1")).toBe(true);
   });
 });

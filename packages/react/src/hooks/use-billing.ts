@@ -158,6 +158,49 @@ export function useUsage(options: { period?: "current" | "past" | "projected"; p
   );
 }
 
+/** One of the customer's finalized invoices. */
+export interface InvoiceData {
+  nozle_id: string;
+  number: string;
+  issuing_date: string;
+  payment_due_date?: string | null;
+  payment_status: string;
+  payment_overdue?: boolean;
+  currency: string;
+  total_amount_cents: number;
+  file_url?: string | null;
+}
+
+export interface InvoicePageData {
+  invoices: InvoiceData[];
+  meta: { current_page: number; next_page: number | null; prev_page: number | null; total_pages: number; total_count: number };
+}
+
+/** The customer's finalized invoices, newest first, 20 per page. */
+export function useInvoices(options: { page?: number } = {}) {
+  const { fetchRoute, queryClient, endpoint } = useBilling();
+  const page = options.page ?? 1;
+  return useQuery(
+    {
+      queryKey: ["nozle", endpoint, "invoices", page],
+      queryFn: () => fetchRoute<InvoicePageData>("invoices", { page }),
+    },
+    queryClient,
+  );
+}
+
+/**
+ * Returns a function that resolves an invoice's PDF URL, or `null` while Nozle is still generating
+ * the PDF (ask again in a few seconds). Your backend only answers for the customer's own invoices.
+ */
+export function useInvoiceDownload(): (invoiceId: string) => Promise<string | null> {
+  const { fetchRoute } = useBilling();
+  return useCallback(
+    async (invoiceId: string) => (await fetchRoute<{ url: string | null }>("invoice-download", { id: invoiceId })).url,
+    [fetchRoute],
+  );
+}
+
 /** What changing to `planCode` would cost now and later. Does nothing until a plan is given. */
 export function useUpgradePreview(planCode: string | undefined) {
   const { fetchRoute, queryClient, endpoint } = useBilling();
