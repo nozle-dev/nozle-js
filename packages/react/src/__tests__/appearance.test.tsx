@@ -1,8 +1,9 @@
 import React from "react";
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { BillingProvider, CreditBalance, UsageMeter } from "../index.js";
-import { dark, light, neobrutal, shadcn, system } from "../themes.js";
+import { BillingProvider, CreditBalance, PricingTable, UsageMeter } from "../index.js";
+import * as themes from "../themes.js";
+import { dark, light, neobrutal } from "../themes.js";
 import { mergeAppearance, T, toCssVars } from "../appearance/tokens.js";
 import { toStripeAppearance } from "../components/billing/Checkout.js";
 
@@ -45,15 +46,39 @@ describe("toCssVars", () => {
 });
 
 describe("themes", () => {
-  it("system sets only colours, each with light-dark()", () => {
-    const variables = system.variables ?? {};
-    expect(variables.colorPrimary).toMatch(/^light-dark\(/);
-    expect(variables.borderRadius).toBeUndefined();
-    expect(variables.colorScheme).toBe("light dark");
+  it("offers exactly light, dark, minimal and neobrutal", () => {
+    expect(Object.keys(themes).sort()).toEqual(["dark", "light", "minimal", "neobrutal"]);
+  });
+});
+
+describe("PricingTable highlight", () => {
+  const plans = [
+    { code: "free", name: "Free", amount_cents: 0, amount_currency: "USD", interval: "monthly" },
+    { code: "pro", name: "Pro", amount_cents: 2900, amount_currency: "USD", interval: "monthly" },
+  ];
+  const card = (name: string) => screen.getByRole("heading", { name }).closest(".nozle-planCard") as HTMLElement;
+
+  it("outlines the highlighted card by default, with the badge", () => {
+    render(<PricingTable plans={plans} highlightPlan="pro" showToggle={false} onSelect={() => {}} />);
+    expect(card("Pro").style.background).toContain("--nozle-card");
+    expect(screen.getByText("Most Popular").style.background).toContain("--nozle-highlight");
   });
 
-  it("shadcn reads the app's own variables", () => {
-    expect(shadcn.variables?.colorPrimary).toBe("var(--primary)");
+  it("fills the highlighted card with the highlight colour and swaps its text and button colours", () => {
+    render(
+      <PricingTable plans={plans} highlightPlan="pro" highlightStyle="filled" highlightLabel="Best value" showToggle={false} onSelect={() => {}} />,
+    );
+    expect(card("Pro").style.background).toContain("--nozle-highlight");
+    expect(card("Pro").style.color).toContain("--nozle-highlight-foreground");
+    const cta = screen.getByRole("button", { name: "Get Pro" });
+    expect(cta.style.background).toContain("--nozle-highlight-foreground");
+    expect(screen.getByText("Best value")).toBeTruthy();
+    expect(card("Free").style.background).toContain("--nozle-card");
+  });
+
+  it("hides the badge when the label is null", () => {
+    render(<PricingTable plans={plans} highlightPlan="pro" highlightLabel={null} showToggle={false} onSelect={() => {}} />);
+    expect(screen.queryByText("Most Popular")).toBeNull();
   });
 });
 

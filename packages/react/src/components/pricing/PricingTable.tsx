@@ -52,7 +52,15 @@ export interface PricingTableProps {
   onCheckoutResult?: (result: CheckoutResult) => void;
   onCheckoutError?: (error: Error) => void;
   showToggle?: boolean;
+  /** Code of the plan to highlight. */
   highlightPlan?: string;
+  /**
+   * How the highlighted card stands out: `outline` (default) draws a border in `colorHighlight`;
+   * `filled` paints the card in `colorHighlight` and its text and button in `colorHighlightForeground`.
+   */
+  highlightStyle?: 'outline' | 'filled';
+  /** Badge on the highlighted card. Default "Most Popular"; pass `null` for no badge. */
+  highlightLabel?: string | null;
   className?: string;
   /**
    * Codes of plans sold on request. Their card shows "Custom" instead of a price and a "Contact Sales"
@@ -149,6 +157,8 @@ interface CardProps {
   features?: string[];
   isCurrent: boolean;
   isHighlighted: boolean;
+  filled: boolean;
+  highlightLabel: string | null;
   isEnt: boolean;
   enterpriseEmail?: string;
   onSelect?: () => void;
@@ -160,12 +170,20 @@ function Card({
   features,
   isCurrent,
   isHighlighted,
+  filled: filledStyle,
+  highlightLabel,
   isEnt,
   enterpriseEmail,
   onSelect,
   el,
 }: CardProps): React.ReactElement {
   const [hover, setHover] = useState(false);
+  // A filled highlight swaps the card's colours: highlight background, highlight-foreground text.
+  const filled = isHighlighted && filledStyle;
+  const text = filled ? T.highlightForeground : C.text;
+  const muted = filled ? `color-mix(in srgb, ${T.highlightForeground} 75%, ${T.highlight})` : C.muted;
+  const accent = filled ? T.highlightForeground : C.hl;
+  const badgeLabel = isCurrent ? 'Current Plan' : highlightLabel;
 
   const interval = `/${intervalLabel(plan.interval)}`;
 
@@ -186,9 +204,10 @@ function Card({
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        background: C.cardBg,
-        border: border(isHighlighted ? C.hl : C.border),
-        borderTopWidth: isHighlighted ? `calc(${T.borderWidth} + 2px)` : T.borderWidth,
+        background: filled ? T.highlight : C.cardBg,
+        color: text,
+        border: border(isHighlighted ? T.highlight : C.border),
+        borderTopWidth: isHighlighted && !filled ? `calc(${T.borderWidth} + 2px)` : T.borderWidth,
         borderRadius: C.radius,
         padding: '2rem',
         transition: 'box-shadow 0.2s ease, transform 0.2s ease',
@@ -197,14 +216,15 @@ function Card({
       })}
     >
       {/* Badge */}
-      {isHighlighted && (
+      {isHighlighted && badgeLabel && (
         <div {...el('planCard__badge', {
           position: 'absolute',
           top: '-1px',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          background: C.hl,
-          color: C.hlFg,
+          background: filled ? T.highlightForeground : T.highlight,
+          color: filled ? T.highlight : T.highlightForeground,
+          border: filled ? border(T.highlight) : undefined,
           fontSize: '0.7rem',
           fontWeight: 700,
           padding: '4px 12px',
@@ -213,7 +233,7 @@ function Card({
           textTransform: 'uppercase',
           whiteSpace: 'nowrap',
         })}>
-          {isCurrent ? 'Current Plan' : 'Most Popular'}
+          {badgeLabel}
         </div>
       )}
       {isCurrent && !isHighlighted && (
@@ -237,11 +257,11 @@ function Card({
       )}
 
       {/* Plan name + description */}
-      <div style={{ marginBottom: '1.25rem', marginTop: isHighlighted || isCurrent ? '0.5rem' : 0 }}>
+      <div style={{ marginBottom: '1.25rem', marginTop: (isHighlighted && badgeLabel) || isCurrent ? '0.5rem' : 0 }}>
         <h3 {...el('planCard__name', {
           fontSize: '1.25rem',
           fontWeight: 700,
-          color: C.text,
+          color: text,
           margin: 0,
           lineHeight: 1.3,
         })}>
@@ -250,7 +270,7 @@ function Card({
         {plan.description && (
           <p {...el('planCard__description', {
             fontSize: '0.875rem',
-            color: C.muted,
+            color: muted,
             margin: '6px 0 0',
             lineHeight: 1.5,
           })}>
@@ -262,15 +282,15 @@ function Card({
       {/* Price */}
       <div {...el('planCard__price', { marginBottom: '1.5rem' })}>
         {isEnt ? (
-          <span style={{ fontSize: '2.25rem', fontWeight: 700, color: C.text, lineHeight: 1 }}>
+          <span style={{ fontSize: '2.25rem', fontWeight: 700, color: text, lineHeight: 1 }}>
             Custom
           </span>
         ) : (
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px' }}>
-            <span style={{ fontSize: '2.75rem', fontWeight: 700, color: C.text, lineHeight: 1, letterSpacing: '-0.025em' }}>
+            <span style={{ fontSize: '2.75rem', fontWeight: 700, color: text, lineHeight: 1, letterSpacing: '-0.025em' }}>
               {fmtPrice(plan.amount_cents, plan.amount_currency)}
             </span>
-            <span style={{ fontSize: '0.9375rem', color: C.muted, marginLeft: '4px' }}>
+            <span style={{ fontSize: '0.9375rem', color: muted, marginLeft: '4px' }}>
               {interval}
             </span>
           </div>
@@ -294,10 +314,10 @@ function Card({
               alignItems: 'flex-start',
               gap: '10px',
               fontSize: '0.875rem',
-              color: C.text,
+              color: text,
               lineHeight: 1.5,
             })}>
-              <span style={{ color: C.hl, marginTop: '2px' }}><Check /></span>
+              <span style={{ color: accent, marginTop: '2px' }}><Check /></span>
               <span>{feat}</span>
             </li>
           ))}
@@ -312,7 +332,7 @@ function Card({
         <CTAButton
           onClick={handleClick}
           disabled={isCurrent}
-          variant={isCurrent ? 'current' : isEnt ? 'outline' : isHighlighted ? 'primary' : 'secondary'}
+          variant={isCurrent ? 'current' : isEnt ? 'outline' : filled ? 'inverse' : isHighlighted ? 'highlight' : 'secondary'}
           el={el}
         >
           {isCurrent ? 'Current Plan' : isEnt ? 'Contact Sales' : `Get ${plan.name}`}
@@ -334,14 +354,18 @@ function CTAButton({
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  variant: ButtonVariant | 'current';
+  variant: ButtonVariant | 'current' | 'highlight' | 'inverse';
   el: UseAppearance['el'];
 }) {
   const [hover, setHover] = useState(false);
   const look =
     variant === 'current'
       ? { ...buttonStyle('secondary'), color: C.muted, cursor: 'default' }
-      : buttonStyle(variant);
+      : variant === 'highlight'
+        ? { ...buttonStyle('primary'), background: T.highlight, color: T.highlightForeground, border: border(T.highlight) }
+        : variant === 'inverse'
+          ? { ...buttonStyle('primary'), background: T.highlightForeground, color: T.highlight, border: border(T.highlightForeground) }
+          : buttonStyle(variant);
 
   return (
     <button
@@ -402,6 +426,8 @@ export function PricingTable({
   onCheckoutError,
   showToggle = true,
   highlightPlan,
+  highlightStyle = 'outline',
+  highlightLabel = 'Most Popular',
   className,
   contactSalesPlans,
   enterpriseEmail,
@@ -502,6 +528,8 @@ export function PricingTable({
             features={featureLines(features, plan, i)}
             isCurrent={currentPlan === plan.code}
             isHighlighted={highlightPlan === plan.code}
+            filled={highlightStyle === 'filled'}
+            highlightLabel={highlightLabel}
             isEnt={isEnterprise(plan)}
             enterpriseEmail={enterpriseEmail}
             onSelect={() => void selectPlan(plan)}

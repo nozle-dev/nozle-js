@@ -15,6 +15,10 @@ export interface Variables {
   colorDanger?: string;
   colorWarning?: string;
   colorSuccess?: string;
+  /** The highlighted pricing card (`highlightPlan`). Defaults to `colorPrimary`. */
+  colorHighlight?: string;
+  /** Text on a filled highlighted card. Defaults to `colorPrimaryForeground`. */
+  colorHighlightForeground?: string;
   fontFamily?: string;
   borderRadius?: string;
   borderWidth?: string;
@@ -107,6 +111,8 @@ const CSS_VAR: Record<ColorKey, string> = {
   colorDanger: "--nozle-destructive",
   colorWarning: "--nozle-warning",
   colorSuccess: "--nozle-success",
+  colorHighlight: "--nozle-highlight",
+  colorHighlightForeground: "--nozle-highlight-foreground",
   fontFamily: "--nozle-font",
   borderRadius: "--nozle-radius",
   borderWidth: "--nozle-border-width",
@@ -114,7 +120,10 @@ const CSS_VAR: Record<ColorKey, string> = {
 };
 
 /** The light values every component falls back to when nothing else sets a token. */
-export const LIGHT: Required<Omit<Variables, "colorScheme">> = {
+// The highlight colours default to the primary colours, so they have no value of their own here.
+type DerivedKey = "colorHighlight" | "colorHighlightForeground";
+
+export const LIGHT: Required<Omit<Variables, "colorScheme" | DerivedKey>> = {
   colorPrimary: "#4f46e5",
   colorPrimaryForeground: "#ffffff",
   colorBackground: "#ffffff",
@@ -146,7 +155,7 @@ const ALIASES: Partial<Record<ColorKey, string[]>> = {
   borderRadius: ["--nozle-pricing-radius"],
 };
 
-function chain(key: ColorKey): string {
+function chain(key: Exclude<ColorKey, DerivedKey>): string {
   return [CSS_VAR[key], ...(ALIASES[key] ?? [])].reduceRight(
     (fallback, name) => `var(${name}, ${fallback})`,
     LIGHT[key],
@@ -162,11 +171,14 @@ const danger = chain("colorDanger");
 const warning = chain("colorWarning");
 const success = chain("colorSuccess");
 const foreground = chain("colorForeground");
+const primaryForeground = chain("colorPrimaryForeground");
 
 /** CSS values for component styles: each reads its token, then older names, then the light value. */
 export const T = {
   primary,
-  primaryForeground: chain("colorPrimaryForeground"),
+  primaryForeground,
+  highlight: `var(--nozle-highlight, ${primary})`,
+  highlightForeground: `var(--nozle-highlight-foreground, ${primaryForeground})`,
   background: chain("colorBackground"),
   card,
   foreground,

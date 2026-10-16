@@ -6,7 +6,7 @@
 //
 //   node scripts/theme-screenshots.mjs http://localhost:3010/sdk-demo/themes ../../../NozleDocs/images/react/themes
 //
-// `system` is captured twice, as system-light.png and system-dark.png.
+// `light-filled` shows the filled highlight style.
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
@@ -15,19 +15,18 @@ const [base = "http://localhost:3010/sdk-demo/themes", outDir = "theme-screensho
 const shots = [
   ["light", "light"],
   ["dark", "dark"],
-  ["system", "light", "system-light"],
-  ["system", "dark", "system-dark"],
-  ["shadcn", "light"],
-  ["minimal", "light"],
-  ["neobrutal", "light"],
+  ["minimal", "minimal"],
+  ["neobrutal", "neobrutal"],
+  ["light", "light-filled", "filled"],
+  ["dark", "dark-filled", "filled"],
 ];
 
 await mkdir(outDir, { recursive: true });
 const browser = await chromium.launch();
 try {
-  for (const [theme, colorScheme, file = theme] of shots) {
-    const page = await browser.newPage({ viewport: { width: 1104, height: 900 }, deviceScaleFactor: 2, colorScheme });
-    await page.goto(`${base}?theme=${theme}`, { waitUntil: "networkidle" });
+  for (const [theme, file, highlight = "outline"] of shots) {
+    const page = await browser.newPage({ viewport: { width: 1104, height: 900 }, deviceScaleFactor: 2 });
+    await page.goto(`${base}?theme=${theme}&highlight=${highlight}`, { waitUntil: "networkidle" });
     await page.locator("[data-theme-ready]").waitFor();
     const target = path.join(outDir, `${file}.png`);
     await page.locator("[data-theme-ready]").screenshot({ path: target });

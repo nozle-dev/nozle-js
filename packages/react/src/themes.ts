@@ -1,6 +1,6 @@
 /**
- * Predefined themes for `appearance={{ theme }}`. Colour themes (`light`, `dark`, `system`, `shadcn`)
- * and shape themes (`minimal`, `neobrutal`) stack: `theme: [neobrutal, dark]`.
+ * Predefined themes for `appearance={{ theme }}`. Colour themes (`light`, `dark`) and shape themes
+ * (`minimal`, `neobrutal`) stack: `theme: [neobrutal, dark]`. Any variable can be changed on top.
  */
 import { LIGHT, type Theme, type Variables } from "./appearance/tokens.js";
 
@@ -33,35 +33,6 @@ export const light: Theme = {
 /** Dark surfaces. Put it on a dark page background. */
 export const dark: Theme = {
   variables: { ...DARK_COLORS, shadow: "0 1px 3px rgba(0,0,0,0.5)", colorScheme: "dark" },
-};
-
-/** Follows the visitor's light or dark preference, with CSS `light-dark()` (2024+ browsers). */
-export const system: Theme = {
-  variables: {
-    ...Object.fromEntries(COLOR_NAMES.map((name) => [name, `light-dark(${LIGHT[name]}, ${DARK_COLORS[name]})`])),
-    colorScheme: "light dark",
-  },
-};
-
-/**
- * Reads a shadcn/ui app's own CSS variables (Tailwind v4, where they hold whole colours), so the
- * components follow its theme and dark mode. Warning and success keep Nozle's colours.
- */
-export const shadcn: Theme = {
-  variables: {
-    colorPrimary: "var(--primary)",
-    colorPrimaryForeground: "var(--primary-foreground)",
-    colorBackground: "var(--background)",
-    colorCard: "var(--card)",
-    colorForeground: "var(--foreground)",
-    colorMuted: "var(--muted)",
-    colorMutedForeground: "var(--muted-foreground)",
-    colorAccent: "var(--accent)",
-    colorAccentForeground: "var(--accent-foreground)",
-    colorBorder: "var(--border)",
-    colorDanger: "var(--destructive)",
-    borderRadius: "var(--radius)",
-  },
 };
 
 /** Flat: no shadows, small corners, a near-black primary. */
