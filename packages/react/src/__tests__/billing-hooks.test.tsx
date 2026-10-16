@@ -25,7 +25,7 @@ const responses: Record<string, unknown> = {
       { credit_system: "ai", credit_system_name: "AI", unit_name: "credits", available: "80", as_of: "t" },
     ],
   },
-  usage: { usage: { amount_cents: 5 }, periods: [{ amount_cents: 1 }], projected: { amount_cents: 5, projected_amount_cents: 12 } },
+  usage: { usage: { amount_cents: 5 }, periods: [{ amount_cents: 1 }] },
   preview: { quote_id: "q1" },
   invoices: { invoices: [{ nozle_id: "inv_1", number: "INV-1" }], meta: { current_page: 2 } },
   "invoice-download": { url: "https://files.example/inv_1.pdf" },
@@ -104,7 +104,6 @@ describe("billing hooks", () => {
       ({ plan }: { plan?: string }) => ({
         current: useUsage(),
         past: useUsage({ period: "past", periods: 3 }),
-        projected: useUsage({ period: "projected" }),
         preview: useUpgradePreview(plan),
       }),
       { wrapper: wrapper(), initialProps: {} as { plan?: string } },
@@ -112,7 +111,6 @@ describe("billing hooks", () => {
     await waitFor(() => expect(result.current.past.data).toBeDefined());
     expect(result.current.current.data).toEqual({ amount_cents: 5 });
     expect(result.current.past.data).toEqual([{ amount_cents: 1 }]);
-    await waitFor(() => expect(result.current.projected.data).toEqual({ amount_cents: 5, projected_amount_cents: 12 }));
     expect(fetch.mock.calls.some(([u]) => String(u).includes("preview"))).toBe(false);
     rerender({ plan: "max" });
     await waitFor(() => expect(result.current.preview.data?.quote_id).toBe("q1"));

@@ -73,7 +73,6 @@ export type {
   EntitlementResult,
   InvoiceData,
   InvoicePageData,
-  ProjectedUsageData,
   UpgradePreview,
 } from "./hooks/use-billing.js";
 export type { Plan as CatalogPlan } from "./hooks/use-plans.js";

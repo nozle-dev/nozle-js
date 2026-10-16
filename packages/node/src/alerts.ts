@@ -8,8 +8,6 @@ export type AlertType =
   | "current_usage_amount"
   | "feature_current_usage_amount"
   | "feature_current_usage_units"
-  | "lifetime_usage_amount"
-  | "feature_lifetime_usage_units"
   | "wallet_balance_amount"
   | "wallet_credits_balance"
   | "wallet_ongoing_balance_amount"

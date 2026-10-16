@@ -107,5 +107,4 @@ export type {
   UsageTrackResult,
   CoreSubscription,
   CustomerUsage,
-  CustomerProjectedUsage,
 } from "./types";

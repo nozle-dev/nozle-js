@@ -62,11 +62,8 @@ const routes: Record<string, Route> = {
   },
   async usage(nozle, customerId, query) {
     const subscription = await activeSubscription(nozle, customerId);
-    if (!subscription) return { usage: null, periods: [], projected: null };
+    if (!subscription) return { usage: null, periods: [] };
     const subscriptionId = subscription.external_id;
-    if (query.get("period") === "projected") {
-      return { projected: await nozle.projectedUsage(customerId, { subscriptionId }) };
-    }
     if (query.get("period") === "past") {
       const periods = query.get("periods");
       return { periods: await nozle.pastUsage(customerId, { subscriptionId, periods: periods ? Number(periods) : undefined }) };

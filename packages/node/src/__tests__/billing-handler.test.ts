@@ -16,7 +16,6 @@ function fakeNozle(subscriptions: Array<{ external_id: string }> = [{ external_i
     },
     currentUsage: vi.fn(async () => ({ amount_cents: 5 })),
     pastUsage: vi.fn(async () => [{ amount_cents: 1 }]),
-    projectedUsage: vi.fn(async () => ({ amount_cents: 5, projected_amount_cents: 12 })),
     previewSubscriptionChange: vi.fn(async () => ({ quote_id: "q1" })),
   };
 }
@@ -41,10 +40,6 @@ describe("createBillingHandler", () => {
     expect(await (await handler(get("/api/nozle/usage"))).json()).toEqual({ usage: { amount_cents: 5 } });
     expect(await (await handler(get("/api/nozle/usage?period=past&periods=3"))).json()).toEqual({ periods: [{ amount_cents: 1 }] });
     expect(nozle.pastUsage).toHaveBeenCalledWith("cust_session", { subscriptionId: "sub_1", periods: 3 });
-    expect(await (await handler(get("/api/nozle/usage?period=projected"))).json()).toEqual({
-      projected: { amount_cents: 5, projected_amount_cents: 12 },
-    });
-    expect(nozle.projectedUsage).toHaveBeenCalledWith("cust_session", { subscriptionId: "sub_1" });
     await handler(get("/api/nozle/preview?plan=pro"));
     expect(nozle.previewSubscriptionChange).toHaveBeenCalledWith("cust_session", "sub_1", "pro");
   });
@@ -65,7 +60,7 @@ describe("createBillingHandler", () => {
   it("returns empty data without a subscription and 409 with more than one", async () => {
     const none = createBillingHandler(fakeNozle([]) as any, { getCustomerId: () => "c" });
     expect(await (await none(get("/x/subscription"))).json()).toEqual({ subscription: null, pending_change: null, past_due: false });
-    expect(await (await none(get("/x/usage"))).json()).toEqual({ usage: null, periods: [], projected: null });
+    expect(await (await none(get("/x/usage"))).json()).toEqual({ usage: null, periods: [] });
 
     const two = createBillingHandler(fakeNozle([{ external_id: "a" }, { external_id: "b" }]) as any, { getCustomerId: () => "c" });
     expect((await two(get("/x/usage"))).status).toBe(409);

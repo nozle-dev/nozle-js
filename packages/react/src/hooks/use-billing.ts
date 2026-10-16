@@ -23,11 +23,6 @@ export interface BillingSubscription {
   past_due?: boolean;
 }
 
-/** This period's usage with the estimate for the whole period. */
-export interface ProjectedUsageData extends CustomerUsageData {
-  projected_amount_cents: number;
-}
-
 /** An entitlement decision for one feature (`can()` on your backend). */
 export interface EntitlementResult {
   allowed: boolean;
@@ -135,26 +130,20 @@ export function useCreditHistory(options: { creditSystemCode?: string; limit?: n
 
 /**
  * The current billing period's usage (`period: "current"`, the default) for `<UsageBreakdown>`,
- * past periods (`period: "past"`) for `<UsageTrend>`, or this period with its projection
- * (`period: "projected"`, `projected_amount_cents`; the organization must have projected usage on).
+ * or past periods (`period: "past"`) for `<UsageTrend>`.
  */
-export function useUsage(options: { period?: "current" | "past" | "projected"; periods?: number } = {}) {
+export function useUsage(options: { period?: "current" | "past"; periods?: number } = {}) {
   const { fetchRoute, queryClient, endpoint } = useBilling();
   const period = options.period ?? "current";
   return useQuery(
     {
       queryKey: ["nozle", endpoint, "usage", period, options.periods],
       queryFn: () =>
-        fetchRoute<{
-          usage?: CustomerUsageData | null;
-          periods?: CustomerUsageData[];
-          projected?: ProjectedUsageData | null;
-        }>("usage", {
+        fetchRoute<{ usage?: CustomerUsageData | null; periods?: CustomerUsageData[] }>("usage", {
           period,
           periods: options.periods,
         }),
-      select: (data) =>
-        period === "past" ? (data.periods ?? []) : period === "projected" ? (data.projected ?? null) : (data.usage ?? null),
+      select: (data) => (period === "past" ? (data.periods ?? []) : (data.usage ?? null)),
     },
     queryClient,
   );
