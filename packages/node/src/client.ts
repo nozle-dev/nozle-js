@@ -18,6 +18,7 @@ import type {
   CanResult,
   CoreSubscription,
   CustomerUsage,
+  CustomerProjectedUsage,
   TrackOptions,
   Plan,
   CheckoutResult,
@@ -503,6 +504,22 @@ export class Nozle {
     );
     if (!res.ok) throw await apiError("pastUsage", res);
     return ((await res.json()) as { usage_periods?: CustomerUsage[] }).usage_periods ?? [];
+  }
+
+  /**
+   * This period's usage with `projected_amount_cents`, an estimate for the whole period from the
+   * usage so far. Core answers 403 `projected_usage_not_enabled` unless projected usage is turned on
+   * for the organization.
+   */
+  async projectedUsage(customerId: string, options: { subscriptionId?: string } = {}): Promise<CustomerProjectedUsage> {
+    if (!this.apiKey.startsWith("sk_")) throw new Error("projectedUsage requires a secret key");
+    const subscriptionId = options.subscriptionId ?? (await this.resolveSubscription(customerId));
+    const res = await request(this.policy,
+      `${this.eventsUrl}/api/v1/customers/${encodeURIComponent(customerId)}/projected_usage?external_subscription_id=${encodeURIComponent(subscriptionId)}`,
+      { headers: { Authorization: `Bearer ${this.apiKey}` } },
+    );
+    if (!res.ok) throw await apiError("projectedUsage", res);
+    return ((await res.json()) as { customer_projected_usage: CustomerProjectedUsage }).customer_projected_usage;
   }
 
   private async resolveSubscription(customerId: string): Promise<string> {

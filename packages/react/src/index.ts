@@ -66,7 +66,7 @@ export {
   useUpgradePreview,
   useBillingRefresh,
 } from "./hooks/use-billing.js";
-export type { BillingSubscription, EntitlementResult, UpgradePreview } from "./hooks/use-billing.js";
+export type { BillingSubscription, EntitlementResult, ProjectedUsageData, UpgradePreview } from "./hooks/use-billing.js";
 export type { Plan as CatalogPlan } from "./hooks/use-plans.js";
 
 export { useCheckout as useCheckoutSession } from "./hooks/use-checkout.js";

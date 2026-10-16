@@ -785,3 +785,4 @@ export type CoreSubscription = import("./generated/openapi").components["schemas
 
 /** A customer's usage for one billing period (Core `current_usage`, or one `past_usage` period). */
 export type CustomerUsage = import("./generated/openapi").components["schemas"]["CustomerUsageObject"];
+export type CustomerProjectedUsage = import("./generated/openapi").components["schemas"]["CustomerProjectedUsageObject"];
