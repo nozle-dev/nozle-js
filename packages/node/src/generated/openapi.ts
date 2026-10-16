@@ -4243,9 +4243,9 @@ export interface paths {
          * Proxy a GET request to OpenAI
          * @description Forwards the request to `https://api.openai.com/{providerPath}` with the same method, query string, headers and body, and streams the provider response back unchanged. Every HTTP method is forwarded; POST and GET are listed here.
          *
-         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. `Authorization` carries the customer's own OpenAI key and is forwarded to OpenAI. Any key Engine recognises except a publishable `pk_` key is accepted; the internal credential is not. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id` and `X-Nozle-Feature` before forwarding.
+         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. `Authorization` carries the customer's own OpenAI key and is forwarded to OpenAI. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
          *
-         *     **Tracking.** For a JSON response Engine reads `model` and `usage.prompt_tokens` / `usage.completion_tokens`. For a `text/event-stream` response it reads the same fields from the `data:` chunks when the stream closes. When either token count is above zero, Engine sends a usage event in the background with code `llm_tokens`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A tracking failure is logged and does not change the response.
+         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
          *
          *     Example: `POST /proxy/openai/v1/chat/completions` is sent to `https://api.openai.com/v1/chat/completions`.
          */
@@ -4255,9 +4255,9 @@ export interface paths {
          * Proxy a request to OpenAI
          * @description Forwards the request to `https://api.openai.com/{providerPath}` with the same method, query string, headers and body, and streams the provider response back unchanged. Every HTTP method is forwarded; POST and GET are listed here.
          *
-         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. `Authorization` carries the customer's own OpenAI key and is forwarded to OpenAI. Any key Engine recognises except a publishable `pk_` key is accepted; the internal credential is not. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id` and `X-Nozle-Feature` before forwarding.
+         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. `Authorization` carries the customer's own OpenAI key and is forwarded to OpenAI. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
          *
-         *     **Tracking.** For a JSON response Engine reads `model` and `usage.prompt_tokens` / `usage.completion_tokens`. For a `text/event-stream` response it reads the same fields from the `data:` chunks when the stream closes. When either token count is above zero, Engine sends a usage event in the background with code `llm_tokens`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A tracking failure is logged and does not change the response.
+         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
          *
          *     Example: `POST /proxy/openai/v1/chat/completions` is sent to `https://api.openai.com/v1/chat/completions`.
          */
@@ -4282,9 +4282,9 @@ export interface paths {
          * Proxy a GET request to Anthropic
          * @description Forwards the request to `https://api.anthropic.com/{providerPath}` with the same method, query string, headers and body, and streams the provider response back unchanged. Every HTTP method is forwarded; POST and GET are listed here.
          *
-         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. The customer's Anthropic credentials (`x-api-key`, `anthropic-version` and any other provider headers) are forwarded unchanged. Any key Engine recognises except a publishable `pk_` key is accepted; the internal credential is not. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id` and `X-Nozle-Feature` before forwarding.
+         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. The customer's Anthropic credentials (`x-api-key`, `anthropic-version` and any other provider headers) are forwarded unchanged. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
          *
-         *     **Tracking.** For a JSON response Engine reads `model` and `usage.input_tokens` / `usage.output_tokens`. For a `text/event-stream` response it reads `message.model` and `message.usage.input_tokens` from the start event and `usage.output_tokens` from later events when the stream closes. When either token count is above zero, Engine sends a usage event in the background with code `llm_tokens`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A tracking failure is logged and does not change the response.
+         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
          *
          *     Example: `POST /proxy/anthropic/v1/messages` is sent to `https://api.anthropic.com/v1/messages`.
          */
@@ -4294,9 +4294,9 @@ export interface paths {
          * Proxy a request to Anthropic
          * @description Forwards the request to `https://api.anthropic.com/{providerPath}` with the same method, query string, headers and body, and streams the provider response back unchanged. Every HTTP method is forwarded; POST and GET are listed here.
          *
-         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. The customer's Anthropic credentials (`x-api-key`, `anthropic-version` and any other provider headers) are forwarded unchanged. Any key Engine recognises except a publishable `pk_` key is accepted; the internal credential is not. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id` and `X-Nozle-Feature` before forwarding.
+         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. The customer's Anthropic credentials (`x-api-key`, `anthropic-version` and any other provider headers) are forwarded unchanged. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
          *
-         *     **Tracking.** For a JSON response Engine reads `model` and `usage.input_tokens` / `usage.output_tokens`. For a `text/event-stream` response it reads `message.model` and `message.usage.input_tokens` from the start event and `usage.output_tokens` from later events when the stream closes. When either token count is above zero, Engine sends a usage event in the background with code `llm_tokens`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A tracking failure is logged and does not change the response.
+         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
          *
          *     Example: `POST /proxy/anthropic/v1/messages` is sent to `https://api.anthropic.com/v1/messages`.
          */
@@ -8684,10 +8684,10 @@ export interface components {
         ApiErrorNotAllowed: {
             /**
              * Format: int32
-             * @example 405
+             * @example 422
              */
             status: number;
-            /** @example Method Not Allowed */
+            /** @example Unprocessable Entity */
             error: string;
             /** @example not_allowed */
             code: string;
@@ -18160,7 +18160,7 @@ export interface components {
                 "application/json": components["schemas"]["ApiErrorNotFound"];
             };
         };
-        /** @description Not Allowed error */
+        /** @description The request is refused in the resource's current state (for example a voided invoice). The `code` says why. */
         NotAllowed: {
             headers: {
                 [name: string]: unknown;
@@ -19462,7 +19462,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            405: components["responses"]["NotAllowed"];
+            422: components["responses"]["NotAllowed"];
         };
     };
     replaceCreditNoteMetadata: {
@@ -21222,7 +21222,6 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            405: components["responses"]["NotAllowed"];
             422: components["responses"]["UnprocessableEntity"];
         };
     };
@@ -21249,7 +21248,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            405: components["responses"]["NotAllowed"];
+            422: components["responses"]["NotAllowed"];
         };
     };
     findAllInvoices: {
@@ -21466,7 +21465,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            405: components["responses"]["NotAllowed"];
+            422: components["responses"]["NotAllowed"];
         };
     };
     refreshInvoice: {
@@ -21600,7 +21599,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            405: components["responses"]["NotAllowed"];
+            422: components["responses"]["NotAllowed"];
         };
     };
     voidInvoice: {
@@ -24489,7 +24488,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            405: components["responses"]["NotAllowed"];
+            422: components["responses"]["NotAllowed"];
         };
     };
     engineGetBillingStatus: {
@@ -24706,15 +24705,6 @@ export interface operations {
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
-            /** @description Core refused the plan change. `code` names the reason (for example `plan_transition_policy_required`, `plan_already_active`, `target_plan_is_not_a_downgrade`, `subscription_not_active`, `externally_billed_subscription`). */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
-                };
-            };
             /** @description Core: `subscription_selection_required` (several active subscriptions and no `subscription_id`), `plan_change_quote_changed` or `subscription_change_pending`. Body is `{"code": "..."}`. */
             409: {
                 headers: {
@@ -24729,7 +24719,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description Core validation failure. */
+            /** @description Core validation failure. Refused in the current state: Core refused the plan change. `code` names the reason (for example `plan_transition_policy_required`, `plan_already_active`, `target_plan_is_not_a_downgrade`, `subscription_not_active`, `externally_billed_subscription`). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24896,15 +24886,6 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description Core refused the plan change. `code` names the reason (for example `plan_transition_policy_required`, `plan_already_active`, `target_plan_is_not_a_downgrade`, `subscription_not_active`, `externally_billed_subscription`). */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
-                };
-            };
             /** @description Core: `subscription_selection_required`, `plan_upgrade_checkout_in_progress`, `entity_subscription_checkout_in_progress`, `billing_anchor_checkout_in_progress`, `idempotency_key_reused` (quoted checkout), `plan_change_quote_changed`, `subscription_change_pending`. */
             409: {
                 headers: {
@@ -24914,7 +24895,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description Core: `checkout_not_required`, `payment_provider_required`, `stripe_customer_required`, `plan_already_active`, `subscription_and_idempotency_key_required`, `third_party_error`, `provider_error`, or `validation_errors` with `error_details` (for example `subscription: [subscription_incomplete]`, `return_url: [invalid_or_untrusted]`). */
+            /** @description Core: `checkout_not_required`, `payment_provider_required`, `stripe_customer_required`, `plan_already_active`, `subscription_and_idempotency_key_required`, `third_party_error`, `provider_error`, or `validation_errors` with `error_details` (for example `return_url: [invalid_or_untrusted]`). Refused in the current state: Core refused the plan change. `code` names the reason (for example `plan_transition_policy_required`, `plan_already_active`, `target_plan_is_not_a_downgrade`, `subscription_not_active`, `externally_billed_subscription`). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25356,16 +25337,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
-            /** @description Core refused the transition, for example `externally_billed_subscription`, `target_plan_is_not_a_downgrade`, `subscription_is_not_canceling`, `subscription_cancellation_already_effective`, `plan_transition_policy_required`. */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
-                };
-            };
-            /** @description Core `validation_errors`, for example `credit_action: [not_supported_for_pay_in_arrears]`, `expected_effective_at: [only_for_end_of_period_cancellation]`, `idempotency_key: [idempotency_key_reused]`. */
+            /** @description Core `validation_errors`, for example `credit_action: [not_supported_for_pay_in_arrears]`, `expected_effective_at: [only_for_end_of_period_cancellation]`, `idempotency_key: [idempotency_key_reused]`. Refused in the current state: Core refused the transition, for example `externally_billed_subscription`, `target_plan_is_not_a_downgrade`, `subscription_is_not_canceling`, `subscription_cancellation_already_effective`, `plan_transition_policy_required`. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25461,15 +25433,6 @@ export interface operations {
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
-            /** @description Core refused the transition, for example `externally_billed_subscription`, `target_plan_is_not_a_downgrade`, `subscription_is_not_canceling`, `subscription_cancellation_already_effective`, `plan_transition_policy_required`. */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
-                };
-            };
             /** @description Core: `subscription_cancellation_date_changed` (stale `expected_effective_at`), `plan_change_quote_changed` or `subscription_change_pending`. */
             409: {
                 headers: {
@@ -25486,7 +25449,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description Core `validation_errors`, for example `credit_action: [not_supported_for_pay_in_arrears]`, `expected_effective_at: [only_for_end_of_period_cancellation]`, `idempotency_key: [idempotency_key_reused]`. */
+            /** @description Core `validation_errors`, for example `credit_action: [not_supported_for_pay_in_arrears]`, `expected_effective_at: [only_for_end_of_period_cancellation]`, `idempotency_key: [idempotency_key_reused]`. Refused in the current state: Core refused the transition, for example `externally_billed_subscription`, `target_plan_is_not_a_downgrade`, `subscription_is_not_canceling`, `subscription_cancellation_already_effective`, `plan_transition_policy_required`. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25578,15 +25541,6 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description Core: `externally_billed_subscription`. */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
-                };
-            };
             /** @description Core: `pending_subscription_changed` (the pending ID is no longer the current pending change). Body is `{"code": "pending_subscription_changed"}`. */
             409: {
                 headers: {
@@ -25601,7 +25555,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description Core: `idempotency_key` `invalid_value` or `idempotency_key_reused`. */
+            /** @description Core: `idempotency_key` `invalid_value` or `idempotency_key_reused`. Refused in the current state: Core: `externally_billed_subscription`. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26085,16 +26039,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorNotFound"];
                 };
             };
-            /** @description `entity_inactive`, `entity_subscription_conflict` or `entity_incarnation_mismatch` (a new Entity reuses an older external ID). */
-            405: {
+            /** @description Validation errors. Refused in the current state: `entity_inactive`, `entity_subscription_conflict` or `entity_incarnation_mismatch` (a new Entity reuses an older external ID). */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
+                    "application/json": components["schemas"]["ApiErrorUnprocessableEntity"];
                 };
             };
-            422: components["responses"]["UnprocessableEntity"];
         };
     };
     coreDeleteEntitySubscription: {
@@ -26200,15 +26153,6 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description `plan_transition_policy_required`, `entity_inactive`, `entity_incarnation_mismatch`, and the other plan-change codes. */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
-                };
-            };
             /** @description `entity_subscription_checkout_in_progress`, `billing_anchor_checkout_in_progress`, `plan_upgrade_checkout_in_progress`, `idempotency_key_reused`, `plan_change_quote_changed`, `subscription_change_pending`. */
             409: {
                 headers: {
@@ -26218,7 +26162,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description `plan_already_active`, `payment_provider_required`, `stripe_customer_required`, `checkout_not_required` (never for Entity plan checkout, which completes such plans with `payment_source: none`), `subscription_and_idempotency_key_required`, or `validation_errors`. */
+            /** @description `plan_already_active`, `payment_provider_required`, `stripe_customer_required`, `checkout_not_required` (never for Entity plan checkout, which completes such plans with `payment_source: none`), `subscription_and_idempotency_key_required`, or `validation_errors`. Refused in the current state: `plan_transition_policy_required`, `entity_inactive`, `entity_incarnation_mismatch`, and the other plan-change codes. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26289,15 +26233,6 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description `plan_transition_policy_required`, `entity_inactive`, `entity_incarnation_mismatch`, and the other plan-change codes. */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
-                };
-            };
             /** @description `entity_subscription_checkout_in_progress`, `billing_anchor_checkout_in_progress`, `plan_upgrade_checkout_in_progress`, `idempotency_key_reused`, `plan_change_quote_changed`, `subscription_change_pending`. */
             409: {
                 headers: {
@@ -26307,7 +26242,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description `plan_already_active`, `payment_provider_required`, `stripe_customer_required`, `checkout_not_required` (never for Entity plan checkout, which completes such plans with `payment_source: none`), `subscription_and_idempotency_key_required`, or `validation_errors`. */
+            /** @description `plan_already_active`, `payment_provider_required`, `stripe_customer_required`, `checkout_not_required` (never for Entity plan checkout, which completes such plans with `payment_source: none`), `subscription_and_idempotency_key_required`, or `validation_errors`. Refused in the current state: `plan_transition_policy_required`, `entity_inactive`, `entity_incarnation_mismatch`, and the other plan-change codes. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26365,16 +26300,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorNotFound"];
                 };
             };
-            /** @description Transition refused, for example `externally_billed_subscription`. */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
-                };
-            };
-            /** @description `validation_errors`, for example `idempotency_key: [value_is_mandatory]` or `credit_action: [not_supported_for_pay_in_arrears]`. */
+            /** @description `validation_errors`, for example `idempotency_key: [value_is_mandatory]` or `credit_action: [not_supported_for_pay_in_arrears]`. Refused in the current state: Transition refused, for example `externally_billed_subscription`. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26467,16 +26393,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorNotFound"];
                 };
             };
-            /** @description `payment_provider_required` or `stripe_customer_required`. */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
-                };
-            };
-            /** @description `validation_errors`. `error_details` keys: `items` (`paid_plan_required`, `mixed_currencies`, `mixed_intervals`, `duplicate_external_entity_id`, `entity_subscription_already_exists`, `value_is_mandatory`, `value_is_too_large`, `value_is_invalid`), `currency` (`customer_currency_mismatch`), `checkout` (`billing_anchor_checkout_in_progress`, `checkout_not_available`, `payment_provider_changed`), `billing_time` (`value_is_invalid`), `idempotency_key` (`value_is_mandatory`, `value_is_too_long`, `idempotency_key_reused`), `return_url` (`invalid_or_untrusted`). */
+            /** @description `validation_errors`. `error_details` keys: `items` (`paid_plan_required`, `mixed_currencies`, `mixed_intervals`, `duplicate_external_entity_id`, `entity_subscription_already_exists`, `value_is_mandatory`, `value_is_too_large`, `value_is_invalid`), `currency` (`customer_currency_mismatch`), `checkout` (`billing_anchor_checkout_in_progress`, `checkout_not_available`, `payment_provider_changed`), `billing_time` (`value_is_invalid`), `idempotency_key` (`value_is_mandatory`, `value_is_too_long`, `idempotency_key_reused`), `return_url` (`invalid_or_untrusted`). Refused in the current state: `payment_provider_required` or `stripe_customer_required`. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26571,16 +26488,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorNotFound"];
                 };
             };
-            /** @description `entity_inactive` or `entity_incarnation_mismatch`. */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
-                };
-            };
-            /** @description `validation_errors`, for example `idempotency_key` (`value_is_mandatory`, `value_is_too_long`, `idempotency_key_reused`), `status`/`billing_authority` (`invalid_value`), `external_reference` (`value_is_mandatory`), `current_period` (`must_contain_current_time`, `does_not_match_plan_cadence`, `invalid_value`), `subscription` (`already_exists`), `credit_grant_rules` (`scope_mismatch`). */
+            /** @description `validation_errors`, for example `idempotency_key` (`value_is_mandatory`, `value_is_too_long`, `idempotency_key_reused`), `status`/`billing_authority` (`invalid_value`), `external_reference` (`value_is_mandatory`), `current_period` (`must_contain_current_time`, `does_not_match_plan_cadence`, `invalid_value`), `subscription` (`already_exists`), `credit_grant_rules` (`scope_mismatch`). Refused in the current state: `entity_inactive` or `entity_incarnation_mismatch`. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26688,16 +26596,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
-            /** @description Core refused the plan change. `code` names the reason (for example `plan_transition_policy_required`, `plan_already_active`, `target_plan_is_not_a_downgrade`, `subscription_not_active`, `externally_billed_subscription`). */
-            405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorNotAllowed"];
-                };
-            };
-            /** @description Core validation failure. */
+            /** @description Core validation failure. Refused in the current state: Core refused the plan change. `code` names the reason (for example `plan_transition_policy_required`, `plan_already_active`, `target_plan_is_not_a_downgrade`, `subscription_not_active`, `externally_billed_subscription`). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29033,8 +28932,10 @@ export interface operations {
                  * @example cust_123
                  */
                 "X-Nozle-Customer-Id": string;
-                /** @description Feature code stored as the `feature` property of the tracked event. */
+                /** @description Stored as the `feature` property of the usage event. */
                 "X-Nozle-Feature"?: string;
+                /** @description Code of the usage event. Default `llm_tokens`. It bills only when a metered Feature has this code. */
+                "X-Nozle-Feature-Code"?: string;
                 /** @description The customer's OpenAI key (`Bearer sk-...`), forwarded to OpenAI unchanged. */
                 Authorization?: string;
             };
@@ -29083,8 +28984,10 @@ export interface operations {
                  * @example cust_123
                  */
                 "X-Nozle-Customer-Id": string;
-                /** @description Feature code stored as the `feature` property of the tracked event. */
+                /** @description Stored as the `feature` property of the usage event. */
                 "X-Nozle-Feature"?: string;
+                /** @description Code of the usage event. Default `llm_tokens`. It bills only when a metered Feature has this code. */
+                "X-Nozle-Feature-Code"?: string;
                 /** @description The customer's OpenAI key (`Bearer sk-...`), forwarded to OpenAI unchanged. */
                 Authorization?: string;
             };
@@ -29149,8 +29052,10 @@ export interface operations {
                  * @example cust_123
                  */
                 "X-Nozle-Customer-Id": string;
-                /** @description Feature code stored as the `feature` property of the tracked event. */
+                /** @description Stored as the `feature` property of the usage event. */
                 "X-Nozle-Feature"?: string;
+                /** @description Code of the usage event. Default `llm_tokens`. It bills only when a metered Feature has this code. */
+                "X-Nozle-Feature-Code"?: string;
                 /** @description The customer's Anthropic key, forwarded to Anthropic unchanged. */
                 "x-api-key"?: string;
                 /**
@@ -29204,8 +29109,10 @@ export interface operations {
                  * @example cust_123
                  */
                 "X-Nozle-Customer-Id": string;
-                /** @description Feature code stored as the `feature` property of the tracked event. */
+                /** @description Stored as the `feature` property of the usage event. */
                 "X-Nozle-Feature"?: string;
+                /** @description Code of the usage event. Default `llm_tokens`. It bills only when a metered Feature has this code. */
+                "X-Nozle-Feature-Code"?: string;
                 /** @description The customer's Anthropic key, forwarded to Anthropic unchanged. */
                 "x-api-key"?: string;
                 /**
