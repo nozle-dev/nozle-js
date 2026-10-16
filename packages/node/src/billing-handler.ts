@@ -104,7 +104,7 @@ export function createBillingHandler(nozle: Nozle, options: BillingHandlerOption
   return async function billingHandler(request: Request): Promise<Response> {
     if (request.method !== "GET") return json(405, { code: "method_not_allowed" });
     const url = new URL(request.url);
-    const name = url.pathname.replace(/\/+$/, "").split("/").pop() ?? "";
+    const name = url.pathname.split("/").filter(Boolean).pop() ?? "";
     const route = Object.prototype.hasOwnProperty.call(routes, name) ? routes[name] : undefined;
     if (!route) return json(404, { code: "not_found" });
 

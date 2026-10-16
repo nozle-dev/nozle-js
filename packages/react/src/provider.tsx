@@ -220,7 +220,10 @@ function createBillingFetch(
   endpoint: string,
   headers?: () => HeadersInit | Promise<HeadersInit>,
 ): BillingFetch {
-  const base = endpoint.replace(/\/+$/, "");
+  // Trim trailing slashes without a regex: /\/+$/ is quadratic on long runs of "/".
+  let end = endpoint.length;
+  while (end > 0 && endpoint[end - 1] === "/") end--;
+  const base = endpoint.slice(0, end);
   return async <T,>(route: string, params: Record<string, string | number | undefined> = {}) => {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
