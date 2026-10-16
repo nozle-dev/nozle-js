@@ -41,9 +41,14 @@ async function activeSubscription(nozle: Nozle, customerId: string) {
 // Each route reads only the signed-in customer's own data; query parameters choose what, never whose.
 const routes: Record<string, Route> = {
   async subscription(nozle, customerId) {
-    const subscription = await activeSubscription(nozle, customerId);
-    if (!subscription) return { subscription: null, pending_change: null };
-    return nozle.subscriptionOptions(customerId, subscription.external_id);
+    // Past due: the customer has an unpaid invoice past its due date.
+    const [subscription, overdue] = await Promise.all([
+      activeSubscription(nozle, customerId),
+      nozle.invoices.list(customerId, { paymentOverdue: true, perPage: 1 }),
+    ]);
+    const past_due = (overdue.meta?.total_count ?? overdue.invoices.length) > 0;
+    if (!subscription) return { subscription: null, pending_change: null, past_due };
+    return { ...(await nozle.subscriptionOptions(customerId, subscription.external_id)), past_due };
   },
   entitlement: (nozle, customerId, query) => nozle.can(customerId, required(query, "feature")),
   credits: (nozle, customerId) => nozle.credits.listBalances(customerId),

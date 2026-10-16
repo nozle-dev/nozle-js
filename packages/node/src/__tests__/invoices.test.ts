@@ -21,11 +21,11 @@ afterEach(() => vi.unstubAllGlobals());
 describe("invoices", () => {
   it("lists a customer's invoices with the filters as Core query parameters", async () => {
     const fetch = stub({ "GET /core/api/v1/invoices": () => Response.json({ invoices: [invoice], meta: { current_page: 2 } }) });
-    const page = await nozle().invoices.list("cus 1", { status: "finalized", paymentStatus: "failed", page: 2, perPage: 5 });
+    const page = await nozle().invoices.list("cus 1", { status: "finalized", paymentStatus: "failed", paymentOverdue: true, page: 2, perPage: 5 });
     expect(page.invoices[0].number).toBe("INV-1");
     const url = new URL(String(fetch.mock.calls[0][0]));
     expect(Object.fromEntries(url.searchParams)).toEqual({
-      external_customer_id: "cus 1", status: "finalized", payment_status: "failed", page: "2", per_page: "5",
+      external_customer_id: "cus 1", status: "finalized", payment_status: "failed", payment_overdue: "true", page: "2", per_page: "5",
     });
   });
 

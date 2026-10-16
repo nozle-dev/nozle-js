@@ -19,6 +19,8 @@ export interface BillingSubscription {
     name: string;
     effective_at: string;
   } | null;
+  /** The customer has an unpaid invoice past its due date. */
+  past_due?: boolean;
 }
 
 /** This period's usage with the estimate for the whole period. */

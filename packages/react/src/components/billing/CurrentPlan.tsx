@@ -32,6 +32,8 @@ export interface CurrentPlanProps {
   details?: CurrentPlanDetail[];
   /** Buttons for the header, for example a link to your billing portal. */
   actions?: ReactNode;
+  /** Text of the notice shown when the customer is past due. */
+  pastDueMessage?: string;
   /** A meter at or above this percentage shows a notice. Default 80; `null` turns notices off. */
   warningPercent?: number | null;
   title?: string;
@@ -116,6 +118,7 @@ function CurrentPlanView({
   isLoading = false,
   error = null,
   emptyMessage = "No active plan.",
+  pastDueMessage = "A payment is overdue. Pay the open invoice to keep your plan active.",
   locale = "en-US",
   appearance,
 }: CurrentPlanProps): React.ReactElement {
@@ -175,6 +178,22 @@ function CurrentPlanView({
       {header}
       {body(
         <>
+          {subscription?.past_due && (
+            <p
+              role="alert"
+              {...el("currentPlan__notice", {
+                margin: 0,
+                padding: "0.625rem 0.875rem",
+                fontSize: "0.875rem",
+                borderRadius: `calc(${T.radius} / 2)`,
+                background: T.dangerSoft,
+                color: T.danger,
+                border: border(T.dangerBorder),
+              })}
+            >
+              {pastDueMessage}
+            </p>
+          )}
           {near.map((meter) => (
             <p
               key={meter.key}

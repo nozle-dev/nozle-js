@@ -13,6 +13,8 @@ export interface ListInvoicesOptions {
   status?: string;
   /** `pending`, `succeeded` or `failed`. */
   paymentStatus?: string;
+  /** Only invoices past their due date and not paid (`true`), or only the others (`false`). */
+  paymentOverdue?: boolean;
   /** Inclusive dates, `YYYY-MM-DD`. */
   issuingDateFrom?: string;
   issuingDateTo?: string;
@@ -34,6 +36,7 @@ export class InvoicesNamespace {
     const fields: [keyof ListInvoicesOptions, string][] = [
       ["status", "status"],
       ["paymentStatus", "payment_status"],
+      ["paymentOverdue", "payment_overdue"],
       ["issuingDateFrom", "issuing_date_from"],
       ["issuingDateTo", "issuing_date_to"],
       ["page", "page"],

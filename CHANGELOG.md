@@ -4,6 +4,7 @@
 
 ### Added
 
+- `createBillingHandler`'s `subscription` route and React `useSubscription()` include `past_due` (the customer has an unpaid invoice past its due date); `CurrentPlan` shows it as an alert. Node `invoices.list` takes `paymentOverdue`.
 - Node.js: `nozle.alerts.list / get / create / update / delete` manage usage alerts of a subscription (`{ subscriptionId }`) and balance alerts of a wallet (`{ customerId, walletCode }`). Nozle sends `alert.triggered` when one fires.
 - Node.js: `nozle.invoices.list(customerId, options)`, `get(invoiceId)` and `downloadUrl(invoiceId)` (the PDF URL, or `null` while it is generated). `createBillingHandler` serves `invoices` (the session customer's finalized invoices) and `invoice-download` (404 for another customer's invoice); React `useInvoices({ page })` and `useInvoiceDownload()` read them.
 - Node.js: `projectedUsage(customerId, { subscriptionId? })` returns this period's usage with `projected_amount_cents`. `createBillingHandler`'s `usage` route and React `useUsage({ period: "projected" })` serve it.

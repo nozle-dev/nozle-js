@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { createBillingHandler } from "../billing-handler";
 import { NozleApiError } from "../errors";
 
-function fakeNozle(subscriptions: Array<{ external_id: string }> = [{ external_id: "sub_1" }]) {
+function fakeNozle(subscriptions: Array<{ external_id: string }> = [{ external_id: "sub_1" }], overdue = 0) {
   return {
+    invoices: {
+      list: vi.fn(async () => ({ invoices: [], meta: { total_count: overdue } })),
+    },
     getSubscriptions: vi.fn(async () => subscriptions),
     subscriptionOptions: vi.fn(async (_c: string, s: string) => ({ subscription: { external_id: s }, pending_change: null })),
     can: vi.fn(async () => ({ allowed: true, used: 1, limit: 10, remaining: 9 })),
@@ -28,7 +31,9 @@ describe("createBillingHandler", () => {
     expect(await (await handler(get("/api/nozle/subscription?customer_id=other"))).json()).toEqual({
       subscription: { external_id: "sub_1" },
       pending_change: null,
+      past_due: false,
     });
+    expect(nozle.invoices.list).toHaveBeenCalledWith("cust_session", { paymentOverdue: true, perPage: 1 });
     await handler(get("/api/nozle/entitlement?feature=ai_calls&customer_id=other"));
     expect(nozle.can).toHaveBeenCalledWith("cust_session", "ai_calls");
     await handler(get("/api/nozle/credit-history?cursor=c2&limit=5"));
@@ -59,7 +64,7 @@ describe("createBillingHandler", () => {
 
   it("returns empty data without a subscription and 409 with more than one", async () => {
     const none = createBillingHandler(fakeNozle([]) as any, { getCustomerId: () => "c" });
-    expect(await (await none(get("/x/subscription"))).json()).toEqual({ subscription: null, pending_change: null });
+    expect(await (await none(get("/x/subscription"))).json()).toEqual({ subscription: null, pending_change: null, past_due: false });
     expect(await (await none(get("/x/usage"))).json()).toEqual({ usage: null, periods: [], projected: null });
 
     const two = createBillingHandler(fakeNozle([{ external_id: "a" }, { external_id: "b" }]) as any, { getCustomerId: () => "c" });
@@ -79,5 +84,10 @@ describe("createBillingHandler", () => {
     const failed = await handler(get("/x/credits"));
     expect(failed.status).toBe(502);
     expect(await failed.text()).not.toContain("secret");
+  });
+
+  it("marks the customer past due when an invoice is overdue", async () => {
+    const handler = createBillingHandler(fakeNozle([{ external_id: "sub_1" }], 2) as any, { getCustomerId: () => "c" });
+    expect(await (await handler(get("/x/subscription"))).json()).toMatchObject({ past_due: true });
   });
 });

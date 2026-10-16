@@ -42,6 +42,11 @@ describe("CurrentPlan from props", () => {
     expect(screen.getByText("Changes to Free on Nov 1, 2026")).toBeTruthy();
   });
 
+  it("shows a past-due alert", () => {
+    render(<CurrentPlan subscription={{ ...active, past_due: true }} />);
+    expect(screen.getByRole("alert").textContent).toBe("A payment is overdue. Pay the open invoice to keep your plan active.");
+  });
+
   it("shows the empty message without a subscription", () => {
     render(<CurrentPlan subscription={{ subscription: null, pending_change: null }} />);
     expect(screen.getByRole("status").textContent).toBe("No active plan.");
