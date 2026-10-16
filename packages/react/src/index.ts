@@ -31,6 +31,10 @@ export type {
 
 /** @nozle-js/react — public catalog and merchant-BFF checkout components. */
 
+export { useAppearance } from "./appearance/context.js";
+export type { UseAppearance, ElementProps } from "./appearance/context.js";
+export type { Appearance, Elements, ElementKey, Theme, Variables } from "./appearance/tokens.js";
+
 export {
   BillingProvider,
   BillingContext,

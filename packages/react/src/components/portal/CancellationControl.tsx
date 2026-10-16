@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { useAppearance } from "../../appearance/context.js";
+import { T, type Appearance } from "../../appearance/tokens.js";
 import { BillingPortalError } from "./client.js";
 import { portalTimezones } from "./timezones.js";
 
@@ -44,19 +46,20 @@ export interface CancellationControlProps {
   locale?: string;
   timezone?: string;
   nonce?: string;
+  appearance?: Appearance;
 }
 
 const styles = `
-.nozle-cancellation{font:inherit;color:var(--nozle-portal-text,#202922)}
-.nozle-cancellation button{font:inherit;padding:9px 14px;border:1px solid var(--nozle-portal-border,#dce2d9);border-radius:7px;background:var(--nozle-portal-background,#fff);color:inherit;cursor:pointer}
+.nozle-cancellation{font-family:${T.font};color:${T.foreground}}
+.nozle-cancellation button{font:inherit;font-weight:550;padding:9px 14px;border:${T.borderWidth} solid ${T.border};border-radius:calc(${T.radius} * 0.6);background:${T.card};color:inherit;cursor:pointer}
 .nozle-cancellation button:disabled{opacity:.55;cursor:wait}
-.nozle-cancellation :focus-visible{outline:2px solid var(--nozle-portal-accent,#526949);outline-offset:3px}
+.nozle-cancellation :focus-visible{outline:2px solid ${T.primary};outline-offset:3px}
 .nozle-cancellation .nzc-backdrop{position:fixed;inset:0;background:#0006;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
-.nozle-cancellation .nzc-dialog{box-sizing:border-box;background:var(--nozle-portal-background,#fff);border:1px solid var(--nozle-portal-border,#dce2d9);border-radius:12px;padding:24px;width:100%;max-width:440px;max-height:90dvh;overflow:auto;box-shadow:0 12px 48px #0003}
+.nozle-cancellation .nzc-dialog{box-sizing:border-box;background:${T.card};border:${T.borderWidth} solid ${T.border};border-radius:${T.radius};padding:24px;width:100%;max-width:440px;max-height:90dvh;overflow:auto;box-shadow:${T.shadow},0 12px 48px #0003}
 .nozle-cancellation .nzc-dialog h3{margin:0 0 16px;font-size:20px}
 .nozle-cancellation .nzc-dialog p{margin:12px 0;line-height:1.55}
 .nozle-cancellation .nzc-buttons{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:20px}
-.nozle-cancellation [role=alert]{color:#922e25}
+.nozle-cancellation [role=alert]{color:${T.danger}}
 `;
 
 function formatDate(value: string, locale: string, timezone: string) {
@@ -99,7 +102,9 @@ function CancellationFlow({
   locale = "en-US",
   timezone = "UTC",
   nonce,
+  appearance,
 }: CancellationControlProps) {
+  const { root } = useAppearance(appearance);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<CancellationPreview>();
@@ -322,7 +327,7 @@ function CancellationFlow({
   }
 
   return (
-    <div className="nozle-cancellation">
+    <div {...root("cancellationControl", undefined, "nozle-cancellation")}>
       <style nonce={nonce}>{styles}</style>
       {notice && <p role="status">{notice}</p>}
       {active && !expired && (

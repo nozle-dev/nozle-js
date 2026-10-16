@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { useAppearance } from "../../appearance/context.js";
+import { T, border as themeBorder, surface, type Appearance } from "../../appearance/tokens.js";
 import { formatDecimalString } from "../../core/decimal.js";
 
 /** The fields of the SDK's credit operation (`nozle.credits.operations`) that this component reads. */
@@ -21,6 +23,7 @@ export interface CreditHistoryProps {
   /** When true a "Load more" button is shown. Fetch the next page with the SDK's `next_cursor`. */
   hasMore?: boolean;
   onLoadMore?: () => void;
+  appearance?: Appearance;
 }
 
 const TYPE_LABELS: Record<CreditOperationData["type"], string> = {
@@ -33,9 +36,8 @@ const TYPE_LABELS: Record<CreditOperationData["type"], string> = {
   transfer: "Transfer",
 };
 
-const border = "1px solid var(--nozle-border, var(--border))";
-const muted = "var(--nozle-muted-foreground, var(--muted-foreground))";
-const cell = { padding: "0.5rem 0.75rem", borderBottom: border, textAlign: "left" as const };
+const muted = T.mutedForeground;
+const cell = { padding: "0.5rem 0.75rem", borderBottom: themeBorder(), textAlign: "left" as const };
 
 function when(value: string): string {
   const parsed = new Date(value);
@@ -49,14 +51,16 @@ export function CreditHistory({
   emptyMessage = "No credit activity yet.",
   hasMore = false,
   onLoadMore,
+  appearance,
 }: CreditHistoryProps): React.ReactElement {
-  if (error) return <p role="alert">{typeof error === "string" ? error : error.message}</p>;
-  if (isLoading && operations.length === 0) return <div role="status" aria-label="Loading credit history" style={{ height: 120, borderRadius: 8, background: "var(--nozle-border, var(--border))" }} />;
-  if (operations.length === 0) return <p role="status">{emptyMessage}</p>;
+  const { root, el } = useAppearance(appearance);
+  if (error) return <p {...root("creditHistory", { ...surface, color: T.danger })} role="alert">{typeof error === "string" ? error : error.message}</p>;
+  if (isLoading && operations.length === 0) return <div {...root("creditHistory", { ...surface, height: 120, background: T.skeleton })} role="status" aria-label="Loading credit history" />;
+  if (operations.length === 0) return <p {...root("creditHistory", { ...surface, color: muted })} role="status">{emptyMessage}</p>;
 
   return (
-    <div style={{ overflowX: "auto", color: "var(--nozle-foreground, var(--foreground))" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
+    <div {...root("creditHistory", { ...surface, overflowX: "auto" })}>
+      <table {...el("creditHistory__table", { width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" })}>
         <thead>
           <tr>
             {["When", "Type", "Feature", "Credits", "Status"].map((heading) => (
@@ -66,7 +70,7 @@ export function CreditHistory({
         </thead>
         <tbody>
           {operations.map((operation) => (
-            <tr key={operation.id}>
+            <tr key={operation.id} {...el("creditHistory__row")}>
               <td style={cell}>{when(operation.occurred_at)}</td>
               <td style={cell}>{TYPE_LABELS[operation.type] ?? operation.type}</td>
               <td style={cell}>{operation.feature_code ?? "—"}</td>
@@ -77,7 +81,21 @@ export function CreditHistory({
         </tbody>
       </table>
       {hasMore && onLoadMore && (
-        <button type="button" onClick={onLoadMore} disabled={isLoading} style={{ marginTop: "0.75rem" }}>
+        <button
+          type="button"
+          onClick={onLoadMore}
+          disabled={isLoading}
+          style={{
+            marginTop: "0.75rem",
+            padding: "0.5rem 0.875rem",
+            font: "inherit",
+            color: T.foreground,
+            background: T.muted,
+            border: themeBorder(),
+            borderRadius: `calc(${T.radius} / 2)`,
+            cursor: isLoading ? "wait" : "pointer",
+          }}
+        >
           {isLoading ? "Loading…" : "Load more"}
         </button>
       )}

@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { useAppearance } from "../../appearance/context.js";
+import { T, border as themeBorder, surface, type Appearance } from "../../appearance/tokens.js";
 import { formatAmount, formatDay, type CustomerUsageData } from "./usage-data.js";
 
 export interface UsageTrendProps {
@@ -14,9 +16,10 @@ export interface UsageTrendProps {
   isLoading?: boolean;
   error?: Error | string | null;
   emptyMessage?: string;
+  appearance?: Appearance;
 }
 
-const muted = "var(--nozle-muted-foreground, var(--muted-foreground))";
+const muted = T.mutedForeground;
 const BAR_AREA = 120;
 
 function unitsFor(period: CustomerUsageData, featureCode: string): number {
@@ -31,10 +34,12 @@ export function UsageTrend({
   isLoading = false,
   error = null,
   emptyMessage = "No past usage yet.",
+  appearance,
 }: UsageTrendProps): React.ReactElement {
-  if (isLoading) return <div role="status" aria-label="Loading usage trend" style={{ height: 160, borderRadius: 8, background: "var(--nozle-border, var(--border))" }} />;
-  if (error) return <p role="alert">{typeof error === "string" ? error : error.message}</p>;
-  if (!periods || periods.length === 0) return <p role="status">{emptyMessage}</p>;
+  const { root, el } = useAppearance(appearance);
+  if (isLoading) return <div {...root("usageTrend", { ...surface, height: 160, background: T.skeleton })} role="status" aria-label="Loading usage trend" />;
+  if (error) return <p {...root("usageTrend", { ...surface, color: T.danger })} role="alert">{typeof error === "string" ? error : error.message}</p>;
+  if (!periods || periods.length === 0) return <p {...root("usageTrend", { ...surface, color: muted })} role="status">{emptyMessage}</p>;
 
   const ordered = [...periods].sort((a, b) => Date.parse(a.from_datetime) - Date.parse(b.from_datetime));
   const points = ordered.map((period) => ({
@@ -48,7 +53,7 @@ export function UsageTrend({
   const max = Math.max(...points.map((point) => point.value), 0);
 
   return (
-    <figure style={{ margin: 0, color: "var(--nozle-foreground, var(--foreground))" }}>
+    <figure {...root("usageTrend", { ...surface, margin: 0 })}>
       <div style={{ display: "flex", alignItems: "flex-end", gap: "0.5rem", height: BAR_AREA + 40 }}>
         {points.map((point) => (
           <div key={point.key} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: "0.75rem" }}>
@@ -57,12 +62,12 @@ export function UsageTrend({
               role="img"
               aria-label={`${point.label}: ${point.text}`}
               title={`${point.label}: ${point.text}`}
-              style={{
+              {...el("usageTrend__bar", {
                 height: max > 0 ? Math.max(2, (point.value / max) * BAR_AREA) : 2,
                 marginTop: 4,
-                borderRadius: "4px 4px 0 0",
-                background: "var(--nozle-primary, var(--primary))",
-              }}
+                borderRadius: `min(4px, ${T.radius}) min(4px, ${T.radius}) 0 0`,
+                background: T.primary,
+              })}
             />
             <div style={{ marginTop: 4, color: muted }}>{point.label}</div>
           </div>

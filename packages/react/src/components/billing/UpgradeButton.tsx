@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { useAppearance } from "../../appearance/context.js";
+import { buttonStyle, type Appearance } from "../../appearance/tokens.js";
 import { UpgradeModal, type ProrationPreview } from "./UpgradeModal.js";
 
 export interface UpgradeButtonProps {
@@ -12,6 +14,7 @@ export interface UpgradeButtonProps {
   preview?: ProrationPreview;
   label?: string;
   className?: string;
+  appearance?: Appearance;
   style?: React.CSSProperties;
   onStripeClientSecret?: (clientSecret: string) => void;
   onCheckoutStarted?: () => void;
@@ -35,31 +38,24 @@ export function UpgradeButton({
   onDowngradeScheduled,
   onUpgraded,
   onError,
+  appearance,
 }: UpgradeButtonProps): React.ReactElement {
   const [isOpen, setIsOpen] = useState(false);
+  const { root } = useAppearance(appearance);
 
   return (
     <>
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className={className}
-        style={{
-          padding: "0.75rem 1.5rem",
-          borderRadius: "var(--nozle-radius, 0.5rem)",
-          border: "none",
-          background: "var(--nozle-primary, var(--primary))",
-          color: "var(--nozle-primary-foreground, var(--primary-foreground))",
-          cursor: "pointer",
-          fontWeight: 500,
-          ...style,
-        }}
+        {...root("upgradeButton", { ...buttonStyle(), ...style }, className)}
       >
         {label}
       </button>
 
       <UpgradeModal
         isOpen={isOpen}
+        appearance={appearance}
         planCode={planCode}
         returnUrl={returnUrl}
         subscriptionId={subscriptionId}

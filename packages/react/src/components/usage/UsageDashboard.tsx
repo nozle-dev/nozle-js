@@ -8,6 +8,8 @@
  */
 
 import { UsageMeter } from "./UsageMeter.js";
+import { useAppearance } from "../../appearance/context.js";
+import { T, type Appearance } from "../../appearance/tokens.js";
 import type { CatalogEntitlement } from "../pricing/plan-features.js";
 
 export interface UsageDashboardFeature {
@@ -46,6 +48,7 @@ export interface UsageDashboardProps {
   error?: Error | string | null;
   /** Shown when there are no features. */
   emptyMessage?: string;
+  appearance?: Appearance;
 }
 
 export function UsageDashboard({
@@ -53,31 +56,47 @@ export function UsageDashboard({
   loading = false,
   error = null,
   emptyMessage = "No usage to show yet.",
+  appearance,
 }: UsageDashboardProps) {
+  const { root } = useAppearance(appearance);
+  const props = root("usageDashboard", {
+    display: "flex",
+    flexDirection: "column",
+    gap: loading ? "0.75rem" : "1rem",
+    fontFamily: T.font,
+    color: T.foreground,
+  });
+
   if (loading) {
     return (
-      <div className="animate-pulse space-y-3">
+      <div {...props} aria-busy="true">
         {[1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className="h-8 rounded"
-            style={{ background: "var(--nozle-border, var(--border))" }}
-          />
+          <div key={i} style={{ height: "2rem", borderRadius: `calc(${T.radius} / 3)`, background: T.skeleton }} />
         ))}
       </div>
     );
   }
 
   if (error) {
-    return <p role="alert">{typeof error === "string" ? error : error.message}</p>;
+    return (
+      <p {...props} role="alert">
+        {typeof error === "string" ? error : error.message}
+      </p>
+    );
   }
 
-  if (features.length === 0) return <p role="status">{emptyMessage}</p>;
+  if (features.length === 0) {
+    return (
+      <p {...props} role="status">
+        {emptyMessage}
+      </p>
+    );
+  }
 
   return (
-    <div className="space-y-4">
+    <div {...props}>
       {features.map((f) => (
-        <UsageMeter key={f.key} used={f.used} limit={f.limit} label={f.label} />
+        <UsageMeter key={f.key} used={f.used} limit={f.limit} label={f.label} appearance={appearance} />
       ))}
     </div>
   );

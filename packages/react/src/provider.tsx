@@ -8,6 +8,8 @@ import React, {
   type ReactNode,
 } from "react";
 import { QueryClient } from "@tanstack/react-query";
+import { AppearanceProvider } from "./appearance/context.js";
+import type { Appearance } from "./appearance/tokens.js";
 
 export interface CheckoutSubscriptionResult {
   external_entity_id?: string;
@@ -272,6 +274,11 @@ export interface BillingProviderProps {
    * `QueryClientProvider` of your app.
    */
   queryClient?: QueryClient;
+  /**
+   * Look of every component inside: a predefined theme from `@nozle-js/react/themes`, your own
+   * variables, and per-element class names or styles. A component's own `appearance` goes on top.
+   */
+  appearance?: Appearance;
   children: ReactNode;
 }
 
@@ -284,6 +291,7 @@ export function BillingProvider({
   billingEndpoint,
   billingHeaders,
   queryClient,
+  appearance,
   children,
 }: BillingProviderProps): React.ReactElement {
   if (!publishableKey.startsWith("pk_")) {
@@ -318,7 +326,7 @@ export function BillingProvider({
   return React.createElement(
     BillingContext.Provider,
     { value: contextValue },
-    children,
+    React.createElement(AppearanceProvider, { appearance, children }),
   );
 }
 

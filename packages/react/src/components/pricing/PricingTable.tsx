@@ -14,6 +14,8 @@ import {
   type CatalogCreditGrantRule,
   type CatalogEntitlement,
 } from './plan-features.js';
+import { useAppearance, type UseAppearance } from '../../appearance/context.js';
+import { T, border, buttonStyle, type Appearance, type ButtonVariant } from '../../appearance/tokens.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -40,8 +42,8 @@ export interface PricingTableProps {
    */
   features?: string[][] | Record<string, string[]>;
   /**
-   * Optional. Orders the plans. By default they are sorted by base price, cheapest first, with custom
-   * (enterprise) plans last.
+   * Optional. Orders the plans. By default they are sorted by base price, cheapest first, with
+   * `contactSalesPlans` last.
    */
   sort?: (a: PricingPlan, b: PricingPlan) => number;
   onSelect?: (plan: PricingPlan) => void;
@@ -52,7 +54,13 @@ export interface PricingTableProps {
   showToggle?: boolean;
   highlightPlan?: string;
   className?: string;
+  /**
+   * Codes of plans sold on request. Their card shows "Custom" instead of a price and a "Contact Sales"
+   * button, which opens `enterpriseEmail` when set.
+   */
+  contactSalesPlans?: string[];
   enterpriseEmail?: string;
+  appearance?: Appearance;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -74,26 +82,17 @@ function fmtPrice(cents: number, cur: string): string {
   return `${s}${val}`;
 }
 
-function isEnterprise(p: PricingPlan): boolean {
-  return /enterprise|custom/i.test(p.name + p.code);
-}
-
-function v(name: string, fb: string): string {
-  return `var(${name}, ${fb})`;
-}
-
-// ─── CSS variable shortcuts ──────────────────────────────────────────────────
+// ─── Theme shortcuts ─────────────────────────────────────────────────────────
 
 const C = {
-  bg:       v('--nozle-pricing-bg', v('--nozle-background', '#ffffff')),
-  cardBg:   v('--nozle-pricing-card-bg', v('--nozle-card', '#ffffff')),
-  hl:       v('--nozle-pricing-highlight', v('--nozle-primary', '#6366f1')),
-  border:   v('--nozle-pricing-border', v('--nozle-border', '#e5e7eb')),
-  radius:   v('--nozle-pricing-radius', v('--nozle-radius', '12px')),
-  text:     v('--nozle-foreground', '#111827'),
-  muted:    v('--nozle-muted-foreground', '#6b7280'),
-  mutedBg:  v('--nozle-muted', '#f3f4f6'),
-  hlFg:     v('--nozle-primary-foreground', '#ffffff'),
+  cardBg: T.card,
+  hl: T.primary,
+  border: T.border,
+  radius: T.radius,
+  text: T.foreground,
+  muted: T.mutedForeground,
+  mutedBg: T.muted,
+  hlFg: T.primaryForeground,
 };
 
 // ─── Check icon ──────────────────────────────────────────────────────────────
@@ -108,7 +107,7 @@ function Check(): React.ReactElement {
 
 // ─── Toggle ──────────────────────────────────────────────────────────────────
 
-function Toggle({ isAnnual, onChange }: { isAnnual: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ isAnnual, onChange, el }: { isAnnual: boolean; onChange: (v: boolean) => void; el: UseAppearance['el'] }) {
   const pill: CSSProperties = {
     display: 'inline-flex',
     borderRadius: '9999px',
@@ -125,17 +124,17 @@ function Toggle({ isAnnual, onChange }: { isAnnual: boolean; onChange: (v: boole
     fontWeight: active ? 600 : 400,
     fontSize: '0.875rem',
     cursor: 'pointer',
-    boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+    boxShadow: active ? T.shadow : 'none',
     transition: 'all 0.15s ease',
   });
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2.5rem' }}>
-      <div style={pill}>
-        <button onClick={() => onChange(false)} style={tab(!isAnnual)} aria-pressed={!isAnnual}>
+      <div {...el('pricingTable__toggle', pill)}>
+        <button onClick={() => onChange(false)} {...el('pricingTable__toggleButton', tab(!isAnnual))} aria-pressed={!isAnnual}>
           Monthly
         </button>
-        <button onClick={() => onChange(true)} style={tab(isAnnual)} aria-pressed={isAnnual}>
+        <button onClick={() => onChange(true)} {...el('pricingTable__toggleButton', tab(isAnnual))} aria-pressed={isAnnual}>
           Annual
         </button>
       </div>
@@ -153,6 +152,7 @@ interface CardProps {
   isEnt: boolean;
   enterpriseEmail?: string;
   onSelect?: () => void;
+  el: UseAppearance['el'];
 }
 
 function Card({
@@ -163,14 +163,9 @@ function Card({
   isEnt,
   enterpriseEmail,
   onSelect,
+  el,
 }: CardProps): React.ReactElement {
   const [hover, setHover] = useState(false);
-
-  const shadow = isHighlighted
-    ? '0 8px 28px rgba(99,102,241,0.12), 0 2px 8px rgba(99,102,241,0.06)'
-    : hover
-    ? '0 8px 24px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.03)'
-    : '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)';
 
   const interval = `/${intervalLabel(plan.interval)}`;
 
@@ -187,23 +182,23 @@ function Card({
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{
+      {...el('planCard', {
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         background: C.cardBg,
-        border: `1px solid ${isHighlighted ? C.hl : C.border}`,
-        borderTopWidth: isHighlighted ? '3px' : '1px',
+        border: border(isHighlighted ? C.hl : C.border),
+        borderTopWidth: isHighlighted ? `calc(${T.borderWidth} + 2px)` : T.borderWidth,
         borderRadius: C.radius,
         padding: '2rem',
         transition: 'box-shadow 0.2s ease, transform 0.2s ease',
-        boxShadow: shadow,
+        boxShadow: T.shadow,
         transform: hover && !isCurrent ? 'translateY(-2px)' : 'none',
-      }}
+      })}
     >
       {/* Badge */}
       {isHighlighted && (
-        <div style={{
+        <div {...el('planCard__badge', {
           position: 'absolute',
           top: '-1px',
           left: '50%',
@@ -217,12 +212,12 @@ function Card({
           letterSpacing: '0.025em',
           textTransform: 'uppercase',
           whiteSpace: 'nowrap',
-        }}>
+        })}>
           {isCurrent ? 'Current Plan' : 'Most Popular'}
         </div>
       )}
       {isCurrent && !isHighlighted && (
-        <div style={{
+        <div {...el('planCard__badge', {
           position: 'absolute',
           top: '0',
           left: '50%',
@@ -236,36 +231,36 @@ function Card({
           letterSpacing: '0.025em',
           textTransform: 'uppercase',
           whiteSpace: 'nowrap',
-        }}>
+        })}>
           Current Plan
         </div>
       )}
 
       {/* Plan name + description */}
       <div style={{ marginBottom: '1.25rem', marginTop: isHighlighted || isCurrent ? '0.5rem' : 0 }}>
-        <h3 style={{
+        <h3 {...el('planCard__name', {
           fontSize: '1.25rem',
           fontWeight: 700,
           color: C.text,
           margin: 0,
           lineHeight: 1.3,
-        }}>
+        })}>
           {plan.name}
         </h3>
         {plan.description && (
-          <p style={{
+          <p {...el('planCard__description', {
             fontSize: '0.875rem',
             color: C.muted,
             margin: '6px 0 0',
             lineHeight: 1.5,
-          }}>
+          })}>
             {plan.description}
           </p>
         )}
       </div>
 
       {/* Price */}
-      <div style={{ marginBottom: '1.5rem' }}>
+      <div {...el('planCard__price', { marginBottom: '1.5rem' })}>
         {isEnt ? (
           <span style={{ fontSize: '2.25rem', fontWeight: 700, color: C.text, lineHeight: 1 }}>
             Custom
@@ -284,7 +279,7 @@ function Card({
 
       {/* Features */}
       {features && features.length > 0 && (
-        <ul style={{
+        <ul {...el('planCard__features', {
           listStyle: 'none',
           padding: 0,
           margin: '0 0 2rem',
@@ -292,16 +287,16 @@ function Card({
           flexDirection: 'column',
           gap: '0.75rem',
           flex: 1,
-        }}>
+        })}>
           {features.map((feat) => (
-            <li key={feat} style={{
+            <li key={feat} {...el('planCard__feature', {
               display: 'flex',
               alignItems: 'flex-start',
               gap: '10px',
               fontSize: '0.875rem',
               color: C.text,
               lineHeight: 1.5,
-            }}>
+            })}>
               <span style={{ color: C.hl, marginTop: '2px' }}><Check /></span>
               <span>{feat}</span>
             </li>
@@ -318,6 +313,7 @@ function Card({
           onClick={handleClick}
           disabled={isCurrent}
           variant={isCurrent ? 'current' : isEnt ? 'outline' : isHighlighted ? 'primary' : 'secondary'}
+          el={el}
         >
           {isCurrent ? 'Current Plan' : isEnt ? 'Contact Sales' : `Get ${plan.name}`}
         </CTAButton>
@@ -328,53 +324,24 @@ function Card({
 
 // ─── CTA Button ──────────────────────────────────────────────────────────────
 
-type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'current';
-
 function CTAButton({
   children,
   onClick,
   disabled,
   variant,
+  el,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  variant: ButtonVariant;
+  variant: ButtonVariant | 'current';
+  el: UseAppearance['el'];
 }) {
   const [hover, setHover] = useState(false);
-
-  const base: CSSProperties = {
-    width: '100%',
-    padding: '12px 24px',
-    borderRadius: '10px',
-    fontSize: '0.9375rem',
-    fontWeight: 600,
-    cursor: disabled ? 'default' : 'pointer',
-    border: 'none',
-    transition: 'all 0.15s ease',
-    lineHeight: 1.4,
-  };
-
-  const variants: Record<ButtonVariant, CSSProperties> = {
-    primary: {
-      background: hover && !disabled ? '#4f46e5' : C.hl,
-      color: C.hlFg,
-    },
-    secondary: {
-      background: hover && !disabled ? '#f0f0f3' : C.mutedBg,
-      color: C.text,
-      border: `1px solid ${C.border}`,
-    },
-    outline: {
-      background: hover && !disabled ? 'rgba(99,102,241,0.04)' : 'transparent',
-      color: C.hl,
-      border: `1.5px solid ${C.hl}`,
-    },
-    current: {
-      background: C.mutedBg,
-      color: C.muted,
-    },
-  };
+  const look =
+    variant === 'current'
+      ? { ...buttonStyle('secondary'), color: C.muted, cursor: 'default' }
+      : buttonStyle(variant);
 
   return (
     <button
@@ -382,7 +349,11 @@ function CTAButton({
       disabled={disabled}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ ...base, ...variants[variant] }}
+      {...el('planCard__cta', {
+        ...look,
+        width: '100%',
+        filter: hover && !disabled ? 'brightness(0.95)' : undefined,
+      })}
     >
       {children}
     </button>
@@ -391,9 +362,9 @@ function CTAButton({
 
 // ─── Loading skeleton ────────────────────────────────────────────────────────
 
-function Skeleton(): React.ReactElement {
+function Skeleton({ rootProps }: { rootProps: ReturnType<UseAppearance['root']> }): React.ReactElement {
   return (
-    <div style={{
+    <div {...rootProps} aria-busy="true" style={{ ...rootProps.style,
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
       gap: '1.5rem',
@@ -401,16 +372,16 @@ function Skeleton(): React.ReactElement {
       {[0, 1, 2].map((i) => (
         <div key={i} style={{
           background: C.cardBg,
-          border: `1px solid ${C.border}`,
+          border: border(),
           borderRadius: C.radius,
           padding: '2rem',
           height: '380px',
         }}>
-          <div style={{ height: 20, width: '40%', borderRadius: 6, background: '#f0f0f0', marginBottom: 12 }} />
-          <div style={{ height: 40, width: '50%', borderRadius: 6, background: '#f0f0f0', marginBottom: 24 }} />
-          <div style={{ height: 14, width: '80%', borderRadius: 6, background: '#f0f0f0', marginBottom: 10 }} />
-          <div style={{ height: 14, width: '70%', borderRadius: 6, background: '#f0f0f0', marginBottom: 10 }} />
-          <div style={{ height: 14, width: '60%', borderRadius: 6, background: '#f0f0f0' }} />
+          <div style={{ height: 20, width: '40%', borderRadius: 6, background: T.skeleton, marginBottom: 12 }} />
+          <div style={{ height: 40, width: '50%', borderRadius: 6, background: T.skeleton, marginBottom: 24 }} />
+          <div style={{ height: 14, width: '80%', borderRadius: 6, background: T.skeleton, marginBottom: 10 }} />
+          <div style={{ height: 14, width: '70%', borderRadius: 6, background: T.skeleton, marginBottom: 10 }} />
+          <div style={{ height: 14, width: '60%', borderRadius: 6, background: T.skeleton }} />
         </div>
       ))}
     </div>
@@ -432,8 +403,12 @@ export function PricingTable({
   showToggle = true,
   highlightPlan,
   className,
+  contactSalesPlans,
   enterpriseEmail,
+  appearance,
 }: PricingTableProps): React.ReactElement {
+  const { root, el } = useAppearance(appearance);
+  const isEnterprise = (p: PricingPlan) => contactSalesPlans?.includes(p.code) ?? false;
   const billing = useOptionalBillingContext();
   const client = billing?.client;
   const [plans, setPlans] = useState<PricingPlan[]>(propPlans ?? []);
@@ -503,26 +478,23 @@ export function PricingTable({
     ? ordered.filter(p => p.interval === (isAnnual ? 'yearly' : 'monthly') || isEnterprise(p))
     : ordered;
 
-  if (loading) return <Skeleton />;
+  const rootProps = root('pricingTable', { fontFamily: T.font, color: C.text }, className);
+  if (loading) return <Skeleton rootProps={rootProps} />;
 
   return (
-    <div className={className} style={{
-      fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      color: C.text,
-      background: C.bg,
-    }}>
+    <div {...rootProps}>
       {showToggle && hasAnnual && (
-        <Toggle isAnnual={isAnnual} onChange={setIsAnnual} />
+        <Toggle isAnnual={isAnnual} onChange={setIsAnnual} el={el} />
       )}
 
       {processing && <p role="status">Payment is processing. Confirmation may take a little while.</p>}
-      {checkoutError && <p role="alert">{checkoutError}</p>}
+      {checkoutError && <p role="alert" style={{ color: T.danger }}>{checkoutError}</p>}
 
-      <div style={{
+      <div {...el('pricingTable__grid', {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '1.5rem',
-      }}>
+      })}>
         {filtered.map((plan, i) => (
           <Card
             key={plan.code}
@@ -533,6 +505,7 @@ export function PricingTable({
             isEnt={isEnterprise(plan)}
             enterpriseEmail={enterpriseEmail}
             onSelect={() => void selectPlan(plan)}
+            el={el}
           />
         ))}
       </div>

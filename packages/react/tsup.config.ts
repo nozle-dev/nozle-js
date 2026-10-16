@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: "src/index.ts",
     "styles/preset": "src/styles/preset.ts",
+    themes: "src/themes.ts",
   },
   format: ["esm", "cjs"],
   dts: true,

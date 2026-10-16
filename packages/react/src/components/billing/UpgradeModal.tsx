@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from "react";
+import { useAppearance } from "../../appearance/context.js";
+import { T, type Appearance } from "../../appearance/tokens.js";
 import { useOptionalBillingContext } from "../../provider.js";
 import { handleCheckoutResult } from "./CheckoutButton.js";
 
@@ -37,18 +39,20 @@ export interface UpgradeModalProps {
   onConfirm?: () => void;
   onCancel?: () => void;
   onError?: (error: Error) => void;
+  appearance?: Appearance;
 }
 
 const styles = `
-.nozle-upgrade-modal{position:fixed;inset:0;background:#0006;display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;color:var(--nozle-portal-text,#202922);font:inherit}
-.nozle-upgrade-modal .nzu-dialog{box-sizing:border-box;background:var(--nozle-portal-background,#fff);border:1px solid var(--nozle-portal-border,#dce2d9);border-radius:12px;padding:24px;max-width:480px;width:100%;max-height:90dvh;overflow:auto;box-shadow:0 12px 48px #0003}
-.nozle-upgrade-modal h2{font-size:20px;margin:0 0 16px}
-.nozle-upgrade-modal p{line-height:1.55}
-.nozle-upgrade-modal button{font:inherit;padding:9px 14px;border:1px solid var(--nozle-portal-border,#dce2d9);border-radius:7px;background:var(--nozle-portal-background,#fff);color:inherit;cursor:pointer}
-.nozle-upgrade-modal button:disabled{opacity:.55;cursor:wait}
-.nozle-upgrade-modal :focus-visible{outline:2px solid var(--nozle-portal-accent,#526949);outline-offset:3px}
-.nozle-upgrade-modal .nzu-buttons{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:20px}
-.nozle-upgrade-modal [role=alert]{color:#922e25}
+.nozle-upgradeModal{position:fixed;inset:0;background:#0006;display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;color:${T.foreground};font-family:${T.font}}
+.nozle-upgradeModal .nozle-upgradeModal__dialog{box-sizing:border-box;background:${T.card};border:${T.borderWidth} solid ${T.border};border-radius:${T.radius};padding:24px;max-width:480px;width:100%;max-height:90dvh;overflow:auto;box-shadow:${T.shadow},0 12px 48px #0003}
+.nozle-upgradeModal h2{font-size:20px;margin:0 0 16px}
+.nozle-upgradeModal p{line-height:1.55}
+.nozle-upgradeModal button{font:inherit;font-weight:550;padding:9px 14px;border:${T.borderWidth} solid ${T.border};border-radius:calc(${T.radius} * 0.6);background:${T.card};color:inherit;cursor:pointer}
+.nozle-upgradeModal button.nzu-primary{background:${T.primary};border-color:${T.primary};color:${T.primaryForeground}}
+.nozle-upgradeModal button:disabled{opacity:.55;cursor:wait}
+.nozle-upgradeModal :focus-visible{outline:2px solid ${T.primary};outline-offset:3px}
+.nozle-upgradeModal .nozle-upgradeModal__actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:20px}
+.nozle-upgradeModal [role=alert]{color:${T.danger}}
 `;
 
 export function UpgradeModal(
@@ -62,6 +66,7 @@ export function UpgradeModal(
   const dialog = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const busy = Boolean(props.busy || confirming);
+  const { root, el } = useAppearance(props.appearance);
   useEffect(() => {
     if (!props.isOpen) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -129,11 +134,11 @@ export function UpgradeModal(
       currency: props.preview?.currency ?? "USD",
     }).format(value);
   return (
-    <div className="nozle-upgrade-modal">
+    <div {...root("upgradeModal", undefined, "nozle-upgrade-modal")}>
       <style nonce={props.nonce}>{styles}</style>
       <div
         ref={dialog}
-        className="nzu-dialog"
+        {...el("upgradeModal__dialog")}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -200,12 +205,13 @@ export function UpgradeModal(
           </div>
         )}
         {props.children}
-        <div className="nzu-buttons">
+        <div {...el("upgradeModal__actions")}>
           <button type="button" onClick={props.onCancel} disabled={busy}>
             Close
           </button>
           <button
             type="button"
+            className="nzu-primary"
             onClick={() => void handleConfirm()}
             disabled={busy || props.confirmDisabled}
           >

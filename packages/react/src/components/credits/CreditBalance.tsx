@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { useAppearance } from "../../appearance/context.js";
+import { T, border as themeBorder, surface, type Appearance } from "../../appearance/tokens.js";
 import { creditUnitLabel, formatDecimalString } from "../../core/decimal.js";
 
 export interface CreditBalanceSource {
@@ -25,6 +27,7 @@ export interface CreditBalanceProps {
   isLoading?: boolean;
   error?: Error | string | null;
   emptyMessage?: string;
+  appearance?: Appearance;
 }
 
 const SOURCE_LABELS: Record<CreditBalanceSource["type"], string> = {
@@ -35,8 +38,7 @@ const SOURCE_LABELS: Record<CreditBalanceSource["type"], string> = {
   allocated_top_up: "Allocated top-up",
 };
 
-const text = "var(--nozle-foreground, var(--foreground))";
-const muted = "var(--nozle-muted-foreground, var(--muted-foreground))";
+const muted = T.mutedForeground;
 
 function date(value: string): string {
   const parsed = new Date(value);
@@ -48,18 +50,20 @@ export function CreditBalance({
   isLoading = false,
   error = null,
   emptyMessage = "No credit balance yet.",
+  appearance,
 }: CreditBalanceProps): React.ReactElement {
-  if (isLoading) return <div role="status" aria-label="Loading credit balance" style={{ height: 96, borderRadius: 8, background: "var(--nozle-border, var(--border))" }} />;
-  if (error) return <p role="alert">{typeof error === "string" ? error : error.message}</p>;
-  if (!balance) return <p role="status">{emptyMessage}</p>;
+  const { root, el } = useAppearance(appearance);
+  if (isLoading) return <div {...root("creditBalance", { ...surface, height: 96, background: T.skeleton })} role="status" aria-label="Loading credit balance" />;
+  if (error) return <p {...root("creditBalance", { ...surface, color: T.danger })} role="alert">{typeof error === "string" ? error : error.message}</p>;
+  if (!balance) return <p {...root("creditBalance", { ...surface, color: muted })} role="status">{emptyMessage}</p>;
 
   const sources = (balance.sources ?? []).filter((source) => source.remaining !== "0");
 
   return (
-    <section aria-label={balance.credit_system_name} style={{ color: text }}>
+    <section aria-label={balance.credit_system_name} {...root("creditBalance", surface)}>
       <h3 style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500, color: muted }}>{balance.credit_system_name}</h3>
       <p style={{ margin: "0.25rem 0 0" }}>
-        <span style={{ fontSize: "2rem", fontWeight: 700 }}>{formatDecimalString(balance.available)}</span>{" "}
+        <span {...el("creditBalance__amount", { fontSize: "2rem", fontWeight: 700 })}>{formatDecimalString(balance.available)}</span>{" "}
         <span style={{ color: muted }}>{creditUnitLabel(balance.available, balance.unit_name)} available</span>
       </p>
       <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: muted }}>As of {date(balance.as_of)}</p>

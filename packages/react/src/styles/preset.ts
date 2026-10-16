@@ -1,3 +1,7 @@
+/**
+ * @deprecated Since 0.11.0 the components no longer read Tailwind classes or this preset. Theme them with
+ * `appearance` on `BillingProvider` (see `@nozle-js/react/themes`). Kept so existing imports still build.
+ */
 export const nozlePreset = {
   theme: {
     extend: {

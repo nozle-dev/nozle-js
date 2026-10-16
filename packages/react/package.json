@@ -1,6 +1,6 @@
 {
   "name": "@nozle-js/react",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -24,6 +24,16 @@
       "require": {
         "types": "./dist/styles/preset.d.cts",
         "default": "./dist/styles/preset.cjs"
+      }
+    },
+    "./themes": {
+      "import": {
+        "types": "./dist/themes.d.ts",
+        "default": "./dist/themes.js"
+      },
+      "require": {
+        "types": "./dist/themes.d.cts",
+        "default": "./dist/themes.cjs"
       }
     }
   },

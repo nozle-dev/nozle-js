@@ -105,7 +105,7 @@ describe("public presentation components", () => {
     rerender(<UsageMeter used={0} limit={0} label="Empty" />);
     expect(container.innerHTML).not.toContain("NaN");
     rerender(<UsageDashboard loading />);
-    expect(container.querySelector(".animate-pulse")).toBeTruthy();
+    expect(container.querySelector(".nozle-usageDashboard[aria-busy=\"true\"]")).toBeTruthy();
     rerender(
       <UsageDashboard
         features={[{ key: "api", label: "API", used: 5, limit: 10 }]}

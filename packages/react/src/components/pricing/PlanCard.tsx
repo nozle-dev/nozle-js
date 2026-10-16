@@ -1,7 +1,7 @@
 /**
  * PlanCard — Individual pricing plan card component.
  * UI-01: Shows plan name, price, interval, features list, and CTA button.
- * Uses CSS variable theming with --nozle-* namespace.
+ * Themed through `appearance` (see the appearance tokens).
  */
 
 "use client";
@@ -10,6 +10,8 @@ import React from "react";
 import type { CreateCheckoutInput } from "../../provider.js";
 import type { PricingPlan } from "./PricingTable.js";
 import { formatPlanPrice, intervalLabel, planFeatures } from "./plan-features.js";
+import { useAppearance } from "../../appearance/context.js";
+import { T, border, buttonStyle, type Appearance } from "../../appearance/tokens.js";
 
 export interface PlanCardProps {
   /** A plan from the public catalog. Its price and feature lines are read from it. */
@@ -19,6 +21,7 @@ export interface PlanCardProps {
   isCurrent: boolean;
   returnUrl?: string;
   onSelect?: (input: CreateCheckoutInput) => void;
+  appearance?: Appearance;
 }
 
 /**
@@ -31,7 +34,9 @@ export function PlanCard({
   isCurrent,
   returnUrl,
   onSelect,
+  appearance,
 }: PlanCardProps): React.ReactElement {
+  const { root, el } = useAppearance(appearance);
   const { code: id, name, description } = plan;
   const price = formatPlanPrice(plan.amount_cents, plan.amount_currency);
   const interval = intervalLabel(plan.interval);
@@ -41,65 +46,36 @@ export function PlanCard({
     <div
       data-testid={`plan-card-${id}`}
       aria-current={isCurrent ? "true" : undefined}
-      style={{
-        background: "var(--nozle-background, var(--background))",
-        border: isCurrent
-          ? "2px solid var(--nozle-primary, var(--primary))"
-          : "1px solid var(--nozle-border, var(--border))",
-        borderRadius: "var(--nozle-radius, 0.5rem)",
+      {...root("planCard", {
+        background: T.card,
+        color: T.foreground,
+        fontFamily: T.font,
+        border: border(isCurrent ? T.primary : T.border),
+        outline: isCurrent ? `1px solid ${T.primary}` : undefined,
+        borderRadius: T.radius,
+        boxShadow: T.shadow,
         padding: "1.5rem",
         display: "flex",
         flexDirection: "column",
         gap: "1rem",
-      }}
-      className={isCurrent ? "border-primary" : ""}
+      })}
     >
       <div>
-        <h3
-          style={{
-            fontSize: "1.25rem",
-            fontWeight: 600,
-            color: "var(--nozle-foreground, var(--foreground))",
-            margin: 0,
-          }}
-        >
-          {name}
-        </h3>
+        <h3 {...el("planCard__name", { fontSize: "1.25rem", fontWeight: 600, margin: 0 })}>{name}</h3>
         {description && (
-          <p
-            style={{
-              color: "var(--nozle-muted-foreground, var(--muted-foreground))",
-              fontSize: "0.875rem",
-              margin: "0.25rem 0 0",
-            }}
-          >
+          <p {...el("planCard__description", { color: T.mutedForeground, fontSize: "0.875rem", margin: "0.25rem 0 0" })}>
             {description}
           </p>
         )}
       </div>
 
-      <div>
-        <span
-          style={{
-            fontSize: "2rem",
-            fontWeight: 700,
-            color: "var(--nozle-foreground, var(--foreground))",
-          }}
-        >
-          {price}
-        </span>
-        <span
-          style={{
-            color: "var(--nozle-muted-foreground, var(--muted-foreground))",
-            marginLeft: "0.25rem",
-          }}
-        >
-          /{interval}
-        </span>
+      <div {...el("planCard__price")}>
+        <span style={{ fontSize: "2rem", fontWeight: 700 }}>{price}</span>
+        <span style={{ color: T.mutedForeground, marginLeft: "0.25rem" }}>/{interval}</span>
       </div>
 
       <ul
-        style={{
+        {...el("planCard__features", {
           listStyle: "none",
           padding: 0,
           margin: 0,
@@ -107,23 +83,11 @@ export function PlanCard({
           flexDirection: "column",
           gap: "0.5rem",
           flex: 1,
-        }}
+        })}
       >
         {features.map((feature) => (
-          <li
-            key={feature}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              color: "var(--nozle-foreground, var(--foreground))",
-              fontSize: "0.875rem",
-            }}
-          >
-            <span
-              style={{ color: "var(--nozle-primary, var(--primary))" }}
-              aria-hidden="true"
-            >
+          <li key={feature} {...el("planCard__feature", { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem" })}>
+            <span style={{ color: T.primary }} aria-hidden="true">
               ✓
             </span>
             {feature}
@@ -139,20 +103,11 @@ export function PlanCard({
               returnUrl: returnUrl ?? window.location.href,
             })
           }
-          style={{
-            background: isCurrent
-              ? "var(--nozle-muted, var(--muted))"
-              : "var(--nozle-primary, var(--primary))",
-            color: isCurrent
-              ? "var(--nozle-muted-foreground, var(--muted-foreground))"
-              : "var(--nozle-primary-foreground, var(--primary-foreground))",
-            border: "none",
-            borderRadius: "var(--nozle-radius, 0.5rem)",
-            padding: "0.75rem 1.5rem",
-            cursor: isCurrent ? "default" : "pointer",
-            fontWeight: 500,
+          {...el("planCard__cta", {
+            ...buttonStyle(isCurrent ? "secondary" : "primary"),
+            ...(isCurrent && { color: T.mutedForeground, cursor: "default" }),
             width: "100%",
-          }}
+          })}
           disabled={isCurrent}
           aria-label={isCurrent ? `Current plan: ${name}` : `Select ${name}`}
         >

@@ -13,7 +13,7 @@ React components for Nozle's public catalog, checkout, and customer billing port
 ## Install
 
 ```bash
-npm install @nozle-js/react@0.10.2 react react-dom @stripe/stripe-js @stripe/react-stripe-js
+npm install @nozle-js/react@0.11.0 react react-dom @stripe/stripe-js @stripe/react-stripe-js
 ```
 
 ## Merchant-backed checkout

@@ -162,8 +162,14 @@ describe("plan order", () => {
   });
 
   it("shows PricingTable plans cheapest first with custom plans last", () => {
-    render(<PricingTable plans={[mk("enterprise", 0), mk("team", 6000), mk("free", 0), mk("pro", 999)]} showToggle={false} />);
+    render(<PricingTable plans={[mk("enterprise", 0), mk("team", 6000), mk("free", 0), mk("pro", 999)]} contactSalesPlans={["enterprise"]} showToggle={false} />);
     expect(headings()).toEqual(["free", "pro", "team", "enterprise"]);
+  });
+
+  it("treats a plan as contact-sales only when its code is listed, never by its name", () => {
+    render(<PricingTable plans={[mk("enterprise", 0), mk("pro", 999)]} showToggle={false} />);
+    expect(headings()).toEqual(["enterprise", "pro"]);
+    expect(screen.queryByText("Custom")).toBeNull();
   });
 
   it("lets a sort function replace the order", () => {

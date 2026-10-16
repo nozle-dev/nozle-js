@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Checkout } from "../billing/Checkout.js";
 import { UpgradeModal } from "../billing/UpgradeModal.js";
+import { useAppearance } from "../../appearance/context.js";
+import { T, type Appearance } from "../../appearance/tokens.js";
 import { formatBillingDate, formatMinorAmount } from "../billing/amounts.js";
 import type {
   CheckoutResult,
@@ -94,6 +96,7 @@ export interface PlanChangeControlProps {
   locale?: string;
   timezone?: string;
   nonce?: string;
+  appearance?: Appearance;
 }
 type Attempt = {
   key: string;
@@ -106,13 +109,13 @@ type Attempt = {
   attempted: boolean;
 };
 const styles = `
-.nozle-plan-change{font:inherit;color:var(--nozle-portal-text,#202922);margin-top:12px}
-.nozle-plan-change button{font:inherit;padding:9px 14px;border:1px solid var(--nozle-portal-border,#dce2d9);border-radius:7px;background:var(--nozle-portal-background,#fff);color:inherit;cursor:pointer}
+.nozle-plan-change{font-family:${T.font};color:${T.foreground};margin-top:12px}
+.nozle-plan-change button{font:inherit;font-weight:550;padding:9px 14px;border:${T.borderWidth} solid ${T.border};border-radius:calc(${T.radius} * 0.6);background:${T.card};color:inherit;cursor:pointer}
 .nozle-plan-change button:disabled{opacity:.55;cursor:wait}
-.nozle-plan-change :focus-visible{outline:2px solid var(--nozle-portal-accent,#526949);outline-offset:3px}
-.nozle-plan-change [role=alert]{color:#922e25}
+.nozle-plan-change :focus-visible{outline:2px solid ${T.primary};outline-offset:3px}
+.nozle-plan-change [role=alert]{color:${T.danger}}
 .nozle-plan-change .nzpc-actions{display:flex;gap:10px;flex-wrap:wrap}
-.nozle-upgrade-modal select{box-sizing:border-box;width:100%;font:inherit;color:inherit;padding:10px;margin:8px 0;border:1px solid #dce2d9;border-radius:7px;background:var(--nozle-portal-background,#fff)}
+.nozle-upgrade-modal select{box-sizing:border-box;width:100%;font:inherit;color:inherit;padding:10px;margin:8px 0;border:${T.borderWidth} solid ${T.border};border-radius:calc(${T.radius} * 0.6);background:${T.card}}
 .nozle-upgrade-modal dl{display:block;margin:16px 0;padding:0}
 .nozle-upgrade-modal dl div{display:flex;justify-content:space-between;gap:16px;margin:12px 0}
 .nozle-upgrade-modal dd{margin:0;text-align:right}
@@ -155,7 +158,9 @@ function PlanChangeFlow({
   locale = "en-US",
   timezone = "UTC",
   nonce,
+  appearance,
 }: PlanChangeControlProps) {
+  const { root } = useAppearance(appearance);
   const owner = useMemo(
     () => ({ controller: new AbortController() }),
     [subscriptionId, actions],
@@ -511,7 +516,7 @@ function PlanChangeFlow({
       pending.current?.accepted,
   );
   return (
-    <div className="nozle-plan-change">
+    <div {...root("planChangeControl", undefined, "nozle-plan-change")}>
       <style nonce={nonce}>{styles}</style>
       {!state ? (
         <>
@@ -652,6 +657,7 @@ function PlanChangeFlow({
             />
           )}
           <UpgradeModal
+            appearance={appearance}
             isOpen={mode !== null}
             planCode={target}
             title={
