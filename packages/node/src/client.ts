@@ -12,6 +12,7 @@ import { MarginClient } from "./margin";
 import { recordUsage as _recordUsage, type RecordUsageParams } from "./provider-usage";
 import { track as _track } from "./track";
 import { UsageNamespace } from "./usage";
+import { WebhooksNamespace } from "./webhooks";
 import type {
   NozleConfig,
   CanResult,
@@ -59,6 +60,8 @@ export class Nozle {
   readonly entitySubscriptions: EntitySubscriptionsNamespace;
   readonly credits: CreditsNamespace;
   readonly usage: UsageNamespace;
+  /** Verifies webhooks Nozle sends to your endpoint. */
+  readonly webhooks: WebhooksNamespace;
 
   private readonly policy: RequestPolicy;
   private subCache = new Map<string, string>();
@@ -84,6 +87,7 @@ export class Nozle {
     this.entitySubscriptions = new EntitySubscriptionsNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.credits = new CreditsNamespace(this.baseUrl, this.apiKey, this.policy);
     this.usage = new UsageNamespace(this.baseUrl, this.apiKey, this.policy);
+    this.webhooks = new WebhooksNamespace(this.eventsUrl, this.apiKey, this.policy);
   }
 
   async track(
