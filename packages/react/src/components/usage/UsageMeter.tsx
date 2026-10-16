@@ -54,7 +54,7 @@ export function UsageMeter({
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem" }}>
           <span {...el("usageMeter__label")}>{label}</span>
           {showText && (
-            <span {...el("usageMeter__value", { color })}>
+            <span {...el("usageMeter__value", { color: percentage >= 80 ? color : T.foreground })}>
               {used.toLocaleString()} / {unlimited ? "Unlimited" : limit.toLocaleString()}
             </span>
           )}

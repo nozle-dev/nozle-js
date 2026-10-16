@@ -9,7 +9,7 @@
 
 import { UsageMeter } from "./UsageMeter.js";
 import { useAppearance } from "../../appearance/context.js";
-import { T, type Appearance } from "../../appearance/tokens.js";
+import { T, surface, type Appearance } from "../../appearance/tokens.js";
 import type { CatalogEntitlement } from "../pricing/plan-features.js";
 
 export interface UsageDashboardFeature {
@@ -60,6 +60,8 @@ export function UsageDashboard({
 }: UsageDashboardProps) {
   const { root } = useAppearance(appearance);
   const props = root("usageDashboard", {
+    ...surface,
+    margin: 0,
     display: "flex",
     flexDirection: "column",
     gap: loading ? "0.75rem" : "1rem",
