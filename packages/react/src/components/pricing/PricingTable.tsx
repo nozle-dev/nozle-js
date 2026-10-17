@@ -16,7 +16,10 @@ import {
 } from './plan-features.js';
 import { useAppearance, type UseAppearance } from '../../appearance/context.js';
 import { PanelPlanCard } from './PanelPlanCard.js';
-import { T, border, primaryButtonBorder, buttonStyle, type Appearance, type ButtonVariant } from '../../appearance/tokens.js';
+import { NozleBranding } from '../branding/PoweredByNozle.js';
+import { useQuery } from '@tanstack/react-query';
+import { catalogQuery, idleQueryClient } from '../../hooks/use-plans.js';
+import { T, border, primaryButtonBorder, buttonStyle, text as role, type Appearance, type ButtonVariant } from '../../appearance/tokens.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -129,9 +132,8 @@ function Toggle({ isAnnual, onChange, el }: { isAnnual: boolean; onChange: (v: b
     borderRadius: '9999px',
     border: 'none',
     background: active ? C.cardBg : 'transparent',
+    ...role.action,
     color: active ? C.text : C.muted,
-    fontWeight: active ? 600 : 400,
-    fontSize: '0.875rem',
     cursor: 'pointer',
     boxShadow: active ? T.shadow : 'none',
     transition: 'all 0.15s ease',
@@ -265,14 +267,11 @@ function Card({
           left: '50%',
           transform: 'translate(-50%, -50%)',
           background: filled ? T.highlightForeground : T.highlight,
-          color: filled ? T.highlight : T.highlightForeground,
           border: filled ? border(T.highlight) : undefined,
-          fontSize: '0.7rem',
-          fontWeight: 700,
+          ...role.label,
+          color: filled ? T.highlight : T.highlightForeground,
           padding: '4px 12px',
           borderRadius: '9999px',
-          letterSpacing: '0.025em',
-          textTransform: 'uppercase',
           whiteSpace: 'nowrap',
         })}>
           {badgeLabel}
@@ -285,13 +284,9 @@ function Card({
           left: '50%',
           transform: 'translate(-50%, -50%)',
           background: C.mutedBg,
-          color: C.muted,
-          fontSize: '0.7rem',
-          fontWeight: 700,
+          ...role.label,
           padding: '4px 12px',
           borderRadius: '9999px',
-          letterSpacing: '0.025em',
-          textTransform: 'uppercase',
           whiteSpace: 'nowrap',
         })}>
           Current Plan
@@ -301,20 +296,17 @@ function Card({
       {/* Plan name + description */}
       <div style={{ marginBottom: '1.25rem', marginTop: (isHighlighted && badgeLabel) || isCurrent ? '0.5rem' : 0 }}>
         <h3 {...el('planCard__name', {
-          fontSize: '1.25rem',
-          fontWeight: 700,
+          ...role.heading,
           color: text,
           margin: 0,
-          lineHeight: 1.3,
         })}>
           {plan.name}
         </h3>
         {plan.description && (
           <p {...el('planCard__description', {
-            fontSize: '0.875rem',
+            ...role.secondary,
             color: muted,
             margin: '6px 0 0',
-            lineHeight: 1.5,
           })}>
             {plan.description}
           </p>
@@ -324,15 +316,15 @@ function Card({
       {/* Price */}
       <div {...el('planCard__price', { marginBottom: '1.5rem' })}>
         {isEnt ? (
-          <span style={{ fontSize: '2.25rem', fontWeight: 700, color: text, lineHeight: 1 }}>
+          <span style={{ ...role.metric, color: text }}>
             Custom
           </span>
         ) : (
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px' }}>
-            <span style={{ fontSize: '2.75rem', fontWeight: 700, color: text, lineHeight: 1, letterSpacing: '-0.025em' }}>
+            <span style={{ ...role.metric, color: text }}>
               {fmtPrice(plan.amount_cents, plan.amount_currency)}
             </span>
-            <span style={{ fontSize: '0.9375rem', color: muted, marginLeft: '4px' }}>
+            <span style={{ ...role.meta, color: muted, marginLeft: '4px' }}>
               {interval}
             </span>
           </div>
@@ -355,9 +347,8 @@ function Card({
               display: 'flex',
               alignItems: 'flex-start',
               gap: '10px',
-              fontSize: '0.875rem',
+              ...role.body,
               color: text,
-              lineHeight: 1.5,
             })}>
               <span style={{ color: accent, marginTop: '2px' }}><Check /></span>
               <span>{feat}</span>
@@ -470,30 +461,24 @@ export function PricingTable({
   const isEnterprise = (p: PricingPlan) => contactSalesPlans?.includes(p.code) ?? false;
   const billing = useOptionalBillingContext();
   const client = billing?.client;
-  const [plans, setPlans] = useState<PricingPlan[]>(propPlans ?? []);
+  // One cached catalog request, shared with usePlans and the "Powered by Nozle" check.
+  const catalog = useQuery(
+    { ...catalogQuery(client), enabled: !propPlans && Boolean(client) },
+    billing?.queryClient ?? idleQueryClient,
+  );
+  const plans = (propPlans ?? catalog.data?.plans ?? []) as PricingPlan[];
+  const loading = !propPlans && Boolean(client) && catalog.isPending;
+  const loadError = propPlans
+    ? null
+    : !client
+      ? 'BillingProvider with a publishableKey is required to load plans'
+      : catalog.error
+        ? `Plans could not be loaded: ${catalog.error.message}`
+        : null;
   const [currentPlan, setCurrentPlan] = useState<string | null>(currentPlanCode ?? null);
   const [isAnnual, setIsAnnual] = useState(false);
-  const [loading, setLoading] = useState(!propPlans);
   const [processing, setProcessing] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (propPlans) { setPlans(propPlans); return; }
-    if (!client) {
-      setLoading(false);
-      setCheckoutError('BillingProvider with a publishableKey is required to load plans');
-      return;
-    }
-    let cancelled = false;
-    client.catalogFetch('/api/v1/plans').then(async (res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      if (!cancelled) setPlans(data.plans || []);
-    }).catch((cause: unknown) => {
-      if (!cancelled) setCheckoutError(`Plans could not be loaded: ${cause instanceof Error ? cause.message : 'unknown error'}`);
-    }).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [client, propPlans]);
 
   useEffect(() => {
     if (currentPlanCode !== undefined) setCurrentPlan(currentPlanCode);
@@ -538,7 +523,7 @@ export function PricingTable({
     ? ordered.filter(p => p.interval === (isAnnual ? 'yearly' : 'monthly') || isEnterprise(p))
     : ordered;
 
-  const rootProps = root('pricingTable', { fontFamily: T.font, color: C.text }, className);
+  const rootProps = root('pricingTable', role.body, className);
   if (loading) return <Skeleton rootProps={rootProps} />;
 
   return (
@@ -548,7 +533,7 @@ export function PricingTable({
       )}
 
       {processing && <p role="status">Payment is processing. Confirmation may take a little while.</p>}
-      {checkoutError && <p role="alert" style={{ color: T.danger }}>{checkoutError}</p>}
+      {(checkoutError ?? loadError) && <p role="alert" style={{ color: T.dangerText }}>{checkoutError ?? loadError}</p>}
 
       <div {...el('pricingTable__grid', {
         display: 'grid',
@@ -577,6 +562,7 @@ export function PricingTable({
           />
         ))}
       </div>
+      <NozleBranding />
     </div>
   );
 }

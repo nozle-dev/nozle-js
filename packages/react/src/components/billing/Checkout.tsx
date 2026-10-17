@@ -19,7 +19,8 @@ import {
 import { loadStripe } from "@stripe/stripe-js";
 import type { Appearance as StripeAppearance, StripeElementsOptions } from "@stripe/stripe-js";
 import { useAppearance } from "../../appearance/context.js";
-import { T, buttonStyle, type Appearance } from "../../appearance/tokens.js";
+import { NozleBranding } from "../branding/PoweredByNozle.js";
+import { T, buttonStyle, text, type Appearance } from "../../appearance/tokens.js";
 
 import {
   useOptionalBillingContext,
@@ -260,7 +261,7 @@ function CheckoutInner({
         />
 
         {error !== null && (
-          <p {...el("checkout__error", { color: T.danger, margin: "0.5rem 0 0" })}>
+          <p {...el("checkout__error", { color: T.dangerText, margin: "0.5rem 0 0" })}>
             {error.message}
           </p>
         )}
@@ -314,7 +315,7 @@ function StripeCheckout({
 
   if (clientSecret.startsWith("cs_")) {
     return (
-      <div {...root("checkout", { fontFamily: T.font, ...style }, className)}>
+      <div {...root("checkout", { ...text.body, ...style }, className)}>
         <EmbeddedCheckoutProvider
           stripe={stripePromise}
           options={embeddedOptions}
@@ -328,7 +329,7 @@ function StripeCheckout({
   const options: StripeElementsOptions | null = stripeAppearance && { clientSecret, appearance: stripeAppearance };
 
   return (
-    <div {...root("checkout", { fontFamily: T.font, color: T.foreground, ...style }, className)}>
+    <div {...root("checkout", { ...text.body, ...style }, className)}>
       {probeElement}
       {options && (
         <Elements key={clientSecret} stripe={stripePromise} options={options}>
@@ -428,7 +429,7 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
       );
     }
     return (
-      <p {...root("checkout", { color: T.danger, fontFamily: T.font }, props.className)} role="alert">
+      <p {...root("checkout", { ...text.body, color: T.dangerText }, props.className)} role="alert">
         Payment setup is incomplete. Contact support to continue.
       </p>
     );
@@ -437,7 +438,7 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
     <CheckoutContext.Provider
       value={{ confirmPayment: pay, isProcessing: busy, error }}
     >
-      <div {...root("checkout", { fontFamily: T.font, color: T.foreground }, props.className)}>
+      <div {...root("checkout", text.body, props.className)}>
         <button
           type="button"
           disabled={busy}
@@ -453,7 +454,7 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
           </p>
         )}
         {error && (
-          <p role="alert" {...el("checkout__error", { color: T.danger })}>
+          <p role="alert" {...el("checkout__error", { color: T.dangerText })}>
             {error.message}
           </p>
         )}
@@ -463,9 +464,9 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
 }
 
 export function Checkout(props: CheckoutProps) {
-  return "checkout" in props ? (
-    <ProviderCheckout {...props} />
-  ) : (
-    <StripeCheckout {...props} />
+  return (
+    <NozleBranding>
+      {"checkout" in props ? <ProviderCheckout {...props} /> : <StripeCheckout {...props} />}
+    </NozleBranding>
   );
 }

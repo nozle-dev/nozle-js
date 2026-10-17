@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from "react";
 import { useAppearance } from "../../appearance/context.js";
-import { buttonStyle, type Appearance } from "../../appearance/tokens.js";
+import { T, buttonStyle, text, type Appearance } from "../../appearance/tokens.js";
 import {
   useBillingContext,
   type CheckoutResult,
@@ -104,7 +104,7 @@ export function CheckoutButton({
   onScheduled,
   appearance,
 }: CheckoutButtonProps): React.ReactElement {
-  const { root } = useAppearance(appearance);
+  const { root, vars } = useAppearance(appearance);
   const { createCheckout, verifyCheckout, getCheckoutStatus } =
     useBillingContext();
   const attempt = useRef<{ plan: string; key: string } | undefined>(undefined);
@@ -176,11 +176,11 @@ export function CheckoutButton({
         {loading ? "Loading..." : label}
       </button>
       {processing && (
-        <span role="status">
+        <span role="status" style={{ ...vars, ...text.body }}>
           Payment is processing. Confirmation may take a little while.
         </span>
       )}
-      {error && <span role="alert">{error.message}</span>}
+      {error && <span role="alert" style={{ ...vars, ...text.body, color: T.dangerText }}>{error.message}</span>}
     </>
   );
 }

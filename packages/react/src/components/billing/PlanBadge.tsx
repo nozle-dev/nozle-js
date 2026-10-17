@@ -6,7 +6,7 @@
 
 import type React from "react";
 import { useAppearance } from "../../appearance/context.js";
-import { T, border, type Appearance } from "../../appearance/tokens.js";
+import { T, border, text, type Appearance } from "../../appearance/tokens.js";
 
 export interface PlanBadgeProps {
   plan: string;
@@ -28,15 +28,12 @@ export function PlanBadge({ plan, tier = "free", appearance }: PlanBadgeProps) {
   return (
     <span
       {...root("planBadge", {
+        ...text.label,
         ...style,
         display: "inline-flex",
         alignItems: "center",
         padding: "0.125rem 0.5rem",
         borderRadius: "9999px",
-        fontFamily: T.font,
-        fontSize: "0.75rem",
-        fontWeight: 600,
-        lineHeight: "1.25rem",
         whiteSpace: "nowrap",
       })}
     >

@@ -8,9 +8,10 @@
  * usePlans for the limits, useUsage for this period). Pass `subscription` and `usage` to render it
  * from your own data instead.
  */
+import { NozleBranding } from "../branding/PoweredByNozle.js";
 import React, { type ReactNode } from "react";
 import { useAppearance } from "../../appearance/context.js";
-import { T, border, surface, type Appearance } from "../../appearance/tokens.js";
+import { T, border, surface, text, type Appearance } from "../../appearance/tokens.js";
 import { useSubscription, useUsage, type BillingSubscription } from "../../hooks/use-billing.js";
 import { usePlans } from "../../hooks/use-plans.js";
 import { formatPlanPrice, intervalLabel } from "../pricing/plan-features.js";
@@ -54,7 +55,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 function statusColors(status: string, ending: boolean): React.CSSProperties {
-  if (status === "active" && !ending) return { background: T.successSoft, color: T.success };
+  if (status === "active" && !ending) return { background: T.successSoft, color: T.successText };
   if (status === "active" || status === "pending" || status === "incomplete") {
     return { background: T.warningSoft, color: T.warningText };
   }
@@ -133,10 +134,9 @@ function CurrentPlanView({
         gap: 12,
         padding: "0.875rem 1.25rem",
         borderBottom: border(),
-        fontWeight: 700,
       }}
     >
-      <span>{title}</span>
+      <span style={text.heading}>{title}</span>
       {actions}
     </div>
   );
@@ -154,7 +154,7 @@ function CurrentPlanView({
     return (
       <section {...root("currentPlan", frame)}>
         {header}
-        {body(<p role="alert" style={{ margin: 0, color: T.danger }}>{typeof error === "string" ? error : error.message}</p>)}
+        {body(<p role="alert" style={{ margin: 0, color: T.dangerText }}>{typeof error === "string" ? error : error.message}</p>)}
       </section>
     );
   }
@@ -163,7 +163,7 @@ function CurrentPlanView({
     return (
       <section {...root("currentPlan", frame)}>
         {header}
-        {body(<p role="status" style={{ margin: 0, color: T.mutedForeground }}>{emptyMessage}</p>)}
+        {body(<p role="status" style={{ ...text.secondary, margin: 0 }}>{emptyMessage}</p>)}
       </section>
     );
   }
@@ -184,10 +184,10 @@ function CurrentPlanView({
               {...el("currentPlan__notice", {
                 margin: 0,
                 padding: "0.625rem 0.875rem",
-                fontSize: "0.875rem",
+                ...text.body,
                 borderRadius: `calc(${T.radius} / 2)`,
                 background: T.dangerSoft,
-                color: T.danger,
+                color: T.dangerText,
                 border: border(T.dangerBorder),
               })}
             >
@@ -201,7 +201,7 @@ function CurrentPlanView({
               {...el("currentPlan__notice", {
                 margin: 0,
                 padding: "0.625rem 0.875rem",
-                fontSize: "0.875rem",
+                ...text.body,
                 borderRadius: `calc(${T.radius} / 2)`,
                 background: T.warningSoft,
                 color: T.warningText,
@@ -214,14 +214,11 @@ function CurrentPlanView({
           ))}
 
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.625rem" }}>
-            <span {...el("currentPlan__name", { fontSize: "1.25rem", fontWeight: 700 })}>{current.plan.name}</span>
+            <span {...el("currentPlan__name", text.heading)}>{current.plan.name}</span>
             <span
               {...el("currentPlan__status", {
+                ...text.label,
                 ...statusColors(current.status, ending),
-                fontSize: "0.75rem",
-                fontWeight: 700,
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
                 padding: "0.125rem 0.625rem",
                 borderRadius: 9999,
               })}
@@ -231,18 +228,16 @@ function CurrentPlanView({
             {pending && (
               <span
                 {...el("currentPlan__scheduled", {
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
+                  ...text.label,
                   padding: "0.125rem 0.625rem",
                   borderRadius: 9999,
                   border: border(),
-                  color: T.mutedForeground,
                 })}
               >
                 Changes to {pending.name} on {day(pending.effective_at, locale)}
               </span>
             )}
-            <span {...el("currentPlan__price", { marginLeft: "auto", color: T.mutedForeground, fontSize: "0.875rem" })}>
+            <span {...el("currentPlan__price", { ...text.secondary, marginLeft: "auto" })}>
               {formatPlanPrice(Number(current.plan.amount_cents), current.plan.currency)} / {intervalLabel(current.plan.interval)}
             </span>
           </div>
@@ -272,7 +267,7 @@ function CurrentPlanView({
             >
               {details.map((detail) => (
                 <div key={detail.label}>
-                  <dt style={{ fontSize: "0.75rem", color: T.mutedForeground }}>{detail.label}</dt>
+                  <dt style={text.meta}>{detail.label}</dt>
                   <dd style={{ margin: "0.125rem 0 0", fontWeight: 600 }}>{detail.value}</dd>
                 </div>
               ))}
@@ -280,6 +275,7 @@ function CurrentPlanView({
           )}
         </>,
       )}
+      <NozleBranding />
     </section>
   );
 }
