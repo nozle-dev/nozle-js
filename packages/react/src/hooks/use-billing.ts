@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { useBillingContext, type BillingFetch } from "../provider.js";
 import type { CreditBalanceData } from "../components/credits/CreditBalance.js";
@@ -132,7 +132,11 @@ export function useCreditHistory(options: { creditSystemCode?: string; limit?: n
  * The current billing period's usage (`period: "current"`, the default) for `<UsageBreakdown>`,
  * or past periods (`period: "past"`) for `<UsageTrend>`.
  */
-export function useUsage(options: { period?: "current" | "past"; periods?: number } = {}) {
+export function useUsage(options?: { period?: "current" }): UseQueryResult<CustomerUsageData | null>;
+export function useUsage(options: { period: "past"; periods?: number }): UseQueryResult<CustomerUsageData[]>;
+export function useUsage(
+  options: { period?: "current" | "past"; periods?: number } = {},
+): UseQueryResult<CustomerUsageData | CustomerUsageData[] | null> {
   const { fetchRoute, queryClient, endpoint } = useBilling();
   const period = options.period ?? "current";
   return useQuery(

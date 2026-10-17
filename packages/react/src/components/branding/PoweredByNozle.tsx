@@ -30,13 +30,14 @@ export function useNozleBranding(): boolean {
 
 /** "Powered by" and the Nozle logo, linking to nozle.dev. */
 export function PoweredByNozle(): React.ReactElement {
-  const { el } = useAppearance();
+  // root, not el: on its own the badge needs the theme's variables, not only its class.
+  const { root } = useAppearance();
   return (
     <a
       href="https://nozle.dev"
       target="_blank"
       rel="noopener noreferrer"
-      {...el("poweredBy", {
+      {...root("poweredBy", {
         ...text.meta,
         display: "flex",
         alignItems: "center",
