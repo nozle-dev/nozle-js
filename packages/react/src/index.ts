@@ -82,10 +82,27 @@ export { useCheckout as useCheckoutSession } from "./hooks/use-checkout.js";
 export type { UseCheckoutResult as UseCheckoutSessionResult } from "./hooks/use-checkout.js";
 
 export { PricingTable } from "./components/pricing/PricingTable.js";
+export type { PricingTableProps } from "./components/pricing/PricingTable.js";
+export {
+  getAvailableIntervals,
+  getDefaultInterval,
+  getPricingCards,
+  getPricingIntervalOptions,
+} from "./components/pricing/catalog.js";
 export type {
-  PricingTableProps,
+  GetPricingCardsOptions,
+  PricingCard,
+  PricingCatalog,
+  PricingEntitlement,
+  PricingFamily,
+  PricingFamilyFeature,
+  PricingFeature,
+  PricingFeatureOverrides,
+  PricingInterval,
+  PricingIntervalOption,
   PricingPlan,
-} from "./components/pricing/PricingTable.js";
+  PricingPrivilege,
+} from "./components/pricing/catalog.js";
 
 export { planFeatures } from "./components/pricing/plan-features.js";
 export type {

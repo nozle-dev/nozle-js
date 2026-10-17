@@ -52,6 +52,53 @@ The merchant endpoint authenticates the user, derives the Nozle customer from th
 
 `createCheckout` returns a `stripe`, `razorpay`, `hosted`, `processing`, `completed`, or `scheduled` result. Nozle payment fulfillment determines activation; Razorpay requires capture. A browser redirect or callback alone does not prove activation.
 
+## Pricing table and plan families
+
+`PricingTable` shows one card per plan family. A family groups the billing intervals of one offer (for example Pro monthly and Pro yearly) and carries the pricing table settings you set in the Nozle dashboard (Developers → Customize SDK). `GET /api/v1/plans` returns them as `families` next to `plans`:
+
+| Family field | Effect |
+| --- | --- |
+| `show_on_pricing: false` | The family is hidden. Plans with `pending_deletion: true` are left out, and a family without plans is hidden |
+| `pricing_position` | Cards are ordered by it, ascending. Families without a position follow in API order |
+| `pricing_highlighted` | The card is highlighted (at most one). The `highlightPlan` prop, a family code or plan code, overrides it |
+| `badge_text` / `cta_text` | Badge on the highlighted card (default "Most Popular"; the `highlightLabel` prop replaces it) and button text (default "Get {name}") |
+| `features[].show_on_pricing: false` | The feature is left out of the card |
+| `features[].display_position` | Features are ordered by it, then by name |
+| `features[].show_description` | The feature's description appears as a muted line under the bullet |
+
+The interval switch offers the intervals of the visible families (Weekly, Monthly, Quarterly, Every 6 months, Annual) and is hidden when there is only one. Each card shows the family's plan for the selected interval as a per-month price (`$40.83 /mo`) with its billing line (`Billed $490 yearly · save 17%`, saving against the family's monthly plan), and a family without a plan for that interval shows its nearest interval. Feature values come from the selected plan's entitlements, for example `Projects: 20` or `Storage (GB: 10, Tier: fast)`. The button and checkout use the selected plan's code.
+
+```tsx
+<PricingTable
+  returnUrl={window.location.href}
+  defaultInterval="yearly"
+  locale="en-GB"
+  features={{
+    pro: ["Priority support", { label: "API access", description: "REST and GraphQL" }],
+  }}
+  onSelect={(plan, family) => console.log(plan.code, family?.code)}
+/>
+```
+
+- `defaultInterval` picks the first interval (`"annual"` also works). Otherwise Monthly when offered, else the first one. `showToggle={false}` hides the switch.
+- `features` is a record keyed by family code (or plan code) that replaces the catalog features of that card, or an array aligned to the rendered cards.
+- `contactSalesPlans` takes family codes as well as plan codes: the card shows "Custom" and a "Contact Sales" button.
+- Cards follow the `appearance` theme like the other components: the highlighted family uses `colorHighlight` (default `colorPrimary`) and `highlightStyle`, and a theme's `planCardLayout: "panel"` lays family cards out as panels with the same billing line. The default highlight (`#4f46e5` in the `light` theme) keeps its white text at WCAG AA contrast; if you set your own `colorHighlight`, check that `colorHighlightForeground` on it reaches 4.5:1.
+- `annualDiscountLabel` replaces the computed "Save N%" on the Annual option.
+- `locale` (default `en-US`) formats prices and feature values. Prices are exact in the currency's minor units (`¥1,500` for 1500 JPY), and whole amounts show no decimals (`$20`).
+- Pass `plans` and `families` to render without fetching. With `plans` alone, or with an older API that returns no `families`, each plan is its own card as before, sorted by price (or by `sort`), with its price per its own interval (`$14.99 /quarter`, no per-month price or billing line) and what the plan gives as its features.
+
+For a custom pricing page, use the same rules with `usePlans()`:
+
+```tsx
+const { plans, families } = usePlans();
+const intervals = getAvailableIntervals({ plans, families });
+const cards = getPricingCards({ plans, families }, { interval: "yearly", locale: "en-US" });
+// cards[i]: { family, plan, name, price, pricePeriod, billing, features, highlighted, badge, cta, ... }
+```
+
+`getPricingIntervalOptions(catalog)` returns the switch options with their labels and best saving, and `getDefaultInterval(catalog, preferred?)` the interval to start on.
+
 ## Payment providers: Stripe and Razorpay
 
 Your merchant backend returns whatever result Nozle gives for the customer's connected provider, and `CheckoutButton` handles each `type`:
