@@ -82,7 +82,8 @@ export function PanelPlanCard({
               letterSpacing: "0.18em",
               textTransform: "uppercase",
               whiteSpace: "nowrap",
-              color: filled ? text : isCurrent ? T.primary : T.highlight,
+              // The current plan's label takes the colour of its button.
+              color: filled ? text : isCurrent ? T.mutedForeground : T.highlight,
             })}
           >
             {label}

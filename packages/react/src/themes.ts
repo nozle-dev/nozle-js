@@ -50,6 +50,8 @@ export const neobrutal: Theme = {
     borderWidth: "2px",
     borderRadius: "0px",
     shadow: "4px 4px 0 var(--nozle-border, #000000)",
+    buttonBorderColor: "#000000",
+    buttonShadow: "3px 3px 0 #000000",
   },
 };
 
