@@ -52,6 +52,9 @@ export const neobrutal: Theme = {
     shadow: "4px 4px 0 var(--nozle-border, #000000)",
     buttonBorderColor: "#000000",
     buttonShadow: "3px 3px 0 #000000",
+    labelFont: "800 12px/1.4 var(--nozle-font, system-ui, sans-serif)",
+    labelTextTransform: "uppercase",
+    labelLetterSpacing: "0.06em",
   },
 };
 
@@ -82,7 +85,10 @@ export const nozle: Theme = {
     colorSecondary: "#ffffff",
     colorInput: "hsl(138 20% 46%)",
     fontFamily: "'Nunito', system-ui, sans-serif",
-    fontFamilyMono: "'JetBrains Mono', ui-monospace, monospace",
+    fontFamilyNumbers: "'JetBrains Mono', ui-monospace, monospace",
+    labelFont: "800 10.5px/1.4 'JetBrains Mono', ui-monospace, monospace",
+    labelTextTransform: "uppercase",
+    labelLetterSpacing: "0.18em",
     borderRadius: "14px",
     borderWidth: "1px",
     shadow: "none",

@@ -76,11 +76,9 @@ export function PanelPlanCard({
         {label && (
           <span
             {...el("planCard__badge", {
-              fontFamily: T.fontMono,
-              fontSize: "10.5px",
-              fontWeight: 800,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
+              font: T.labelFont,
+              letterSpacing: T.labelSpacing,
+              textTransform: T.labelTransform as CSSProperties["textTransform"],
               whiteSpace: "nowrap",
               // The current plan's label takes the colour of its button.
               color: filled ? text : isCurrent ? T.mutedForeground : T.highlight,

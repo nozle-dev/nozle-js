@@ -38,10 +38,11 @@ describe("toCssVars", () => {
       "--nozle-radius": "0px",
       colorScheme: "dark",
     });
-    expect(toCssVars({ colorSecondary: "#fff", colorInput: "#999", fontFamilyMono: "monospace" })).toEqual({
+    expect(toCssVars({ colorSecondary: "#fff", colorInput: "#999", labelFont: "600 12px serif", labelTextTransform: "uppercase" })).toEqual({
       "--nozle-secondary": "#fff",
       "--nozle-input": "#999",
-      "--nozle-font-mono": "monospace",
+      "--nozle-label-font": "600 12px serif",
+      "--nozle-label-transform": "uppercase",
     });
     expect(toCssVars({ buttonRadius: "10px", buttonBorderWidth: "2px", buttonBorderColor: "#000", buttonShadow: "none" })).toEqual({
       "--nozle-button-radius": "10px",
