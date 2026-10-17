@@ -456,6 +456,12 @@ export class Nozle {
     return res.json();
   }
 
+  /**
+   * Legacy wallet adapter: deducts `credits` from the customer's wallet.
+   *
+   * @deprecated Use {@link Nozle.usage}`.check()` and `.track()` with a credit system, which keep
+   * metric conversion, source ordering, idempotency and the credit ledger authoritative.
+   */
   async checkAndDeduct(params: CheckAndDeductParams): Promise<CheckAndDeductResult> {
     const res = await request(this.policy, `${this.baseUrl}/api/v1/check-and-deduct`, {
       method: "POST",

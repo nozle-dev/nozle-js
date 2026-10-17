@@ -30,19 +30,21 @@
     "node": ">=18.0.0"
   },
   "peerDependencies": {
-    "anthropic": ">=0.30.0",
+    "@anthropic-ai/sdk": ">=0.30.0",
     "openai": ">=4.0.0"
   },
   "peerDependenciesMeta": {
     "openai": {
       "optional": true
     },
-    "anthropic": {
+    "@anthropic-ai/sdk": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
     "@types/node": "^18.19.0",
+    "openai": "7.27.0",
     "openapi-typescript": "7.13.0",
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
