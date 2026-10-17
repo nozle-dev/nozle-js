@@ -78,6 +78,7 @@
 
 ### Fixed
 
+- The built package keeps `"use client"` on the main entry, so a Next.js server component can render the components without a wrapper; before, it failed with "createContext only works in Client Components". `@nozle-js/react/themes` stays importable from server components.
 - `useUsage()` is typed per period: `CustomerUsageData | null` for the current period and `CustomerUsageData[]` with `{ period: "past" }`, so its data passes to `UsageBreakdown` and `UsageTrend` without a cast. `PricingPlan.description` accepts `null`, so `usePlans().plans` passes to `PricingTable`, `PlanCard` and `PlanComparison` as is. `PoweredByNozle` used on its own takes the theme's colours.
 - Component buttons (`UpgradePrompt`, `PlanCard`, `PricingTable` and its toggle, `UsageAlert` dismiss, `PaymentMethodDisplay`) are `type="button"`, so they no longer submit a form they sit inside.
 - `PricingTable` shows the real billing interval (`/quarter`, `/week`, `/6 months`) instead of `/month` for every plan that is not yearly.

@@ -41,7 +41,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/check-use-client.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
