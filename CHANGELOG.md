@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## Node.js 0.13.0 — unreleased
+## Node.js 0.13.0 — 2026-10-17
 
 ### Added
 
@@ -39,7 +39,7 @@
 - `wrapOpenAI` and `wrapAnthropic` return the SDK's own `APIPromise` and `Stream`, so `withResponse()`, `asResponse()`, `chat.completions.parse()`, `messages.stream()` / `finalMessage()`, `stream.controller` and `toReadableStream()` work on a wrapped client. Usage is recorded once, when the response is read (not for `asResponse()`, which leaves the body to you); a stream records when it is fully iterated. Errors reject only to the caller.
 - The optional peer dependency is `@anthropic-ai/sdk`, the package `wrapAnthropic` wraps, instead of the unrelated `anthropic` package.
 
-## React 0.11.0 — unreleased
+## React 0.11.0 — 2026-10-17
 
 ### Breaking
 
