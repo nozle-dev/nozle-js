@@ -15,7 +15,7 @@ import {
   type CatalogEntitlement,
 } from './plan-features.js';
 import { useAppearance, type UseAppearance } from '../../appearance/context.js';
-import { T, border, buttonStyle, type Appearance, type ButtonVariant } from '../../appearance/tokens.js';
+import { T, border, buttonBorder, buttonStyle, type Appearance, type ButtonVariant } from '../../appearance/tokens.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -362,9 +362,9 @@ function CTAButton({
     variant === 'current'
       ? { ...buttonStyle('secondary'), color: C.muted, cursor: 'default' }
       : variant === 'highlight'
-        ? { ...buttonStyle('primary'), background: T.highlight, color: T.highlightForeground, border: border(T.highlight) }
+        ? { ...buttonStyle('primary'), background: T.highlight, color: T.highlightForeground, border: buttonBorder(T.highlight) }
         : variant === 'inverse'
-          ? { ...buttonStyle('primary'), background: T.highlightForeground, color: T.highlight, border: border(T.highlightForeground) }
+          ? { ...buttonStyle('primary'), background: T.highlightForeground, color: T.highlight, border: buttonBorder(T.highlightForeground) }
           : buttonStyle(variant);
 
   return (

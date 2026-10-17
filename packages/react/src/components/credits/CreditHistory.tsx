@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useAppearance } from "../../appearance/context.js";
-import { T, border as themeBorder, surface, type Appearance } from "../../appearance/tokens.js";
+import { T, border as themeBorder, buttonRadius, buttonStyle, surface, type Appearance } from "../../appearance/tokens.js";
 import { formatDecimalString } from "../../core/decimal.js";
 
 /** The fields of the SDK's credit operation (`nozle.credits.operations`) that this component reads. */
@@ -86,14 +86,13 @@ export function CreditHistory({
           onClick={onLoadMore}
           disabled={isLoading}
           style={{
+            ...buttonStyle("secondary", isLoading),
             marginTop: "0.75rem",
             padding: "0.5rem 0.875rem",
-            font: "inherit",
-            color: T.foreground,
-            background: T.muted,
-            border: themeBorder(),
-            borderRadius: `calc(${T.radius} / 2)`,
-            cursor: isLoading ? "wait" : "pointer",
+            fontSize: "inherit",
+            fontWeight: "inherit",
+            borderRadius: buttonRadius(`calc(${T.radius} / 2)`),
+            opacity: 1,
           }}
         >
           {isLoading ? "Loading…" : "Load more"}

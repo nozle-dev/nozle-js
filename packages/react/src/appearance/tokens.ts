@@ -23,6 +23,14 @@ export interface Variables {
   borderRadius?: string;
   borderWidth?: string;
   shadow?: string;
+  /** Corner radius of buttons. Defaults to a fraction of `borderRadius`. */
+  buttonRadius?: string;
+  /** Border width of buttons. Defaults to `borderWidth`. */
+  buttonBorderWidth?: string;
+  /** Border colour of every button. Defaults to each button's own colour. */
+  buttonBorderColor?: string;
+  /** Shadow of buttons only, for example a hard offset. Defaults to none. */
+  buttonShadow?: string;
   /** Sets the CSS `color-scheme` of the component, so native controls follow the theme. */
   colorScheme?: "light" | "dark" | "light dark";
 }
@@ -125,11 +133,22 @@ const CSS_VAR: Record<ColorKey, string> = {
   borderRadius: "--nozle-radius",
   borderWidth: "--nozle-border-width",
   shadow: "--nozle-shadow",
+  buttonRadius: "--nozle-button-radius",
+  buttonBorderWidth: "--nozle-button-border-width",
+  buttonBorderColor: "--nozle-button-border",
+  buttonShadow: "--nozle-button-shadow",
 };
 
 /** The light values every component falls back to when nothing else sets a token. */
-// The highlight colours default to the primary colours, so they have no value of their own here.
-type DerivedKey = "colorHighlight" | "colorHighlightForeground";
+// The highlight colours default to the primary colours, and the button values to the general ones
+// or to each button's own, so they have no value of their own here.
+type DerivedKey =
+  | "colorHighlight"
+  | "colorHighlightForeground"
+  | "buttonRadius"
+  | "buttonBorderWidth"
+  | "buttonBorderColor"
+  | "buttonShadow";
 
 export const LIGHT: Required<Omit<Variables, "colorScheme" | DerivedKey>> = {
   colorPrimary: "#4f46e5",
@@ -217,6 +236,15 @@ export const T = {
 /** `border` shorthand using the theme's border width and colour. */
 export const border = (color: string = T.border) => `${T.borderWidth} solid ${color}`;
 
+/** `border` shorthand for a button: the button tokens first, then the general width and `color`. */
+export const buttonBorder = (color: string) =>
+  `var(--nozle-button-border-width, ${T.borderWidth}) solid var(--nozle-button-border, ${color})`;
+
+/** Button corner radius: the `buttonRadius` token, else `fallback`. */
+export const buttonRadius = (fallback: string) => `var(--nozle-button-radius, ${fallback})`;
+
+export const buttonShadow = "var(--nozle-button-shadow, none)";
+
 export interface ResolvedAppearance {
   variables: Variables;
   elements: Partial<Record<ElementKey, { className?: string; style?: CSSProperties }>>;
@@ -276,14 +304,15 @@ export type ButtonVariant = "primary" | "secondary" | "outline";
 /** Button look shared by every component, from the theme tokens. */
 export function buttonStyle(variant: ButtonVariant = "primary", busy = false): CSSProperties {
   const colors: Record<ButtonVariant, CSSProperties> = {
-    primary: { background: T.primary, color: T.primaryForeground, border: border(T.primary) },
-    secondary: { background: T.muted, color: T.foreground, border: border() },
-    outline: { background: "transparent", color: T.primary, border: border(T.primary) },
+    primary: { background: T.primary, color: T.primaryForeground, border: buttonBorder(T.primary) },
+    secondary: { background: T.muted, color: T.foreground, border: buttonBorder(T.border) },
+    outline: { background: "transparent", color: T.primary, border: buttonBorder(T.primary) },
   };
   return {
     ...colors[variant],
+    boxShadow: buttonShadow,
     padding: "0.75rem 1.5rem",
-    borderRadius: `calc(${T.radius} * 0.75)`,
+    borderRadius: buttonRadius(`calc(${T.radius} * 0.75)`),
     fontFamily: T.font,
     fontSize: "0.9375rem",
     fontWeight: 600,

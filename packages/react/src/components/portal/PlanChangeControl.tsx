@@ -110,7 +110,7 @@ type Attempt = {
 };
 const styles = `
 .nozle-plan-change{font-family:${T.font};color:${T.foreground};margin-top:12px}
-.nozle-plan-change button{font:inherit;font-weight:550;padding:9px 14px;border:${T.borderWidth} solid ${T.border};border-radius:calc(${T.radius} * 0.6);background:${T.card};color:inherit;cursor:pointer}
+.nozle-plan-change button{font:inherit;font-weight:550;padding:9px 14px;border:var(--nozle-button-border-width, ${T.borderWidth}) solid var(--nozle-button-border, ${T.border});border-radius:var(--nozle-button-radius, calc(${T.radius} * 0.6));box-shadow:var(--nozle-button-shadow, none);background:${T.card};color:inherit;cursor:pointer}
 .nozle-plan-change button:disabled{opacity:.55;cursor:wait}
 .nozle-plan-change :focus-visible{outline:2px solid ${T.primary};outline-offset:3px}
 .nozle-plan-change [role=alert]{color:${T.danger}}

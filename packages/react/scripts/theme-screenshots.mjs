@@ -17,6 +17,8 @@ const shots = [
   ["dark", "dark"],
   ["minimal", "minimal"],
   ["neobrutal", "neobrutal"],
+  ["nozle", "nozle"],
+  ["nozleDark", "nozle-dark"],
   ["light", "light-filled", "filled"],
   ["dark", "dark-filled", "filled"],
 ];
