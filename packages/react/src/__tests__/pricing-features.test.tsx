@@ -88,14 +88,18 @@ describe("planFeatures", () => {
 describe("PricingTable interval", () => {
   it("labels every billing interval, not only year and month", () => {
     render(<PricingTable plans={[{ ...pro, code: "q", interval: "quarterly" }]} showToggle={false} />);
-    expect(screen.getByText("/quarter")).toBeTruthy();
+    // The price is shown per month with the real billing interval underneath.
+    expect(screen.getByText("Billed $14.99 quarterly")).toBeTruthy();
+    expect(screen.queryByText("/month")).toBeNull();
   });
 });
 
 describe("PricingTable interval", () => {
   it("labels every billing interval, not only year and month", () => {
     render(<PricingTable plans={[{ ...pro, code: "q", interval: "quarterly" }]} showToggle={false} />);
-    expect(screen.getByText("/quarter")).toBeTruthy();
+    // The price is shown per month with the real billing interval underneath.
+    expect(screen.getByText("Billed $14.99 quarterly")).toBeTruthy();
+    expect(screen.queryByText("/month")).toBeNull();
   });
 });
 
