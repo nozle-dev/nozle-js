@@ -23,6 +23,10 @@ import {
   PaymentMethodDisplay,
   PlanComparison,
   PricingTable,
+  getAvailableIntervals,
+  getDefaultInterval,
+  getPricingCards,
+  getPricingIntervalOptions,
   getUsageMeterColor,
   usePlans,
   useNozleClient,
@@ -183,6 +187,32 @@ describe("public presentation components", () => {
   });
 });
 
+describe("public pricing display helpers", () => {
+  it("exports the catalog pricing helpers from the package entry", () => {
+    expect(typeof getPricingCards).toBe("function");
+    expect(typeof getAvailableIntervals).toBe("function");
+    expect(typeof getDefaultInterval).toBe("function");
+    expect(typeof getPricingIntervalOptions).toBe("function");
+    const catalog = {
+      plans: [
+        {
+          code: "free",
+          name: "Free",
+          amount_cents: 0,
+          amount_currency: "USD",
+          interval: "monthly",
+        },
+      ],
+      families: [{ code: "free", name: "Free", plan_codes: ["free"] }],
+    };
+    expect(getAvailableIntervals(catalog)).toEqual(["monthly"]);
+    expect(getPricingCards(catalog).map((card) => card.plan.code)).toEqual([
+      "free",
+    ]);
+    expect(getPricingCards({ plans: catalog.plans })[0].family).toBeNull();
+  });
+});
+
 describe("public catalog hook", () => {
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <BillingProvider publishableKey="pk_contract">{children}</BillingProvider>
@@ -212,10 +242,30 @@ describe("public catalog hook", () => {
     );
     await waitFor(() => expect(result.current.plans.isLoading).toBe(false));
     expect(result.current.plans.plans[0].code).toBe("free");
+    expect(result.current.plans.families).toBeNull();
     expect(result.current.client.publishableKey).toBe("pk_contract");
     expect(fetchMock.mock.calls[0][0]).toBe(
       "https://api.nozle.app/engine/api/v1/plans",
     );
+  });
+  it("returns the catalog families next to the plans", async () => {
+    const families = [{ code: "pro", name: "Pro", plan_codes: ["pro_monthly"], features: [] }];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            plans: [{ code: "pro_monthly", name: "Pro", amount_cents: 4900, amount_currency: "USD", interval: "monthly", plan_family_code: "pro" }],
+            families,
+            meta: {},
+          }),
+        ),
+      ),
+    );
+    const { result } = renderHook(() => usePlans(), { wrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.families).toEqual(families);
+    expect(result.current.plans[0].plan_family_code).toBe("pro");
   });
   it("returns an error for a failed catalog request without an unhandled rejection", async () => {
     vi.stubGlobal(

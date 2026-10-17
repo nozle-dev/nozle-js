@@ -12,7 +12,10 @@ export interface PanelPlanCardProps {
   price: string;
   /** "month", "year"…; omitted for a price without an interval. */
   interval?: string;
-  features: string[];
+  /** A line under the price, for example "Billed $490 yearly · save 17%". */
+  priceNote?: string | null;
+  /** Feature lines; an object adds a muted description under its label. */
+  features: Array<string | { label: string; description?: string | null }>;
   isCurrent: boolean;
   isHighlighted: boolean;
   /** The highlighted card takes the highlight colour as its fill instead of its border. */
@@ -33,6 +36,7 @@ export function PanelPlanCard({
   description,
   price,
   interval,
+  priceNote,
   features,
   isCurrent,
   isHighlighted,
@@ -93,6 +97,11 @@ export function PanelPlanCard({
             {price}
             {interval && <span style={{ ...role.meta, color: muted }}> / {interval}</span>}
           </p>
+          {priceNote && (
+            <p data-testid="pricing-billing" style={{ ...role.meta, color: muted, margin: "0.25rem 0 0" }}>
+              {priceNote}
+            </p>
+          )}
           {description && (
             <p {...el("planCard__description", { ...role.secondary, color: muted, margin: "0.25rem 0 0" })}>
               {description}
@@ -113,11 +122,17 @@ export function PanelPlanCard({
             color: muted,
           })}
         >
-          {features.map((feature) => (
-            <li key={feature} {...el("planCard__feature")}>
-              {feature}
-            </li>
-          ))}
+          {features.map((feature, index) => {
+            const item = typeof feature === "string" ? { label: feature } : feature;
+            return (
+              <li key={`${index}:${item.label}`} {...el("planCard__feature")}>
+                {item.label}
+                {item.description && (
+                  <span style={{ display: "block", ...role.meta, color: muted }}>{item.description}</span>
+                )}
+              </li>
+            );
+          })}
         </ul>
 
         {children}
