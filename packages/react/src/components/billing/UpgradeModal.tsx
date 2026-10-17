@@ -47,8 +47,8 @@ const styles = `
 .nozle-upgradeModal .nozle-upgradeModal__dialog{box-sizing:border-box;background:${T.card};border:${T.borderWidth} solid ${T.border};border-radius:${T.radius};padding:24px;max-width:480px;width:100%;max-height:90dvh;overflow:auto;box-shadow:${T.shadow},0 12px 48px #0003}
 .nozle-upgradeModal h2{font-size:20px;margin:0 0 16px}
 .nozle-upgradeModal p{line-height:1.55}
-.nozle-upgradeModal button{font:inherit;font-weight:550;padding:9px 14px;border:${T.borderWidth} solid ${T.border};border-radius:calc(${T.radius} * 0.6);background:${T.card};color:inherit;cursor:pointer}
-.nozle-upgradeModal button.nzu-primary{background:${T.primary};border-color:${T.primary};color:${T.primaryForeground}}
+.nozle-upgradeModal button{font:inherit;font-weight:550;padding:9px 14px;border:var(--nozle-button-border-width, ${T.borderWidth}) solid var(--nozle-button-border, ${T.border});border-radius:var(--nozle-button-radius, calc(${T.radius} * 0.6));box-shadow:var(--nozle-button-shadow, none);background:${T.card};color:inherit;cursor:pointer}
+.nozle-upgradeModal button.nzu-primary{background:${T.primary};border-color:var(--nozle-button-border, ${T.primary});color:${T.primaryForeground}}
 .nozle-upgradeModal button:disabled{opacity:.55;cursor:wait}
 .nozle-upgradeModal :focus-visible{outline:2px solid ${T.primary};outline-offset:3px}
 .nozle-upgradeModal .nozle-upgradeModal__actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:20px}

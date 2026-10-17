@@ -38,6 +38,12 @@ describe("toCssVars", () => {
       "--nozle-radius": "0px",
       colorScheme: "dark",
     });
+    expect(toCssVars({ buttonRadius: "10px", buttonBorderWidth: "2px", buttonBorderColor: "#000", buttonShadow: "none" })).toEqual({
+      "--nozle-button-radius": "10px",
+      "--nozle-button-border-width": "2px",
+      "--nozle-button-border": "#000",
+      "--nozle-button-shadow": "none",
+    });
   });
 
   it("falls back to an old variable name and then to the light value", () => {
@@ -46,8 +52,25 @@ describe("toCssVars", () => {
 });
 
 describe("themes", () => {
-  it("offers exactly light, dark, minimal and neobrutal", () => {
-    expect(Object.keys(themes).sort()).toEqual(["dark", "light", "minimal", "neobrutal"]);
+  it("offers exactly light, dark, minimal, neobrutal, nozle and nozleDark", () => {
+    expect(Object.keys(themes).sort()).toEqual(["dark", "light", "minimal", "neobrutal", "nozle", "nozleDark"]);
+  });
+
+  it("gives nozle flat cards and the shadow on buttons only", () => {
+    render(
+      <PricingTable
+        plans={[{ code: "pro", name: "Pro", amount_cents: 2900, amount_currency: "USD", interval: "monthly" }]}
+        showToggle={false}
+        onSelect={() => {}}
+        appearance={{ theme: themes.nozle }}
+      />,
+    );
+    const root = document.querySelector(".nozle-pricingTable") as HTMLElement;
+    expect(root.style.getPropertyValue("--nozle-shadow")).toBe("none");
+    expect(root.style.getPropertyValue("--nozle-button-shadow")).toBe("3px 3px 0 0 hsl(138 53% 8%)");
+    const cta = document.querySelector(".nozle-planCard__cta") as HTMLElement;
+    expect(cta.getAttribute("style")).toContain("var(--nozle-button-shadow, none)");
+    expect(cta.style.fontWeight).toBe("800");
   });
 });
 

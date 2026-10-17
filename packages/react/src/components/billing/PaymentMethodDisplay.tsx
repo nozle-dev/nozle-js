@@ -6,7 +6,7 @@
  */
 
 import { useAppearance } from "../../appearance/context.js";
-import { T, border, surface, type Appearance } from "../../appearance/tokens.js";
+import { T, border, buttonRadius, buttonStyle, surface, type Appearance } from "../../appearance/tokens.js";
 
 export interface PaymentMethod {
   last4: string;
@@ -79,16 +79,12 @@ export function PaymentMethodDisplay({
       <button
         onClick={handleUpdate}
         style={{
+          ...buttonStyle("outline"),
           alignSelf: "flex-start",
-          background: "transparent",
-          border: border(T.primary),
-          color: T.primary,
           padding: "0.375rem 0.875rem",
-          borderRadius: `calc(${T.radius} / 2)`,
-          font: "inherit",
+          borderRadius: buttonRadius(`calc(${T.radius} / 2)`),
           fontSize: "0.875rem",
           fontWeight: 500,
-          cursor: "pointer",
         }}
       >
         Update Payment Method
