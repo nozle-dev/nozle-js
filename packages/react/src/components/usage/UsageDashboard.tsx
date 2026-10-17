@@ -9,7 +9,7 @@
 
 import { UsageMeter } from "./UsageMeter.js";
 import { useAppearance } from "../../appearance/context.js";
-import { T, surface, type Appearance } from "../../appearance/tokens.js";
+import { T, surface, text, type Appearance } from "../../appearance/tokens.js";
 import type { CatalogEntitlement } from "../pricing/plan-features.js";
 
 export interface UsageDashboardFeature {
@@ -65,8 +65,8 @@ export function UsageDashboard({
     display: "flex",
     flexDirection: "column",
     gap: loading ? "0.75rem" : "1rem",
-    fontFamily: T.font,
-    color: T.foreground,
+    // Errors and the empty message take the same colours as in the other components.
+    ...(error ? { color: T.dangerText } : features.length === 0 && !loading && text.secondary),
   });
 
   if (loading) {

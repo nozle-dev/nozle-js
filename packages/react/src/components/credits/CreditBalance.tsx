@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useAppearance } from "../../appearance/context.js";
-import { T, border as themeBorder, surface, type Appearance } from "../../appearance/tokens.js";
+import { T, border as themeBorder, surface, text, type Appearance } from "../../appearance/tokens.js";
 import { creditUnitLabel, formatDecimalString } from "../../core/decimal.js";
 
 export interface CreditBalanceSource {
@@ -54,25 +54,25 @@ export function CreditBalance({
 }: CreditBalanceProps): React.ReactElement {
   const { root, el } = useAppearance(appearance);
   if (isLoading) return <div {...root("creditBalance", { ...surface, height: 96, background: T.skeleton })} role="status" aria-label="Loading credit balance" />;
-  if (error) return <p {...root("creditBalance", { ...surface, color: T.danger })} role="alert">{typeof error === "string" ? error : error.message}</p>;
+  if (error) return <p {...root("creditBalance", { ...surface, color: T.dangerText })} role="alert">{typeof error === "string" ? error : error.message}</p>;
   if (!balance) return <p {...root("creditBalance", { ...surface, color: muted })} role="status">{emptyMessage}</p>;
 
   const sources = (balance.sources ?? []).filter((source) => source.remaining !== "0");
 
   return (
     <section aria-label={balance.credit_system_name} {...root("creditBalance", surface)}>
-      <h3 style={{ margin: 0, fontSize: "0.875rem", fontWeight: 500, color: muted }}>{balance.credit_system_name}</h3>
+      <h3 style={{ ...text.heading, margin: 0 }}>{balance.credit_system_name}</h3>
       <p style={{ margin: "0.25rem 0 0" }}>
-        <span {...el("creditBalance__amount", { fontSize: "2rem", fontWeight: 700 })}>{formatDecimalString(balance.available)}</span>{" "}
-        <span style={{ color: muted }}>{creditUnitLabel(balance.available, balance.unit_name)} available</span>
+        <span {...el("creditBalance__amount", text.metric)}>{formatDecimalString(balance.available)}</span>{" "}
+        <span style={text.secondary}>{creditUnitLabel(balance.available, balance.unit_name)} available</span>
       </p>
-      <p style={{ margin: "0.25rem 0 0", fontSize: "0.75rem", color: muted }}>As of {date(balance.as_of)}</p>
+      <p style={{ ...text.meta, margin: "0.25rem 0 0" }}>As of {date(balance.as_of)}</p>
       {sources.length > 0 && (
-        <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0", fontSize: "0.875rem" }}>
+        <ul style={{ listStyle: "none", padding: 0, margin: "1rem 0 0" }}>
           {sources.map((source) => (
             <li key={source.id} style={{ display: "flex", justifyContent: "space-between", padding: "0.25rem 0" }}>
               <span>{SOURCE_LABELS[source.type] ?? source.type}</span>
-              <span style={{ color: muted }}>
+              <span style={text.secondary}>
                 {formatDecimalString(source.remaining)}
                 {source.expires_at ? ` · expires ${date(source.expires_at)}` : ""}
               </span>

@@ -8,7 +8,7 @@
 
 import React from "react";
 import { useAppearance } from "../../appearance/context.js";
-import { T, buttonStyle, type Appearance } from "../../appearance/tokens.js";
+import { buttonStyle, text as role, type Appearance } from "../../appearance/tokens.js";
 
 export interface UpgradePromptProps {
   text?: string;
@@ -49,15 +49,15 @@ export function UpgradePrompt({
         gap: "0.75rem",
         padding: "1rem",
         textAlign: "center",
-        fontFamily: T.font,
+        ...role.body,
       })}
     >
-      <p style={{ color: T.foreground, fontSize: "0.875rem", margin: 0 }}>
+      <p style={{ margin: 0 }}>
         {displayText}
       </p>
       <button
         onClick={handleUpgrade}
-        style={{ ...buttonStyle(), padding: "0.5rem 1.25rem", fontSize: "0.875rem" }}
+        style={{ ...buttonStyle(), padding: "0.5rem 1.25rem" }}
       >
         Upgrade
       </button>

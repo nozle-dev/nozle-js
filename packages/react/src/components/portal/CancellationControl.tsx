@@ -50,16 +50,16 @@ export interface CancellationControlProps {
 }
 
 const styles = `
-.nozle-cancellation{font-family:${T.font};color:${T.foreground}}
-.nozle-cancellation button{font:inherit;font-weight:550;padding:9px 14px;border:var(--nozle-button-border-width, ${T.borderWidth}) solid ${T.input};border-radius:var(--nozle-button-radius, calc(${T.radius} * 0.6));background:${T.card};color:inherit;cursor:pointer}
+.nozle-cancellation{font:${T.fontBody};color:${T.foreground}}
+.nozle-cancellation button{font:${T.fontAction};padding:9px 14px;border:var(--nozle-button-border-width, ${T.borderWidth}) solid ${T.input};border-radius:var(--nozle-button-radius, calc(${T.radius} * 0.6));background:${T.card};color:inherit;cursor:pointer}
 .nozle-cancellation button:disabled{opacity:.55;cursor:wait}
 .nozle-cancellation :focus-visible{outline:2px solid ${T.primary};outline-offset:3px}
 .nozle-cancellation .nzc-backdrop{position:fixed;inset:0;background:#0006;z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
 .nozle-cancellation .nzc-dialog{box-sizing:border-box;background:${T.card};border:${T.borderWidth} solid ${T.border};border-radius:${T.radius};padding:24px;width:100%;max-width:440px;max-height:90dvh;overflow:auto;box-shadow:${T.shadow},0 12px 48px #0003}
-.nozle-cancellation .nzc-dialog h3{margin:0 0 16px;font-size:20px}
-.nozle-cancellation .nzc-dialog p{margin:12px 0;line-height:1.55}
+.nozle-cancellation .nzc-dialog h3{margin:0 0 16px;font:${T.fontTitle};letter-spacing:normal;color:${T.foreground}}
+.nozle-cancellation .nzc-dialog p{margin:12px 0}
 .nozle-cancellation .nzc-buttons{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin-top:20px}
-.nozle-cancellation [role=alert]{color:${T.danger}}
+.nozle-cancellation [role=alert],.nozle-cancellation .nzc-danger{color:${T.dangerText}}
 `;
 
 function formatDate(value: string, locale: string, timezone: string) {
@@ -445,6 +445,7 @@ function CancellationFlow({
               {preview && (
                 <button
                   type="button"
+                  className={preview.operation === "cancel" ? "nzc-danger" : undefined}
                   disabled={busy}
                   onClick={() => void confirm()}
                 >

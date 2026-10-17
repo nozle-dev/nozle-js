@@ -109,16 +109,18 @@ type Attempt = {
   attempted: boolean;
 };
 const styles = `
-.nozle-plan-change{font-family:${T.font};color:${T.foreground};margin-top:12px}
-.nozle-plan-change button{font:inherit;font-weight:550;padding:9px 14px;border:var(--nozle-button-border-width, ${T.borderWidth}) solid ${T.input};border-radius:var(--nozle-button-radius, calc(${T.radius} * 0.6));background:${T.card};color:inherit;cursor:pointer}
+.nozle-plan-change{font:${T.fontBody};color:${T.foreground};margin-top:12px}
+.nozle-plan-change button{font:${T.fontAction};padding:9px 14px;border:var(--nozle-button-border-width, ${T.borderWidth}) solid ${T.input};border-radius:var(--nozle-button-radius, calc(${T.radius} * 0.6));background:${T.card};color:inherit;cursor:pointer}
 .nozle-plan-change button:disabled{opacity:.55;cursor:wait}
 .nozle-plan-change :focus-visible{outline:2px solid ${T.primary};outline-offset:3px}
-.nozle-plan-change [role=alert]{color:${T.danger}}
+.nozle-plan-change [role=alert]{color:${T.dangerText}}
 .nozle-plan-change .nzpc-actions{display:flex;gap:10px;flex-wrap:wrap}
 .nozle-upgrade-modal select{box-sizing:border-box;width:100%;font:inherit;color:inherit;padding:10px;margin:8px 0;border:${T.borderWidth} solid ${T.border};border-radius:calc(${T.radius} * 0.6);background:${T.card}}
 .nozle-upgrade-modal dl{display:block;margin:16px 0;padding:0}
 .nozle-upgrade-modal dl div{display:flex;justify-content:space-between;gap:16px;margin:12px 0}
+.nozle-upgrade-modal dt{font:${T.fontMeta};color:${T.mutedForeground}}
 .nozle-upgrade-modal dd{margin:0;text-align:right}
+.nozle-upgrade-modal label{font:${T.fontBody};font-weight:500}
 `;
 const paymentPending = (state: PlanChangeState) =>
   ["awaiting_payment", "processing", "needs_review"].includes(

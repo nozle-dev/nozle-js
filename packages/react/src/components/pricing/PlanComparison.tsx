@@ -16,7 +16,7 @@ import {
   type ComparisonRow,
 } from "./plan-features.js";
 import { useAppearance } from "../../appearance/context.js";
-import { T, table, type Appearance } from "../../appearance/tokens.js";
+import { T, table, text, type Appearance } from "../../appearance/tokens.js";
 
 export type ComparisonFeature = ComparisonRow;
 
@@ -53,7 +53,7 @@ export function PlanComparison({
             {plans.map((plan) => (
               <th key={plan.code} {...cell({ ...table.head(), textAlign: "center", padding: "10px 20px" })}>
                 {plan.name}
-                <div style={{ fontFamily: T.font, fontSize: "12px", fontWeight: 400, letterSpacing: 0, textTransform: "none" }}>
+                <div style={{ ...text.meta, letterSpacing: "normal", textTransform: "none" }}>
                   {formatPlanPrice(plan.amount_cents, plan.amount_currency)} / {intervalLabel(plan.interval)}
                 </div>
               </th>

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useAppearance } from "../../appearance/context.js";
-import { T, buttonRadius, buttonStyle, surface, table, type Appearance } from "../../appearance/tokens.js";
+import { T, buttonRadius, buttonStyle, surface, table, text, type Appearance } from "../../appearance/tokens.js";
 import { formatDecimalString } from "../../core/decimal.js";
 
 /** The fields of the SDK's credit operation (`nozle.credits.operations`) that this component reads. */
@@ -53,12 +53,12 @@ export function CreditHistory({
   appearance,
 }: CreditHistoryProps): React.ReactElement {
   const { root, el } = useAppearance(appearance);
-  if (error) return <p {...root("creditHistory", { ...surface, color: T.danger })} role="alert">{typeof error === "string" ? error : error.message}</p>;
+  if (error) return <p {...root("creditHistory", { ...surface, color: T.dangerText })} role="alert">{typeof error === "string" ? error : error.message}</p>;
   if (isLoading && operations.length === 0) return <div {...root("creditHistory", { ...surface, height: 120, background: T.skeleton })} role="status" aria-label="Loading credit history" />;
   if (operations.length === 0) return <p {...root("creditHistory", { ...surface, color: muted })} role="status">{emptyMessage}</p>;
 
   return (
-    <div {...root("creditHistory", { fontFamily: T.font, color: T.foreground, minWidth: 0 })}>
+    <div {...root("creditHistory", { ...text.body, minWidth: 0 })}>
       <div style={table.frame}>
         <table {...el("creditHistory__table", table.table)}>
           <thead>
@@ -93,8 +93,6 @@ export function CreditHistory({
             ...buttonStyle("secondary", isLoading),
             marginTop: "0.75rem",
             padding: "0.5rem 0.875rem",
-            fontSize: "inherit",
-            fontWeight: "inherit",
             borderRadius: buttonRadius(`calc(${T.radius} / 2)`),
             opacity: 1,
           }}

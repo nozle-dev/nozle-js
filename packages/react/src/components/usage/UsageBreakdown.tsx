@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useAppearance } from "../../appearance/context.js";
-import { T, surface, table, type Appearance } from "../../appearance/tokens.js";
+import { T, surface, table, text, type Appearance } from "../../appearance/tokens.js";
 import { formatDecimalString } from "../../core/decimal.js";
 import { formatAmount, formatDay, type CustomerUsageData } from "./usage-data.js";
 
@@ -26,14 +26,14 @@ export function UsageBreakdown({
 }: UsageBreakdownProps): React.ReactElement {
   const { root, el } = useAppearance(appearance);
   if (isLoading) return <div {...root("usageBreakdown", { ...surface, height: 120, background: T.skeleton })} role="status" aria-label="Loading usage" />;
-  if (error) return <p {...root("usageBreakdown", { ...surface, color: T.danger })} role="alert">{typeof error === "string" ? error : error.message}</p>;
+  if (error) return <p {...root("usageBreakdown", { ...surface, color: T.dangerText })} role="alert">{typeof error === "string" ? error : error.message}</p>;
   if (!usage || usage.charges_usage.length === 0) return <p {...root("usageBreakdown", { ...surface, color: muted })} role="status">{emptyMessage}</p>;
 
   const rows = [...usage.charges_usage].sort((a, b) => b.amount_cents - a.amount_cents);
 
   return (
-    <section {...root("usageBreakdown", { fontFamily: T.font, color: T.foreground, minWidth: 0 })}>
-      <p style={{ margin: "0 0 0.5rem", fontSize: "0.875rem", color: muted }}>
+    <section {...root("usageBreakdown", { ...text.body, minWidth: 0 })}>
+      <p style={{ ...text.secondary, margin: "0 0 0.5rem" }}>
         {formatDay(usage.from_datetime)} to {formatDay(usage.to_datetime)}
       </p>
       <div style={table.frame}>

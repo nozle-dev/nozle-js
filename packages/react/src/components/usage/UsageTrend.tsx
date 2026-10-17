@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useAppearance } from "../../appearance/context.js";
-import { T, border as themeBorder, surface, type Appearance } from "../../appearance/tokens.js";
+import { T, border as themeBorder, surface, text, type Appearance } from "../../appearance/tokens.js";
 import { formatAmount, formatDay, type CustomerUsageData } from "./usage-data.js";
 
 export interface UsageTrendProps {
@@ -38,7 +38,7 @@ export function UsageTrend({
 }: UsageTrendProps): React.ReactElement {
   const { root, el } = useAppearance(appearance);
   if (isLoading) return <div {...root("usageTrend", { ...surface, height: 160, background: T.skeleton })} role="status" aria-label="Loading usage trend" />;
-  if (error) return <p {...root("usageTrend", { ...surface, color: T.danger })} role="alert">{typeof error === "string" ? error : error.message}</p>;
+  if (error) return <p {...root("usageTrend", { ...surface, color: T.dangerText })} role="alert">{typeof error === "string" ? error : error.message}</p>;
   if (!periods || periods.length === 0) return <p {...root("usageTrend", { ...surface, color: muted })} role="status">{emptyMessage}</p>;
 
   const ordered = [...periods].sort((a, b) => Date.parse(a.from_datetime) - Date.parse(b.from_datetime));
@@ -56,8 +56,8 @@ export function UsageTrend({
     <figure {...root("usageTrend", { ...surface, margin: 0 })}>
       <div style={{ display: "flex", alignItems: "flex-end", gap: "0.5rem", height: BAR_AREA + 40 }}>
         {points.map((point) => (
-          <div key={point.key} style={{ flex: 1, minWidth: 0, textAlign: "center", fontSize: "0.75rem" }}>
-            <div style={{ color: muted }}>{point.text}</div>
+          <div key={point.key} style={{ ...text.meta, flex: 1, minWidth: 0, textAlign: "center" }}>
+            <div>{point.text}</div>
             <div
               role="img"
               aria-label={`${point.label}: ${point.text}`}
@@ -69,7 +69,7 @@ export function UsageTrend({
                 background: T.primary,
               })}
             />
-            <div style={{ marginTop: 4, color: muted }}>{point.label}</div>
+            <div style={{ marginTop: 4 }}>{point.label}</div>
           </div>
         ))}
       </div>

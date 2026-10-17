@@ -1,6 +1,6 @@
 import React, { type CSSProperties, type ReactNode } from "react";
 import type { ElementProps, UseAppearance } from "../../appearance/context.js";
-import { T, border } from "../../appearance/tokens.js";
+import { T, border, text as role } from "../../appearance/tokens.js";
 
 export interface PanelPlanCardProps {
   /** Props for the card element: `el` or `root` of the calling component. */
@@ -52,9 +52,9 @@ export function PanelPlanCard({
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        ...role.body,
         background: filled ? T.highlight : T.card,
         color: text,
-        fontFamily: T.font,
         border: border(edge),
         borderRadius: T.radius,
         boxShadow: T.shadow,
@@ -70,15 +70,13 @@ export function PanelPlanCard({
           borderBottom: border(filled ? `color-mix(in srgb, ${T.highlightForeground} 30%, ${T.highlight})` : T.border),
         })}
       >
-        <h3 {...el("planCard__name", { margin: 0, fontSize: "14px", fontWeight: 900, lineHeight: 1.25, letterSpacing: "-0.015em" })}>
+        <h3 {...el("planCard__name", { ...role.heading, color: text, margin: 0 })}>
           {name}
         </h3>
         {label && (
           <span
             {...el("planCard__badge", {
-              font: T.labelFont,
-              letterSpacing: T.labelSpacing,
-              textTransform: T.labelTransform as CSSProperties["textTransform"],
+              ...role.label,
               whiteSpace: "nowrap",
               // The current plan's label takes the colour of its button.
               color: filled ? text : isCurrent ? T.mutedForeground : T.highlight,
@@ -91,12 +89,12 @@ export function PanelPlanCard({
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "1.25rem", flex: 1 }}>
         <div>
-          <p {...el("planCard__price", { margin: 0, fontSize: "24px", fontWeight: 800, lineHeight: 1.2, fontVariantNumeric: "tabular-nums" })}>
+          <p {...el("planCard__price", { ...role.metric, color: text, margin: 0 })}>
             {price}
-            {interval && <span style={{ fontSize: "12px", fontWeight: 400, color: muted }}> / {interval}</span>}
+            {interval && <span style={{ ...role.meta, color: muted }}> / {interval}</span>}
           </p>
           {description && (
-            <p {...el("planCard__description", { margin: "0.25rem 0 0", fontSize: "14px", lineHeight: 1.5, color: muted })}>
+            <p {...el("planCard__description", { ...role.secondary, color: muted, margin: "0.25rem 0 0" })}>
               {description}
             </p>
           )}
@@ -111,8 +109,7 @@ export function PanelPlanCard({
             flexDirection: "column",
             gap: "0.375rem",
             flex: 1,
-            fontSize: "14px",
-            lineHeight: 1.5,
+            ...role.secondary,
             color: muted,
           })}
         >

@@ -28,6 +28,8 @@ export interface UseAppearance {
   el(key: ElementKey, style?: CSSProperties, className?: string): ElementProps;
   /** The plan card layout the theme asks for. */
   planCardLayout: "card" | "panel";
+  /** The theme's CSS variables, for an element rendered beside the root rather than inside it. */
+  vars: CSSProperties;
 }
 
 /**
@@ -49,6 +51,7 @@ export function useAppearance(appearance?: Appearance): UseAppearance {
     return {
       el,
       planCardLayout,
+      vars,
       root: (key, style, className) => {
         const props = el(key, style, className);
         return { ...props, style: { ...vars, ...props.style } };
