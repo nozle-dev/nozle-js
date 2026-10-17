@@ -59,7 +59,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --workspaces=false
 
+      # Vitest 4 needs Node 20+; on Node 18 the built package is smoke-tested instead.
       - name: Run tests
+        if: matrix.node-version != '18.20.8'
         run: npm test
 
       - name: Typecheck
@@ -67,6 +69,11 @@ jobs:
 
       - name: Build package
         run: npm run build
+
+      - name: Smoke test built package
+        run: |
+          node -e "const { Nozle } = require('./dist/index.cjs'); if (typeof Nozle !== 'function') process.exit(1)"
+          node --input-type=module -e "const { Nozle } = await import('./dist/index.js'); if (typeof Nozle !== 'function') process.exit(1)"
 
   react:
     name: React ${{ matrix.node-version }}
@@ -92,7 +99,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Vitest 4 needs Node 20+; the example test below still runs on Node 18.
       - name: Run tests
+        if: matrix.node-version != '18.20.8'
         run: npm test --workspace=@nozle-js/react -- --no-file-parallelism
 
       - name: Typecheck
