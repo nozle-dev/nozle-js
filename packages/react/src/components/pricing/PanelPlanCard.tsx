@@ -7,7 +7,7 @@ export interface PanelPlanCardProps {
   frame: (style: CSSProperties) => ElementProps;
   el: UseAppearance["el"];
   name: string;
-  description?: string;
+  description?: string | null;
   /** Formatted price, or a word such as "Custom". */
   price: string;
   /** "month", "year"…; omitted for a price without an interval. */

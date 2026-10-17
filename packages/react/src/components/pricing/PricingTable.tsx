@@ -29,7 +29,7 @@ export interface PricingPlan {
   amount_cents: number;
   amount_currency: string;
   interval: string;
-  description?: string;
+  description?: string | null;
   /** Present in the public catalog. The table turns these into each card's feature list. */
   entitlements?: CatalogEntitlement[];
   credit_grant_rules?: CatalogCreditGrantRule[];
