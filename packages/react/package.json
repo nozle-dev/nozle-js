@@ -45,7 +45,7 @@
     "react-dom": "^19.2.6",
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
-    "vitest": "^3.1.0"
+    "vitest": "^4.1.12"
   },
   "peerDependencies": {
     "@stripe/react-stripe-js": ">=3.0.0",
@@ -58,5 +58,10 @@
     "url": "git+https://github.com/nozle-dev/nozle-js.git",
     "directory": "packages/react"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "overrides": {
+    "esbuild": "^0.28.2",
+    "postcss": "^8.5.23",
+    "source-map-js": "^1.2.2"
+  }
 }
