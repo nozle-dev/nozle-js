@@ -44,7 +44,7 @@ export function PlanCard({
   const features = featureOverride ?? planFeatures(plan);
 
   const cta = onSelect && (
-    <button
+    <button type="button"
       onClick={() =>
         onSelect?.({
           planCode: id,
