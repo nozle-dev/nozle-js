@@ -3,7 +3,7 @@
  * (`minimal`, `neobrutal`) stack: `theme: [neobrutal, dark]`. Any variable can be changed on top.
  * `nozle` and `nozleDark` are the complete Nozle dashboard look, colours and shape together.
  */
-import { LIGHT, type Theme, type Variables } from "./appearance/tokens.js";
+import { DERIVED_MUTED_FOREGROUND, LIGHT, type Theme, type Variables } from "./appearance/tokens.js";
 
 export type { Appearance, Elements, ElementKey, Theme, Variables } from "./appearance/tokens.js";
 
@@ -14,7 +14,7 @@ const DARK_COLORS = {
   colorCard: "#111827",
   colorForeground: "#f3f4f6",
   colorMuted: "#1f2937",
-  colorMutedForeground: "#9ca3af",
+  colorMutedForeground: DERIVED_MUTED_FOREGROUND,
   colorAccent: "#1e1b4b",
   colorAccentForeground: "#c7d2fe",
   colorBorder: "#374151",
@@ -26,9 +26,11 @@ const DARK_COLORS = {
 type ColorName = keyof typeof DARK_COLORS;
 const COLOR_NAMES = Object.keys(DARK_COLORS) as ColorName[];
 
+const LIGHT_COLORS = { ...LIGHT, colorMutedForeground: DERIVED_MUTED_FOREGROUND };
+
 /** The default look, written out so it can be stacked over another theme. */
 export const light: Theme = {
-  variables: { ...Object.fromEntries(COLOR_NAMES.map((name) => [name, LIGHT[name]])), colorScheme: "light" },
+  variables: { ...Object.fromEntries(COLOR_NAMES.map((name) => [name, LIGHT_COLORS[name]])), colorScheme: "light" },
 };
 
 /** Dark surfaces. Put it on a dark page background. */
@@ -53,6 +55,8 @@ export const neobrutal: Theme = {
     buttonBorderColor: "#000000",
     buttonShadow: "3px 3px 0 #000000",
     labelFont: "800 12px/1.4 var(--nozle-font, system-ui, sans-serif)",
+    fontTitle: "800 20px/1.25 var(--nozle-font, system-ui, sans-serif)",
+    fontHeading: "800 16px/1.35 var(--nozle-font, system-ui, sans-serif)",
     labelTextTransform: "uppercase",
     labelLetterSpacing: "0.06em",
   },
@@ -61,7 +65,10 @@ export const neobrutal: Theme = {
 // Nozle dashboard tokens (nozle-frontend design system and its plan page): flat panels with
 // hairline borders, pill buttons, and depth only on the primary action, as a hard ink offset.
 const NOZLE_INK = "hsl(138 53% 8%)";
-const nozleCta = { fontWeight: 800, fontSize: "14px", padding: "0.625rem 1.5rem" };
+const nozleCta = { padding: "0.625rem 1.5rem" };
+const nunito = "'Nunito', system-ui, sans-serif";
+// Text role in the theme's font, so a `fontFamily` set on top still applies.
+const nozleFont = (size: string) => `${size} var(--nozle-font, ${nunito})`;
 
 /**
  * The Nozle dashboard look. The app loads the Nunito and JetBrains Mono fonts; without them the
@@ -84,9 +91,16 @@ export const nozle: Theme = {
     colorSuccess: "hsl(152 62% 28%)",
     colorSecondary: "#ffffff",
     colorInput: "hsl(138 20% 46%)",
-    fontFamily: "'Nunito', system-ui, sans-serif",
+    fontFamily: nunito,
     fontFamilyNumbers: "'JetBrains Mono', ui-monospace, monospace",
     labelFont: "800 10.5px/1.4 'JetBrains Mono', ui-monospace, monospace",
+    // The dashboard type scale. Prices are Nunito; JetBrains Mono is for table numbers only.
+    fontTitle: nozleFont("900 20px/1.15"),
+    fontHeading: nozleFont("900 14px/1.25"),
+    fontMetric: nozleFont("800 24px/1"),
+    fontBody: nozleFont("400 13px/1.5"),
+    fontMeta: nozleFont("400 11.5px/1.4"),
+    fontAction: nozleFont("800 14px/1.4"),
     labelTextTransform: "uppercase",
     labelLetterSpacing: "0.18em",
     borderRadius: "14px",

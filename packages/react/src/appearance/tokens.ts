@@ -32,6 +32,21 @@ export interface Variables {
   labelTextTransform?: string;
   /** `letter-spacing` of small labels. */
   labelLetterSpacing?: string;
+  /** CSS `font` shorthand of titles: dialog and portal titles. Default `700 20px/1.25` in `fontFamily`. */
+  fontTitle?: string;
+  /** CSS `font` shorthand of headings: plan names and section headings. Default `600 16px/1.35` in `fontFamily`. */
+  fontHeading?: string;
+  /**
+   * CSS `font` shorthand of large numbers: prices, balances and totals, shown in tabular figures.
+   * Default `700 28px/1.1` in `fontFamilyNumbers`, else `fontFamily`.
+   */
+  fontMetric?: string;
+  /** CSS `font` shorthand of body text and descriptions. Default `400 14px/1.5` in `fontFamily`. */
+  fontBody?: string;
+  /** CSS `font` shorthand of small text: dates, intervals and hints. Default `400 12px/1.4` in `fontFamily`. */
+  fontMeta?: string;
+  /** CSS `font` shorthand of buttons and links. Default `600 14px/1.4` in `fontFamily`. */
+  fontAction?: string;
   borderRadius?: string;
   borderWidth?: string;
   shadow?: string;
@@ -155,6 +170,12 @@ const CSS_VAR: Record<ColorKey, string> = {
   labelFont: "--nozle-label-font",
   labelTextTransform: "--nozle-label-transform",
   labelLetterSpacing: "--nozle-label-spacing",
+  fontTitle: "--nozle-font-title",
+  fontHeading: "--nozle-font-heading",
+  fontMetric: "--nozle-font-metric",
+  fontBody: "--nozle-font-body",
+  fontMeta: "--nozle-font-meta",
+  fontAction: "--nozle-font-action",
   borderRadius: "--nozle-radius",
   borderWidth: "--nozle-border-width",
   shadow: "--nozle-shadow",
@@ -165,9 +186,11 @@ const CSS_VAR: Record<ColorKey, string> = {
 };
 
 /** The light values every component falls back to when nothing else sets a token. */
-// The highlight colours default to the primary colours, and the button values to the general ones
-// or to each button's own, so they have no value of their own here.
+// The highlight colours default to the primary colours, the muted text to a mix of the text and card
+// colours, the text roles to sizes in `fontFamily`, and the button values to the general ones or to
+// each button's own, so they have no value of their own here.
 type DerivedKey =
+  | "colorMutedForeground"
   | "colorHighlight"
   | "colorHighlightForeground"
   | "colorSecondary"
@@ -176,6 +199,12 @@ type DerivedKey =
   | "labelFont"
   | "labelTextTransform"
   | "labelLetterSpacing"
+  | "fontTitle"
+  | "fontHeading"
+  | "fontMetric"
+  | "fontBody"
+  | "fontMeta"
+  | "fontAction"
   | "buttonRadius"
   | "buttonBorderWidth"
   | "buttonBorderColor"
@@ -188,7 +217,6 @@ export const LIGHT: Required<Omit<Variables, "colorScheme" | DerivedKey>> = {
   colorCard: "#ffffff",
   colorForeground: "#111827",
   colorMuted: "#f3f4f6",
-  colorMutedForeground: "#6b7280",
   colorAccent: "#eef2ff",
   colorAccentForeground: "#3730a3",
   colorBorder: "#e5e7eb",
@@ -213,10 +241,10 @@ const ALIASES: Partial<Record<ColorKey, string[]>> = {
   borderRadius: ["--nozle-pricing-radius"],
 };
 
-function chain(key: Exclude<ColorKey, DerivedKey>): string {
+function chain(key: ColorKey, last: string = LIGHT[key as Exclude<ColorKey, DerivedKey>]): string {
   return [CSS_VAR[key], ...(ALIASES[key] ?? [])].reduceRight(
     (fallback, name) => `var(${name}, ${fallback})`,
-    LIGHT[key],
+    last,
   );
 }
 
@@ -230,6 +258,13 @@ const warning = chain("colorWarning");
 const success = chain("colorSuccess");
 const foreground = chain("colorForeground");
 const primaryForeground = chain("colorPrimaryForeground");
+const font = chain("fontFamily");
+
+/**
+ * Muted text when `colorMutedForeground` is not set: the text colour mixed into the card colour, so
+ * changing `colorForeground` recolours muted text too.
+ */
+export const DERIVED_MUTED_FOREGROUND = `color-mix(in srgb, ${foreground} 62%, ${card})`;
 
 /** CSS values for component styles: each reads its token, then older names, then the light value. */
 export const T = {
@@ -241,7 +276,7 @@ export const T = {
   card,
   foreground,
   muted: chain("colorMuted"),
-  mutedForeground: chain("colorMutedForeground"),
+  mutedForeground: chain("colorMutedForeground", DERIVED_MUTED_FOREGROUND),
   accent: chain("colorAccent"),
   secondary: `var(--nozle-secondary, ${chain("colorMuted")})`,
   input: `var(--nozle-input, ${chain("colorBorder")})`,
@@ -250,9 +285,15 @@ export const T = {
   danger,
   warning,
   success,
-  font: chain("fontFamily"),
+  font,
   fontNumbers: "var(--nozle-font-numbers, inherit)",
-  labelFont: `var(--nozle-label-font, 600 12px/1.4 ${chain("fontFamily")})`,
+  labelFont: `var(--nozle-label-font, 600 12px/1.4 ${font})`,
+  fontTitle: `var(--nozle-font-title, 700 20px/1.25 ${font})`,
+  fontHeading: `var(--nozle-font-heading, 600 16px/1.35 ${font})`,
+  fontMetric: `var(--nozle-font-metric, 700 28px/1.1 var(--nozle-font-numbers, ${font}))`,
+  fontBody: `var(--nozle-font-body, 400 14px/1.5 ${font})`,
+  fontMeta: `var(--nozle-font-meta, 400 12px/1.4 ${font})`,
+  fontAction: `var(--nozle-font-action, 600 14px/1.4 ${font})`,
   labelTransform: "var(--nozle-label-transform, none)",
   labelSpacing: "var(--nozle-label-spacing, normal)",
   radius: chain("borderRadius"),
@@ -263,7 +304,10 @@ export const T = {
   dangerBorder: soft(danger, card, 30),
   warningSoft: soft(warning, card, 12),
   warningBorder: soft(warning, card, 35),
+  /** Status text: the status colour mixed with the text colour, so it stays readable on its soft background. */
+  dangerText: soft(danger, foreground, 70),
   warningText: soft(warning, foreground, 70),
+  successText: soft(success, foreground, 70),
   successSoft: soft(success, card, 12),
   primarySoft: soft(primary, card, 10),
   primaryHover: soft(primary, "black", 88),
@@ -272,6 +316,27 @@ export const T = {
   tableHeader: soft(chain("colorMuted"), card, 50),
   rowLine: soft(chain("colorBorder"), card, 70),
 } as const;
+
+/**
+ * Text roles. Each sets the role's font (a `font` shorthand variable) and its default colour; a
+ * component may change the colour, for example to a status colour or the text on a filled card.
+ * `font` comes first because the shorthand resets the longhands after it.
+ */
+export const text = {
+  title: { font: T.fontTitle, color: T.foreground },
+  heading: { font: T.fontHeading, color: T.foreground },
+  metric: { font: T.fontMetric, fontVariantNumeric: "tabular-nums", color: T.foreground },
+  body: { font: T.fontBody, color: T.foreground },
+  secondary: { font: T.fontBody, color: T.mutedForeground },
+  meta: { font: T.fontMeta, color: T.mutedForeground },
+  label: {
+    font: T.labelFont,
+    letterSpacing: T.labelSpacing,
+    textTransform: T.labelTransform as CSSProperties["textTransform"],
+    color: T.mutedForeground,
+  },
+  action: { font: T.fontAction },
+} satisfies Record<string, CSSProperties>;
 
 /** `border` shorthand using the theme's border width and colour. */
 export const border = (color: string = T.border) => `${T.borderWidth} solid ${color}`;
@@ -336,39 +401,34 @@ export function toCssVars(variables: Variables): CSSProperties {
 
 /** The card frame shared by the data components. */
 export const surface: CSSProperties = {
+  ...text.body,
   background: T.card,
-  color: T.foreground,
   border: border(),
   borderRadius: T.radius,
   boxShadow: T.shadow,
   padding: "1.25rem",
-  fontFamily: T.font,
 };
 
 /** Tables, after the Nozle dashboard table: a bordered frame, a tinted header band with small
  * uppercase labels, roomy rows, and numbers right-aligned in tabular figures. */
 export const table = {
   frame: {
+    ...text.body,
     background: T.card,
-    color: T.foreground,
-    fontFamily: T.font,
     border: border(),
     borderRadius: T.radius,
     overflowX: "auto",
     minWidth: 0,
     maxWidth: "100%",
   } as CSSProperties,
-  table: { width: "100%", borderCollapse: "collapse", fontSize: "14px" } as CSSProperties,
+  table: { width: "100%", borderCollapse: "collapse", font: "inherit" } as CSSProperties,
   head: (numeric = false): CSSProperties => ({
     height: "44px",
     padding: "0 20px",
     textAlign: numeric ? "right" : "left",
     verticalAlign: "middle",
-    font: T.labelFont,
-    letterSpacing: T.labelSpacing,
-    textTransform: T.labelTransform as CSSProperties["textTransform"],
+    ...text.label,
     whiteSpace: "nowrap",
-    color: T.mutedForeground,
     background: T.tableHeader,
     borderBottom: border(),
   }),
@@ -403,10 +463,7 @@ export function buttonStyle(variant: ButtonVariant = "primary", busy = false): C
     ...colors[variant],
     padding: "0.75rem 1.5rem",
     borderRadius: buttonRadius(`calc(${T.radius} * 0.75)`),
-    fontFamily: T.font,
-    fontSize: "0.9375rem",
-    fontWeight: 600,
-    lineHeight: 1.4,
+    ...text.action,
     cursor: busy ? "wait" : "pointer",
     opacity: busy ? 0.7 : 1,
     transition: "filter 0.15s ease",

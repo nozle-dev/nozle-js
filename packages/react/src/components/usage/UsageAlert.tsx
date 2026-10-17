@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 import { useAppearance } from "../../appearance/context.js";
-import { T, border, type Appearance } from "../../appearance/tokens.js";
+import { T, border, text, type Appearance } from "../../appearance/tokens.js";
 
 export interface UsageAlertFeature {
   key: string;
@@ -46,7 +46,7 @@ export function UsageAlert({
   };
 
   return (
-    <div {...root("usageAlert", { display: "flex", flexDirection: "column", gap: "0.5rem", fontFamily: T.font })}>
+    <div {...root("usageAlert", { display: "flex", flexDirection: "column", gap: "0.5rem", ...text.body })}>
       {alertFeatures.map((f) => (
         <div
           key={f.key}
@@ -57,7 +57,6 @@ export function UsageAlert({
             justifyContent: "space-between",
             borderRadius: `calc(${T.radius} / 2)`,
             padding: "0.75rem 1rem",
-            fontSize: "0.875rem",
             background: T.warningSoft,
             color: T.warningText,
             border: border(T.warningBorder),
@@ -75,8 +74,8 @@ export function UsageAlert({
             <a
               href={upgradeHref}
               style={{
+                ...text.action,
                 color: "inherit",
-                fontWeight: 600,
                 textDecoration: "underline",
               }}
             >
@@ -91,7 +90,7 @@ export function UsageAlert({
               border: "none",
               cursor: "pointer",
               padding: "0 0 0 0.75rem",
-              fontSize: "1rem",
+              ...text.action,
               color: "inherit",
             })}
           >

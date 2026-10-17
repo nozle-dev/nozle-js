@@ -12,7 +12,7 @@ import type { PricingPlan } from "./PricingTable.js";
 import { formatPlanPrice, intervalLabel, planFeatures } from "./plan-features.js";
 import { useAppearance, type ElementProps } from "../../appearance/context.js";
 import { PanelPlanCard } from "./PanelPlanCard.js";
-import { T, border, buttonStyle, type Appearance } from "../../appearance/tokens.js";
+import { T, border, buttonStyle, text, type Appearance } from "../../appearance/tokens.js";
 
 export interface PlanCardProps {
   /** A plan from the public catalog. Its price and feature lines are read from it. */
@@ -87,9 +87,8 @@ export function PlanCard({
       data-testid={`plan-card-${id}`}
       aria-current={isCurrent ? "true" : undefined}
       {...root("planCard", {
+        ...text.body,
         background: T.card,
-        color: T.foreground,
-        fontFamily: T.font,
         border: border(isCurrent ? T.primary : T.border),
         outline: isCurrent ? `1px solid ${T.primary}` : undefined,
         borderRadius: T.radius,
@@ -101,17 +100,17 @@ export function PlanCard({
       })}
     >
       <div>
-        <h3 {...el("planCard__name", { fontSize: "1.25rem", fontWeight: 600, margin: 0 })}>{name}</h3>
+        <h3 {...el("planCard__name", { ...text.heading, margin: 0 })}>{name}</h3>
         {description && (
-          <p {...el("planCard__description", { color: T.mutedForeground, fontSize: "0.875rem", margin: "0.25rem 0 0" })}>
+          <p {...el("planCard__description", { ...text.secondary, margin: "0.25rem 0 0" })}>
             {description}
           </p>
         )}
       </div>
 
       <div {...el("planCard__price")}>
-        <span style={{ fontSize: "2rem", fontWeight: 700 }}>{price}</span>
-        <span style={{ color: T.mutedForeground, marginLeft: "0.25rem" }}>/{interval}</span>
+        <span style={text.metric}>{price}</span>
+        <span style={{ ...text.meta, marginLeft: "0.25rem" }}>/{interval}</span>
       </div>
 
       <ul
@@ -126,7 +125,7 @@ export function PlanCard({
         })}
       >
         {features.map((feature) => (
-          <li key={feature} {...el("planCard__feature", { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem" })}>
+          <li key={feature} {...el("planCard__feature", { display: "flex", alignItems: "center", gap: "0.5rem", ...text.body })}>
             <span style={{ color: T.primary }} aria-hidden="true">
               ✓
             </span>

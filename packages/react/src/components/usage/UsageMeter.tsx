@@ -10,7 +10,7 @@
  *   ≥ 95%  → destructive (red)
  */
 import { useAppearance } from "../../appearance/context.js";
-import { T, type Appearance } from "../../appearance/tokens.js";
+import { T, text, type Appearance } from "../../appearance/tokens.js";
 
 export function getUsageMeterColor(percentage: number): string {
   if (percentage >= 95) return T.danger;
@@ -46,15 +46,14 @@ export function UsageMeter({
         display: "flex",
         flexDirection: "column",
         gap: "0.25rem",
-        fontFamily: T.font,
-        color: T.foreground,
+        ...text.body,
       })}
     >
       {label && (
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span {...el("usageMeter__label")}>{label}</span>
           {showText && (
-            <span {...el("usageMeter__value", { color: percentage >= 80 ? color : T.foreground })}>
+            <span {...el("usageMeter__value", { color: percentage >= 95 ? T.dangerText : percentage >= 80 ? T.warningText : T.foreground })}>
               {used.toLocaleString()} / {unlimited ? "Unlimited" : limit.toLocaleString()}
             </span>
           )}

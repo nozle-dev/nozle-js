@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 import { BillingProvider, CreditBalance, PricingTable, UsageMeter } from "../index.js";
 import * as themes from "../themes.js";
 import { dark, light, neobrutal } from "../themes.js";
-import { mergeAppearance, T, toCssVars } from "../appearance/tokens.js";
+import { mergeAppearance, T, text, toCssVars } from "../appearance/tokens.js";
 import { toStripeAppearance } from "../components/billing/Checkout.js";
 
 const balance = { credit_system_name: "AI credits", unit_name: "credit", available: "120", as_of: "2026-10-01T00:00:00Z" };
@@ -50,6 +50,35 @@ describe("toCssVars", () => {
       "--nozle-button-border": "#000",
       "--nozle-button-shadow": "none",
     });
+    expect(
+      toCssVars({
+        fontTitle: "700 20px serif",
+        fontHeading: "600 16px serif",
+        fontMetric: "700 28px serif",
+        fontBody: "400 14px serif",
+        fontMeta: "400 12px serif",
+        fontAction: "600 14px serif",
+      }),
+    ).toEqual({
+      "--nozle-font-title": "700 20px serif",
+      "--nozle-font-heading": "600 16px serif",
+      "--nozle-font-metric": "700 28px serif",
+      "--nozle-font-body": "400 14px serif",
+      "--nozle-font-meta": "400 12px serif",
+      "--nozle-font-action": "600 14px serif",
+    });
+  });
+
+  it("gives each text role a default in the theme's font, the metric in the numbers font", () => {
+    expect(T.fontBody).toBe(`var(--nozle-font-body, 400 14px/1.5 ${T.font})`);
+    expect(T.fontMetric).toBe(`var(--nozle-font-metric, 700 28px/1.1 var(--nozle-font-numbers, ${T.font}))`);
+    expect(text.secondary).toEqual({ font: T.fontBody, color: T.mutedForeground });
+    expect(text.action).not.toHaveProperty("color");
+  });
+
+  it("derives muted text from the text and card colours unless colorMutedForeground is set", () => {
+    expect(T.mutedForeground).toBe(`var(--nozle-muted-foreground, var(--nozle-portal-muted, color-mix(in srgb, ${T.foreground} 62%, ${T.card})))`);
+    expect(toCssVars({ colorMutedForeground: "#777" })).toEqual({ "--nozle-muted-foreground": "#777" });
   });
 
   it("falls back to an old variable name and then to the light value", () => {
@@ -89,7 +118,8 @@ describe("themes", () => {
     expect(style("Get Scale")).toContain("var(--nozle-button-shadow, none)");
     expect(style("Get Free")).not.toContain("--nozle-button-shadow");
     expect(style("Get Free")).toContain("--nozle-input");
-    expect(ctas[0].style.fontWeight).toBe("800");
+    expect(root.style.getPropertyValue("--nozle-font-action")).toContain("800 14px/1.4");
+    expect(style("Get Free")).toContain("var(--nozle-font-action");
   });
 });
 
@@ -142,6 +172,15 @@ describe("components", () => {
     expect(root.style.getPropertyValue("--nozle-primary")).toBe("#7c3aed");
     expect(root.className).toContain("nozle-creditBalance");
     expect(root.className).toContain("from-provider");
+  });
+
+  it("recolours secondary text with colorForeground when colorMutedForeground is not set", () => {
+    render(<CreditBalance balance={balance} appearance={{ variables: { colorForeground: "#1e3a8a" } }} />);
+    const root = screen.getByRole("region", { name: "AI credits" });
+    expect(root.style.getPropertyValue("--nozle-foreground")).toBe("#1e3a8a");
+    const unit = screen.getByText("credits available").getAttribute("style")!;
+    expect(unit).toContain("--nozle-muted-foreground");
+    expect(unit).toContain("--nozle-foreground");
   });
 
   it("applies element class names and styles to the matching inner element", () => {

@@ -373,7 +373,7 @@ function Portal(props: SectionProps) {
             "Your account"}
         </p>
       </header>
-      {notice && <p role="status">{notice}</p>}
+      {notice && <p className="nzp-notice" role="status">{notice}</p>}
       {view.kind !== "overview" && (
         <button type="button" onClick={back}>
           ← Back to overview

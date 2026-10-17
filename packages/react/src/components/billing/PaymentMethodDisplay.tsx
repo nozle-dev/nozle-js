@@ -6,7 +6,7 @@
  */
 
 import { useAppearance } from "../../appearance/context.js";
-import { T, border, buttonRadius, buttonStyle, surface, type Appearance } from "../../appearance/tokens.js";
+import { T, border, buttonRadius, buttonStyle, surface, text, type Appearance } from "../../appearance/tokens.js";
 
 export interface PaymentMethod {
   last4: string;
@@ -58,21 +58,20 @@ export function PaymentMethodDisplay({
             padding: "0.75rem 1rem",
             border: border(),
             borderRadius: `calc(${T.radius} * 0.6)`,
-            fontSize: "0.875rem",
           }}
         >
           <span style={{ fontWeight: 600, color: T.foreground }}>
             {BRAND_LABELS[paymentMethod.brand.toLowerCase()] ??
               paymentMethod.brand}
           </span>
-          <span style={{ color: T.mutedForeground }}>•••• {paymentMethod.last4}</span>
-          <span style={{ color: T.mutedForeground, fontSize: "0.75rem" }}>
+          <span style={text.secondary}>•••• {paymentMethod.last4}</span>
+          <span style={text.meta}>
             Expires {String(paymentMethod.expMonth).padStart(2, "0")}/
             {String(paymentMethod.expYear).slice(-2)}
           </span>
         </div>
       ) : (
-        <p style={{ margin: 0, color: T.mutedForeground, fontSize: "0.875rem" }}>
+        <p style={{ ...text.secondary, margin: 0 }}>
           No payment method on file.
         </p>
       )}
@@ -83,8 +82,6 @@ export function PaymentMethodDisplay({
           alignSelf: "flex-start",
           padding: "0.375rem 0.875rem",
           borderRadius: buttonRadius(`calc(${T.radius} / 2)`),
-          fontSize: "0.875rem",
-          fontWeight: 500,
         }}
       >
         Update Payment Method
