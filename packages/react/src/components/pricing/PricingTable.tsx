@@ -142,10 +142,10 @@ function Toggle({ isAnnual, onChange, el }: { isAnnual: boolean; onChange: (v: b
   return (
     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2.5rem' }}>
       <div {...el('pricingTable__toggle', pill)}>
-        <button onClick={() => onChange(false)} {...el('pricingTable__toggleButton', tab(!isAnnual))} aria-pressed={!isAnnual}>
+        <button type="button" onClick={() => onChange(false)} {...el('pricingTable__toggleButton', tab(!isAnnual))} aria-pressed={!isAnnual}>
           Monthly
         </button>
-        <button onClick={() => onChange(true)} {...el('pricingTable__toggleButton', tab(isAnnual))} aria-pressed={isAnnual}>
+        <button type="button" onClick={() => onChange(true)} {...el('pricingTable__toggleButton', tab(isAnnual))} aria-pressed={isAnnual}>
           Annual
         </button>
       </div>
@@ -392,7 +392,7 @@ function CTAButton({
           : buttonStyle(variant);
 
   return (
-    <button
+    <button type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       onMouseEnter={() => setHover(true)}

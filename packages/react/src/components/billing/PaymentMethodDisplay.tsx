@@ -75,7 +75,7 @@ export function PaymentMethodDisplay({
           No payment method on file.
         </p>
       )}
-      <button
+      <button type="button"
         onClick={handleUpdate}
         style={{
           ...buttonStyle("outline"),

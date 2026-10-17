@@ -82,7 +82,7 @@ export function UsageAlert({
               Upgrade
             </a>
           </span>
-          <button
+          <button type="button"
             onClick={() => handleDismiss(f.key)}
             aria-label={`Dismiss ${f.label} alert`}
             {...el("usageAlert__dismiss", {

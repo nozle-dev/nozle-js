@@ -55,7 +55,7 @@ export function UpgradePrompt({
       <p style={{ margin: 0 }}>
         {displayText}
       </p>
-      <button
+      <button type="button"
         onClick={handleUpgrade}
         style={{ ...buttonStyle(), padding: "0.5rem 1.25rem" }}
       >
