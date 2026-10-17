@@ -565,24 +565,16 @@ function Subscriptions({
                           subscription.plan.interval}
                       </span>
                     </div>
-                    <div className="nzp-row">
-                      <p className="nzp-muted">
-                        Base price, excluding tax and usage
-                        <br />
-                        Current period ends{" "}
-                        {date(
-                          subscription.currentBillingPeriodEndingAt,
-                          locale,
-                          timezone,
-                        )}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => onUsage(subscription)}
-                      >
-                        View usage
-                      </button>
-                    </div>
+                    <p className="nzp-muted">
+                      Base price, excluding tax and usage
+                      <br />
+                      Current period ends{" "}
+                      {date(
+                        subscription.currentBillingPeriodEndingAt,
+                        locale,
+                        timezone,
+                      )}
+                    </p>
                     {subscription.endingAt && (
                       <p>
                         Cancels on{" "}
@@ -595,55 +587,63 @@ function Subscriptions({
                         {subscription.nextSubscription.plan.name}
                       </p>
                     )}
-                    {cancellationActions && subscription.externalId && (
-                      <CancellationControl
-                        subscription={cancellationState(subscription)}
-                        actions={cancellationActions}
-                        appearance={portalAppearance}
-                        locale={locale}
-                        timezone={timezone}
-                        nonce={nonce}
-                        onError={onError}
-                        onChanged={retry}
-                        refresh={async (signal) => {
-                          const result = await client.request<{
-                            customerPortalSubscription: Subscription | null;
-                          }>(
-                            subscriptionQuery,
-                            { id: subscription.id },
-                            signal,
-                          );
-                          if (
-                            !signal.aborted &&
-                            result.customerPortalSubscription
-                          ) {
-                            const fresh = result.customerPortalSubscription;
-                            setUpdated((previous) => ({
-                              ...previous,
-                              [fresh.id]: fresh,
-                            }));
-                          }
-                          return result.customerPortalSubscription
-                            ? cancellationState(
-                                result.customerPortalSubscription,
-                              )
-                            : null;
-                        }}
-                      />
-                    )}
-                    {planChangeActions && subscription.externalId && (
-                      <PlanChangeControl
-                        subscriptionId={subscription.externalId}
-                        refreshKey={`${subscription.id}:${subscription.endingAt ?? ""}:${subscription.nextSubscription?.id ?? ""}:${subscription.plan.code}`}
-                        actions={planChangeActions}
-                        appearance={portalAppearance}
-                        locale={locale}
-                        timezone={timezone}
-                        nonce={nonce}
-                        onError={onError}
-                        onChanged={retry}
-                      />
-                    )}
+                    <div className="nzp-card-actions">
+                      <button
+                        type="button"
+                        onClick={() => onUsage(subscription)}
+                      >
+                        View usage
+                      </button>
+                      {planChangeActions && subscription.externalId && (
+                        <PlanChangeControl
+                          subscriptionId={subscription.externalId}
+                          refreshKey={`${subscription.id}:${subscription.endingAt ?? ""}:${subscription.nextSubscription?.id ?? ""}:${subscription.plan.code}`}
+                          actions={planChangeActions}
+                          appearance={portalAppearance}
+                          locale={locale}
+                          timezone={timezone}
+                          nonce={nonce}
+                          onError={onError}
+                          onChanged={retry}
+                        />
+                      )}
+                      {cancellationActions && subscription.externalId && (
+                        <CancellationControl
+                          subscription={cancellationState(subscription)}
+                          actions={cancellationActions}
+                          appearance={portalAppearance}
+                          locale={locale}
+                          timezone={timezone}
+                          nonce={nonce}
+                          onError={onError}
+                          onChanged={retry}
+                          refresh={async (signal) => {
+                            const result = await client.request<{
+                              customerPortalSubscription: Subscription | null;
+                            }>(
+                              subscriptionQuery,
+                              { id: subscription.id },
+                              signal,
+                            );
+                            if (
+                              !signal.aborted &&
+                              result.customerPortalSubscription
+                            ) {
+                              const fresh = result.customerPortalSubscription;
+                              setUpdated((previous) => ({
+                                ...previous,
+                                [fresh.id]: fresh,
+                              }));
+                            }
+                            return result.customerPortalSubscription
+                              ? cancellationState(
+                                  result.customerPortalSubscription,
+                                )
+                              : null;
+                          }}
+                        />
+                      )}
+                    </div>
                   </Part>
                 ))}
             </div>

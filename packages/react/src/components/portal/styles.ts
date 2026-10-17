@@ -22,6 +22,10 @@ export const portalStyles = `
 .nozle-billing-portal .nzp-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
 .nozle-billing-portal .nzp-stack{display:grid;gap:12px;margin-top:16px}
 .nozle-billing-portal .nzp-card{background:${T.card};border:${line};border-radius:${r(0.85)};box-shadow:${T.shadow};padding:20px;min-width:0}
+.nozle-billing-portal .nzp-card-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:16px;padding-top:16px;border-top:${line}}
+.nozle-billing-portal .nzp-card-actions>.nozle-plan-change,.nozle-billing-portal .nzp-card-actions>.nozle-cancellation,.nozle-billing-portal .nzp-card-actions .nzpc-actions{display:contents}
+.nozle-billing-portal .nzp-card-actions>.nozle-plan-change>:not(.nzpc-actions),.nozle-billing-portal .nzp-card-actions>.nozle-cancellation>:not(button){flex-basis:100%;margin:0}
+.nozle-billing-portal .nzp-card-actions>.nozle-cancellation>button{margin-left:auto}
 .nozle-billing-portal .nzp-price{font:${T.fontMetric};font-variant-numeric:tabular-nums;margin:12px 0 4px}
 .nozle-billing-portal .nzp-price .nzp-muted{font:${T.fontMeta}}
 .nozle-billing-portal .nzp-badge{display:inline-block;font:${T.labelFont};letter-spacing:${T.labelSpacing};text-transform:${T.labelTransform};border-radius:${r(0.4)};background:${T.accent};color:${T.accentForeground};padding:3px 7px}

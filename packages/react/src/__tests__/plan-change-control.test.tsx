@@ -1,4 +1,5 @@
-import { StrictMode } from "react";
+import React, { StrictMode } from "react";
+import { BillingProvider } from "../provider.js";
 import {
   act,
   cleanup,
@@ -115,24 +116,27 @@ function fixture() {
     set: (patch: Partial<PlanChangeState>) => {
       state = { ...state, ...patch };
     },
-    mount: () =>
+    mount: (wrapper?: React.ComponentType<{ children: React.ReactNode }>) =>
       render(
         <PlanChangeControl
           subscriptionId="external-sub"
           actions={actions as PlanChangeActions}
           onChanged={changed}
         />,
+        { wrapper },
       ),
   };
 }
+function planOption(code: string) {
+  return screen.getAllByRole("radio").find((radio) => (radio as HTMLInputElement).value === code) as HTMLInputElement;
+}
+async function pickPlan(code: string) {
+  await waitFor(() => expect(planOption(code).disabled).toBe(false));
+  fireEvent.click(planOption(code));
+}
 async function choose(code: string) {
   fireEvent.click(await screen.findByRole("button", { name: "Change plan" }));
-  await waitFor(() =>
-    expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(
-      false,
-    ),
-  );
-  fireEvent.change(screen.getByRole("combobox"), { target: { value: code } });
+  await pickPlan(code);
   fireEvent.click(screen.getByRole("button", { name: "Review change" }));
   await screen.findByRole("button", {
     name: code === "starter" ? "Confirm downgrade" : "Confirm upgrade",
@@ -171,6 +175,47 @@ describe("subscription plan changes", () => {
     );
     await screen.findByRole("button", { name: "Change plan" });
   });
+  it("shows each plan's description and features from the catalog inside a BillingProvider", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            plans: [
+              {
+                code: "business",
+                name: "Business",
+                amount_cents: 10000,
+                amount_currency: "USD",
+                interval: "monthly",
+                description: "For larger teams",
+                entitlements: [{ feature_type: "metered", code: "seats", name: "Seats", usage_limit: 50 }],
+              },
+            ],
+            meta: {},
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const f = fixture();
+    f.mount(({ children }) => <BillingProvider publishableKey="pk_test">{children}</BillingProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Change plan" }));
+    await waitFor(() => expect(planOption("business").closest("label")?.textContent).toContain("For larger teams"));
+    expect(planOption("business").closest("label")?.textContent).toContain("50 Seats");
+    vi.unstubAllGlobals();
+  });
+
+  it("lists the plans to choose from and goes back from the confirmation to the list", async () => {
+    const f = fixture();
+    f.mount();
+    await choose("starter");
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(planOption("starter").checked).toBe(true);
+    expect(screen.getByRole("button", { name: "Review change" })).toBeTruthy();
+    expect(f.actions.apply).not.toHaveBeenCalled();
+  });
+
   it("confirms and persists a quoted downgrade, then withdraws only that pending change", async () => {
     const f = fixture();
     f.mount();
@@ -340,11 +385,8 @@ describe("subscription plan changes", () => {
     });
     f.mount();
     fireEvent.click(await screen.findByRole("button", { name: "Change plan" }));
-    expect(
-      await screen.findByRole("option", {
-        name: "Business — $1.00 / monthly (downgrade)",
-      }),
-    ).toBeTruthy();
+    await waitFor(() => expect(planOption("business")).toBeTruthy());
+    expect(planOption("business").closest("label")?.textContent).toBe("BusinessDowngrade$1.00 / monthly");
   });
   it("does not enable confirmation of an unusable monetary quote", async () => {
     const f = fixture();
@@ -363,14 +405,7 @@ describe("subscription plan changes", () => {
     } as any);
     f.mount();
     fireEvent.click(await screen.findByRole("button", { name: "Change plan" }));
-    await waitFor(() =>
-      expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(
-        false,
-      ),
-    );
-    fireEvent.change(screen.getByRole("combobox"), {
-      target: { value: "business" },
-    });
+    await pickPlan("business");
     fireEvent.click(screen.getByRole("button", { name: "Review change" }));
     await screen.findByRole("alert");
     expect(
