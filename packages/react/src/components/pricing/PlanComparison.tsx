@@ -16,6 +16,7 @@ import {
   type ComparisonRow,
 } from "./plan-features.js";
 import { useAppearance } from "../../appearance/context.js";
+import { NozleBranding } from "../branding/PoweredByNozle.js";
 import { T, table, text, type Appearance } from "../../appearance/tokens.js";
 
 export type ComparisonFeature = ComparisonRow;
@@ -45,7 +46,8 @@ export function PlanComparison({
   const features = featureOverride ?? comparisonRows(plans);
   const cell = (style: React.CSSProperties) => el("planComparison__cell", style);
   return (
-    <div {...root("planComparison", table.frame)}>
+    <div {...root("planComparison", { minWidth: 0 })}>
+    <div style={table.frame}>
       <table {...el("planComparison__table", table.table)}>
         <thead>
           <tr>
@@ -88,6 +90,8 @@ export function PlanComparison({
           ))}
         </tbody>
       </table>
+    </div>
+    <NozleBranding />
     </div>
   );
 }

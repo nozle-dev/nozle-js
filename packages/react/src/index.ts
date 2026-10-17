@@ -57,6 +57,7 @@ export type {
 } from "./provider.js";
 
 export { usePlans } from "./hooks/use-plans.js";
+export { PoweredByNozle, useNozleBranding } from "./components/branding/PoweredByNozle.js";
 export {
   useSubscription,
   useEntitlement,

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from "react";
+import { NozleBranding } from "../branding/PoweredByNozle.js";
 import { useAppearance } from "../../appearance/context.js";
 import { T, type Appearance } from "../../appearance/tokens.js";
 import { useOptionalBillingContext } from "../../provider.js";
@@ -219,6 +220,7 @@ export function UpgradeModal(
               : (props.confirmLabel ?? "Confirm")}
           </button>
         </div>
+        <NozleBranding />
       </div>
     </div>
   );

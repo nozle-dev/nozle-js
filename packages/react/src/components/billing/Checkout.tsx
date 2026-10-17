@@ -19,6 +19,7 @@ import {
 import { loadStripe } from "@stripe/stripe-js";
 import type { Appearance as StripeAppearance, StripeElementsOptions } from "@stripe/stripe-js";
 import { useAppearance } from "../../appearance/context.js";
+import { NozleBranding } from "../branding/PoweredByNozle.js";
 import { T, buttonStyle, text, type Appearance } from "../../appearance/tokens.js";
 
 import {
@@ -463,9 +464,9 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
 }
 
 export function Checkout(props: CheckoutProps) {
-  return "checkout" in props ? (
-    <ProviderCheckout {...props} />
-  ) : (
-    <StripeCheckout {...props} />
+  return (
+    <NozleBranding>
+      {"checkout" in props ? <ProviderCheckout {...props} /> : <StripeCheckout {...props} />}
+    </NozleBranding>
   );
 }

@@ -11,6 +11,7 @@ import {
   type HTMLAttributes,
 } from "react";
 import { useAppearance, type UseAppearance } from "../../appearance/context.js";
+import { NozleBranding } from "../branding/PoweredByNozle.js";
 import type { Appearance, ElementKey } from "../../appearance/tokens.js";
 import {
   BillingPortalError,
@@ -355,7 +356,7 @@ function Portal(props: SectionProps) {
   if (!data) return <Loading />;
   const customer = data.customerPortalUser;
   return (
-    <>
+    <NozleBranding show={data.customerPortalOrganization.nozleBranding === true}>
       <header>
         <div className="nzp-row">
           <span className="nzp-muted">
@@ -465,8 +466,7 @@ function Portal(props: SectionProps) {
           }}
         />
       )}
-      <footer>Powered by Nozle</footer>
-    </>
+    </NozleBranding>
   );
 }
 

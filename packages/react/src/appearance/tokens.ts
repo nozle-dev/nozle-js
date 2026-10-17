@@ -124,7 +124,8 @@ export type ElementKey =
   | "billingPortal__table"
   | "billingPortal__error"
   | "cancellationControl"
-  | "planChangeControl";
+  | "planChangeControl"
+  | "poweredBy";
 
 /** A string adds a class name; an object adds inline styles. */
 export type Elements = Partial<Record<ElementKey, string | CSSProperties>>;

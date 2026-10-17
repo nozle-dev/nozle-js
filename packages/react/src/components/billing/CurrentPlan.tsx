@@ -8,6 +8,7 @@
  * usePlans for the limits, useUsage for this period). Pass `subscription` and `usage` to render it
  * from your own data instead.
  */
+import { NozleBranding } from "../branding/PoweredByNozle.js";
 import React, { type ReactNode } from "react";
 import { useAppearance } from "../../appearance/context.js";
 import { T, border, surface, text, type Appearance } from "../../appearance/tokens.js";
@@ -274,6 +275,7 @@ function CurrentPlanView({
           )}
         </>,
       )}
+      <NozleBranding />
     </section>
   );
 }
