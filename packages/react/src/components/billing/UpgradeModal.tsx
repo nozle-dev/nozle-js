@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from "react";
+import { NozleBranding } from "../branding/PoweredByNozle.js";
 import { useAppearance } from "../../appearance/context.js";
 import { T, type Appearance } from "../../appearance/tokens.js";
 import { useOptionalBillingContext } from "../../provider.js";
@@ -38,6 +39,8 @@ export interface UpgradeModalProps {
   onScheduled?: () => void;
   onConfirm?: () => void;
   onCancel?: () => void;
+  /** Shows a Back button on the left of the actions, for a step that has a previous step. */
+  onBack?: () => void;
   onError?: (error: Error) => void;
   appearance?: Appearance;
 }
@@ -51,6 +54,7 @@ const styles = `
 .nozle-upgradeModal button:disabled{opacity:.55;cursor:wait}
 .nozle-upgradeModal :focus-visible{outline:2px solid ${T.primary};outline-offset:3px}
 .nozle-upgradeModal .nozle-upgradeModal__actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:20px}
+.nozle-upgradeModal .nzu-back{margin-right:auto}
 .nozle-upgradeModal [role=alert]{color:${T.dangerText}}
 `;
 
@@ -205,6 +209,11 @@ export function UpgradeModal(
         )}
         {props.children}
         <div {...el("upgradeModal__actions")}>
+          {props.onBack && (
+            <button type="button" className="nzu-back" onClick={props.onBack} disabled={busy}>
+              Back
+            </button>
+          )}
           <button type="button" onClick={props.onCancel} disabled={busy}>
             Close
           </button>
@@ -219,6 +228,7 @@ export function UpgradeModal(
               : (props.confirmLabel ?? "Confirm")}
           </button>
         </div>
+        <NozleBranding />
       </div>
     </div>
   );

@@ -16,6 +16,9 @@ import {
 } from './plan-features.js';
 import { useAppearance, type UseAppearance } from '../../appearance/context.js';
 import { PanelPlanCard } from './PanelPlanCard.js';
+import { NozleBranding } from '../branding/PoweredByNozle.js';
+import { useQuery } from '@tanstack/react-query';
+import { catalogQuery, idleQueryClient } from '../../hooks/use-plans.js';
 import { T, border, primaryButtonBorder, buttonStyle, text as role, type Appearance, type ButtonVariant } from '../../appearance/tokens.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -458,30 +461,24 @@ export function PricingTable({
   const isEnterprise = (p: PricingPlan) => contactSalesPlans?.includes(p.code) ?? false;
   const billing = useOptionalBillingContext();
   const client = billing?.client;
-  const [plans, setPlans] = useState<PricingPlan[]>(propPlans ?? []);
+  // One cached catalog request, shared with usePlans and the "Powered by Nozle" check.
+  const catalog = useQuery(
+    { ...catalogQuery(client), enabled: !propPlans && Boolean(client) },
+    billing?.queryClient ?? idleQueryClient,
+  );
+  const plans = (propPlans ?? catalog.data?.plans ?? []) as PricingPlan[];
+  const loading = !propPlans && Boolean(client) && catalog.isPending;
+  const loadError = propPlans
+    ? null
+    : !client
+      ? 'BillingProvider with a publishableKey is required to load plans'
+      : catalog.error
+        ? `Plans could not be loaded: ${catalog.error.message}`
+        : null;
   const [currentPlan, setCurrentPlan] = useState<string | null>(currentPlanCode ?? null);
   const [isAnnual, setIsAnnual] = useState(false);
-  const [loading, setLoading] = useState(!propPlans);
   const [processing, setProcessing] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (propPlans) { setPlans(propPlans); return; }
-    if (!client) {
-      setLoading(false);
-      setCheckoutError('BillingProvider with a publishableKey is required to load plans');
-      return;
-    }
-    let cancelled = false;
-    client.catalogFetch('/api/v1/plans').then(async (res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      if (!cancelled) setPlans(data.plans || []);
-    }).catch((cause: unknown) => {
-      if (!cancelled) setCheckoutError(`Plans could not be loaded: ${cause instanceof Error ? cause.message : 'unknown error'}`);
-    }).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [client, propPlans]);
 
   useEffect(() => {
     if (currentPlanCode !== undefined) setCurrentPlan(currentPlanCode);
@@ -536,7 +533,7 @@ export function PricingTable({
       )}
 
       {processing && <p role="status">Payment is processing. Confirmation may take a little while.</p>}
-      {checkoutError && <p role="alert" style={{ color: T.dangerText }}>{checkoutError}</p>}
+      {(checkoutError ?? loadError) && <p role="alert" style={{ color: T.dangerText }}>{checkoutError ?? loadError}</p>}
 
       <div {...el('pricingTable__grid', {
         display: 'grid',
@@ -565,6 +562,7 @@ export function PricingTable({
           />
         ))}
       </div>
+      <NozleBranding />
     </div>
   );
 }
