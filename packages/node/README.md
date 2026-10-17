@@ -7,12 +7,12 @@ Server-side Node.js SDK for usage tracking, entitlement checks, margin intellige
 ## Install
 
 ```bash
-npm install @nozle-js/node@0.10.0
+npm install @nozle-js/node@0.13.0
 ```
 
 Works with both JavaScript and TypeScript. Requires Node.js 18+.
 
-Version `0.9.1` converts RFC 3339 Feature Event timestamps to the Unix-second format Core accepts, including events created by the OpenAI and Anthropic wrappers. See the [changelog](../../CHANGELOG.md).
+Version `0.13.0` adds `captureFetch` and `recordUsage` for usage from any LLM client, `createBillingHandler` to serve the React billing hooks, `webhooks.verify` and `createWebhookHandler`, invoices, usage and balance alerts, `currentUsage` and `pastUsage`, a `host` option and opt-in retries. `apiKey` is optional and falls back to `NOZLE_SECRET_KEY`, and every failed call throws `NozleApiError`. See the [changelog](../../CHANGELOG.md) and [docs.nozle.dev](https://docs.nozle.dev).
 
 ## Quick Start
 
