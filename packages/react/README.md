@@ -83,7 +83,7 @@ The interval switch offers the intervals of the visible families (Weekly, Monthl
 - `defaultInterval` picks the first interval (`"annual"` also works). Otherwise Monthly when offered, else the first one. `showToggle={false}` hides the switch.
 - `features` is a record keyed by family code (or plan code) that replaces the catalog features of that card, or an array aligned to the rendered cards.
 - `contactSalesPlans` takes family codes as well as plan codes: the card shows "Custom" and a "Contact Sales" button.
-- Cards follow the `appearance` theme like the other components: the highlighted family uses `colorHighlight` (default `colorPrimary`) and `highlightStyle`, and a theme's `planCardLayout: "panel"` lays family cards out as panels with the same billing line.
+- Cards follow the `appearance` theme like the other components: the highlighted family uses `colorHighlight` (default `colorPrimary`) and `highlightStyle`, and a theme's `planCardLayout: "panel"` lays family cards out as panels with the same billing line. The default highlight (`#4f46e5` in the `light` theme) keeps its white text at WCAG AA contrast; if you set your own `colorHighlight`, check that `colorHighlightForeground` on it reaches 4.5:1.
 - `annualDiscountLabel` replaces the computed "Save N%" on the Annual option.
 - `locale` (default `en-US`) formats prices and feature values. Prices are exact in the currency's minor units (`¥1,500` for 1500 JPY), and whole amounts show no decimals (`$20`).
 - Pass `plans` and `families` to render without fetching. With `plans` alone, or with an older API that returns no `families`, each plan is its own card as before, sorted by price (or by `sort`), with what the plan gives as its features.

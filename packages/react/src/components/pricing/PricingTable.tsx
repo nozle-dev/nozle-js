@@ -166,6 +166,7 @@ function IntervalSwitch({
               onClick={() => onChange(option.interval)}
               {...el('pricingTable__toggleButton', tab(active))}
               aria-pressed={active}
+              aria-label={note ? `${option.label}, ${note.replace(/^Save /, 'save ')}` : undefined}
             >
               {option.label}
               {note && (

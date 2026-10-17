@@ -414,11 +414,32 @@ describe("getAvailableIntervals and getPricingIntervalOptions", () => {
 });
 
 describe("PricingTable with plan families", () => {
+  it("defaults the highlight to the theme's AA indigo and takes colorHighlight from the appearance", () => {
+    const data = catalog();
+    const { rerender } = render(<PricingTable plans={data.plans} families={data.families} onSelect={() => undefined} />);
+    // colorHighlight, then colorPrimary (and its older names), then #4f46e5: white text on it is 6.3:1.
+    expect(card("pro").outerHTML).toContain("var(--nozle-highlight, var(--nozle-primary, var(--nozle-pricing-highlight, var(--nozle-portal-accent, #4f46e5))))");
+    expect(card("pro").outerHTML).not.toContain("#6366f1");
+    rerender(
+      <PricingTable
+        plans={data.plans}
+        families={data.families}
+        onSelect={() => undefined}
+        appearance={{ variables: { colorHighlight: "#0f766e" } }}
+      />,
+    );
+    const root = document.querySelector<HTMLElement>(".nozle-pricingTable");
+    expect(root?.style.getPropertyValue("--nozle-highlight")).toBe("#0f766e");
+    expect(within(card("pro")).getByRole("button", { name: "Get Pro" }).outerHTML).toContain("var(--nozle-highlight");
+  });
+
   it("renders one card per family and switches intervals", () => {
     const data = catalog();
     render(<PricingTable plans={data.plans} families={data.families} onSelect={() => undefined} />);
     expect(cardKeys()).toEqual(["starter", "pro", "team"]);
     expect(intervalLabels()).toEqual(["Monthly", "AnnualSave 17%"]);
+    // The saving is part of the accessible name, separated from the label.
+    expect(intervalButton("Annual, save 17%")).toBeTruthy();
     expect(intervalButton("Monthly").getAttribute("aria-pressed")).toBe("true");
     expect(card("pro").getAttribute("data-plan-code")).toBe("pro_monthly");
     expect(within(card("pro")).getByText("$49")).toBeTruthy();
@@ -523,6 +544,7 @@ describe("PricingTable with plan families", () => {
     const data = catalog();
     render(<PricingTable plans={data.plans} families={data.families} annualDiscountLabel="2 months free" />);
     expect(intervalLabels()).toEqual(["Monthly", "Annual2 months free"]);
+    expect(intervalButton("Annual, 2 months free")).toBeTruthy();
     expect(screen.queryByText("Save 17%")).toBeNull();
   });
 
