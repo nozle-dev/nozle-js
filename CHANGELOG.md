@@ -48,6 +48,7 @@
 - `usage.track()` reuses the timestamp it filled in when the same idempotency key is sent again on the same client, so a retry no longer fails with 409 `idempotency_key_reused`. The client remembers the last 1000 keys; a retry from another process or after a restart must pass `timestamp`.
 - Node.js: `wrapOpenAI` and `wrapAnthropic` return the SDK's own `APIPromise` and `Stream`, so `withResponse()`, `asResponse()`, `chat.completions.parse()`, `messages.stream()` / `finalMessage()`, `stream.controller` and `toReadableStream()` work on a wrapped client. Usage is recorded once, when the response is read (not for `asResponse()`, which leaves the body to you); a stream records when it is fully iterated. Errors reject only to the caller.
 - Node.js: `checkAndDeduct()` is marked `@deprecated`; use `usage.check()` and `usage.track()` with a credit system.
+- Node.js: the optional peer dependency is `@anthropic-ai/sdk`, the package `wrapAnthropic` wraps, instead of the unrelated `anthropic` package.
 - React: `PricingTable` shows the real billing interval (`/quarter`, `/week`, `/6 months`) instead of `/month` for every plan that is not yearly.
 - React: `PlanCard` prints the plan's own currency instead of `$` for every plan.
 - React: the annual toggle no longer shows a hard-coded "Save 20%".
