@@ -26,6 +26,8 @@ export interface UseAppearance {
   root(key: ElementKey, style?: CSSProperties, className?: string): ElementProps;
   /** Props for an inner element: its `nozle-<key>` class and its element overrides. */
   el(key: ElementKey, style?: CSSProperties, className?: string): ElementProps;
+  /** The plan card layout the theme asks for. */
+  planCardLayout: "card" | "panel";
 }
 
 /**
@@ -35,7 +37,7 @@ export interface UseAppearance {
 export function useAppearance(appearance?: Appearance): UseAppearance {
   const inherited = useContext(AppearanceContext);
   return useMemo(() => {
-    const { variables, elements } = mergeAppearance(inherited, appearance);
+    const { variables, elements, planCardLayout = "card" } = mergeAppearance(inherited, appearance);
     const vars = toCssVars(variables);
     const el = (key: ElementKey, style?: CSSProperties, className?: string): ElementProps => {
       const override = elements[key];
@@ -46,6 +48,7 @@ export function useAppearance(appearance?: Appearance): UseAppearance {
     };
     return {
       el,
+      planCardLayout,
       root: (key, style, className) => {
         const props = el(key, style, className);
         return { ...props, style: { ...vars, ...props.style } };

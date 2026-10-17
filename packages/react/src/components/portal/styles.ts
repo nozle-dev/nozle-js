@@ -11,11 +11,11 @@ export const portalStyles = `
 .nozle-billing-portal h3{font-size:16px;line-height:1.4}
 .nozle-billing-portal header{margin-bottom:30px}
 .nozle-billing-portal section{margin-top:28px;padding-top:24px;border-top:${line}}
-.nozle-billing-portal button,.nozle-billing-portal .nzp-link{appearance:none;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-weight:550;line-height:1.4;border:var(--nozle-button-border-width, ${T.borderWidth}) solid var(--nozle-button-border, ${T.border});border-radius:var(--nozle-button-radius, ${r(0.6)});box-shadow:var(--nozle-button-shadow, none);background:${T.card};color:${T.foreground};padding:9px 14px;cursor:pointer;text-decoration:none;white-space:normal}
+.nozle-billing-portal button,.nozle-billing-portal .nzp-link{appearance:none;display:inline-flex;align-items:center;justify-content:center;font:inherit;font-weight:550;line-height:1.4;border:var(--nozle-button-border-width, ${T.borderWidth}) solid ${T.input};border-radius:var(--nozle-button-radius, ${r(0.6)});background:${T.card};color:${T.foreground};padding:9px 14px;cursor:pointer;text-decoration:none;white-space:normal}
 .nozle-billing-portal button:hover,.nozle-billing-portal .nzp-link:hover{background:${T.muted}}
 .nozle-billing-portal button:disabled{opacity:.55;cursor:wait}
 .nozle-billing-portal :focus-visible{outline:2px solid ${T.primary};outline-offset:3px}
-.nozle-billing-portal .nzp-primary{background:${T.primary};border-color:var(--nozle-button-border, ${T.primary});color:${T.primaryForeground}}
+.nozle-billing-portal .nzp-primary{background:${T.primary};border-color:var(--nozle-button-border, ${T.primary});box-shadow:var(--nozle-button-shadow, none);color:${T.primaryForeground}}
 .nozle-billing-portal .nzp-primary:hover{filter:brightness(.92);background:${T.primary}}
 .nozle-billing-portal .nzp-muted{color:${T.mutedForeground};font-size:13px}
 .nozle-billing-portal .nzp-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}

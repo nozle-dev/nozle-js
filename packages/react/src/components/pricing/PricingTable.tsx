@@ -15,7 +15,8 @@ import {
   type CatalogEntitlement,
 } from './plan-features.js';
 import { useAppearance, type UseAppearance } from '../../appearance/context.js';
-import { T, border, buttonBorder, buttonStyle, type Appearance, type ButtonVariant } from '../../appearance/tokens.js';
+import { PanelPlanCard } from './PanelPlanCard.js';
+import { T, border, primaryButtonBorder, buttonStyle, type Appearance, type ButtonVariant } from '../../appearance/tokens.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -163,6 +164,7 @@ interface CardProps {
   enterpriseEmail?: string;
   onSelect?: () => void;
   el: UseAppearance['el'];
+  panel: boolean;
 }
 
 function Card({
@@ -176,6 +178,7 @@ function Card({
   enterpriseEmail,
   onSelect,
   el,
+  panel,
 }: CardProps): React.ReactElement {
   const [hover, setHover] = useState(false);
   // A filled highlight swaps the card's colours: highlight background, highlight-foreground text.
@@ -195,6 +198,37 @@ function Card({
     }
     onSelect?.();
   };
+
+  const cta = onSelect && (
+    <CTAButton
+      onClick={handleClick}
+      disabled={isCurrent}
+      variant={isCurrent ? 'current' : isEnt ? 'outline' : filled ? 'inverse' : isHighlighted ? 'highlight' : 'secondary'}
+      el={el}
+    >
+      {isCurrent ? 'Current Plan' : isEnt ? 'Contact Sales' : `Get ${plan.name}`}
+    </CTAButton>
+  );
+
+  if (panel) {
+    return (
+      <PanelPlanCard
+        frame={(style) => el('planCard', style)}
+        el={el}
+        name={plan.name}
+        description={plan.description}
+        price={isEnt ? 'Custom' : fmtPrice(plan.amount_cents, plan.amount_currency)}
+        interval={isEnt ? undefined : intervalLabel(plan.interval)}
+        features={features ?? []}
+        isCurrent={isCurrent}
+        isHighlighted={isHighlighted}
+        filled={filledStyle}
+        highlightLabel={highlightLabel}
+      >
+        {cta}
+      </PanelPlanCard>
+    );
+  }
 
   return (
     <div
@@ -328,16 +362,7 @@ function Card({
       {(!features || features.length === 0) && <div style={{ flex: 1 }} />}
 
       {/* CTA */}
-      {onSelect && (
-        <CTAButton
-          onClick={handleClick}
-          disabled={isCurrent}
-          variant={isCurrent ? 'current' : isEnt ? 'outline' : filled ? 'inverse' : isHighlighted ? 'highlight' : 'secondary'}
-          el={el}
-        >
-          {isCurrent ? 'Current Plan' : isEnt ? 'Contact Sales' : `Get ${plan.name}`}
-        </CTAButton>
-      )}
+      {cta}
     </div>
   );
 }
@@ -360,11 +385,11 @@ function CTAButton({
   const [hover, setHover] = useState(false);
   const look =
     variant === 'current'
-      ? { ...buttonStyle('secondary'), color: C.muted, cursor: 'default' }
+      ? { ...buttonStyle('secondary'), background: C.mutedBg, color: C.muted, cursor: 'default' }
       : variant === 'highlight'
-        ? { ...buttonStyle('primary'), background: T.highlight, color: T.highlightForeground, border: buttonBorder(T.highlight) }
+        ? { ...buttonStyle('primary'), background: T.highlight, color: T.highlightForeground, border: primaryButtonBorder(T.highlight) }
         : variant === 'inverse'
-          ? { ...buttonStyle('primary'), background: T.highlightForeground, color: T.highlight, border: buttonBorder(T.highlightForeground) }
+          ? { ...buttonStyle('primary'), background: T.highlightForeground, color: T.highlight, border: primaryButtonBorder(T.highlightForeground) }
           : buttonStyle(variant);
 
   return (
@@ -433,7 +458,7 @@ export function PricingTable({
   enterpriseEmail,
   appearance,
 }: PricingTableProps): React.ReactElement {
-  const { root, el } = useAppearance(appearance);
+  const { root, el, planCardLayout } = useAppearance(appearance);
   const isEnterprise = (p: PricingPlan) => contactSalesPlans?.includes(p.code) ?? false;
   const billing = useOptionalBillingContext();
   const client = billing?.client;
@@ -534,6 +559,7 @@ export function PricingTable({
             enterpriseEmail={enterpriseEmail}
             onSelect={() => void selectPlan(plan)}
             el={el}
+            panel={planCardLayout === 'panel'}
           />
         ))}
       </div>

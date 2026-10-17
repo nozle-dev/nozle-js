@@ -38,6 +38,11 @@ describe("toCssVars", () => {
       "--nozle-radius": "0px",
       colorScheme: "dark",
     });
+    expect(toCssVars({ colorSecondary: "#fff", colorInput: "#999", fontFamilyMono: "monospace" })).toEqual({
+      "--nozle-secondary": "#fff",
+      "--nozle-input": "#999",
+      "--nozle-font-mono": "monospace",
+    });
     expect(toCssVars({ buttonRadius: "10px", buttonBorderWidth: "2px", buttonBorderColor: "#000", buttonShadow: "none" })).toEqual({
       "--nozle-button-radius": "10px",
       "--nozle-button-border-width": "2px",
@@ -56,10 +61,17 @@ describe("themes", () => {
     expect(Object.keys(themes).sort()).toEqual(["dark", "light", "minimal", "neobrutal", "nozle", "nozleDark"]);
   });
 
-  it("gives nozle flat cards and the shadow on buttons only", () => {
+  it("gives nozle flat panel cards, ACTIVE on the current plan and the shadow on the primary button only", () => {
     render(
       <PricingTable
-        plans={[{ code: "pro", name: "Pro", amount_cents: 2900, amount_currency: "USD", interval: "monthly" }]}
+        plans={[
+          { code: "free", name: "Free", amount_cents: 0, amount_currency: "USD", interval: "monthly" },
+          { code: "pro", name: "Pro", amount_cents: 2900, amount_currency: "USD", interval: "monthly" },
+          { code: "scale", name: "Scale", amount_cents: 9900, amount_currency: "USD", interval: "monthly" },
+        ]}
+        currentPlanCode="free"
+        highlightPlan="pro"
+        highlightLabel={null}
         showToggle={false}
         onSelect={() => {}}
         appearance={{ theme: themes.nozle }}
@@ -67,10 +79,16 @@ describe("themes", () => {
     );
     const root = document.querySelector(".nozle-pricingTable") as HTMLElement;
     expect(root.style.getPropertyValue("--nozle-shadow")).toBe("none");
-    expect(root.style.getPropertyValue("--nozle-button-shadow")).toBe("3px 3px 0 0 hsl(138 53% 8%)");
-    const cta = document.querySelector(".nozle-planCard__cta") as HTMLElement;
-    expect(cta.getAttribute("style")).toContain("var(--nozle-button-shadow, none)");
-    expect(cta.style.fontWeight).toBe("800");
+    expect(root.style.getPropertyValue("--nozle-button-shadow")).toBe("4px 4px 0 0 hsl(138 53% 8%)");
+    const header = (name: string) => screen.getByRole("heading", { name }).closest(".nozle-planCard__header") as HTMLElement;
+    expect(header("Free").textContent).toBe("FreeActive");
+    expect(header("Pro").textContent).toBe("Pro");
+    const ctas = [...document.querySelectorAll<HTMLElement>(".nozle-planCard__cta")];
+    const style = (text: string) => ctas.find((cta) => cta.textContent === text)!.getAttribute("style")!;
+    expect(style("Get Pro")).toContain("var(--nozle-button-shadow, none)");
+    expect(style("Get Scale")).not.toContain("--nozle-button-shadow");
+    expect(style("Get Scale")).toContain("--nozle-input");
+    expect(ctas[0].style.fontWeight).toBe("800");
   });
 });
 
