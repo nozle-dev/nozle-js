@@ -708,8 +708,8 @@ function UsageDetails({
                 <thead>
                   <tr>
                     <th>Feature</th>
-                    <th>Units</th>
-                    <th>Amount</th>
+                    <th className="nzp-num">Units</th>
+                    <th className="nzp-num">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -721,8 +721,8 @@ function UsageDetails({
                           charge.feature?.code ||
                           "Usage"}
                       </td>
-                      <td>{charge.units}</td>
-                      <td>
+                      <td className="nzp-num">{charge.units}</td>
+                      <td className="nzp-num">
                         {money(charge.amountCents, usage.currency, locale)}
                       </td>
                     </tr>
@@ -754,15 +754,21 @@ function Invoices(props: SectionProps) {
       <h3>Invoice history</h3>
       <form
         className="nzp-actions"
+        role="search"
         onSubmit={(event) => {
           event.preventDefault();
           setFilter({ page: 1, searchTerm: search.trim() });
         }}
       >
-        <label>
-          Search invoices
+        <label className="nzp-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
           <input
             type="search"
+            aria-label="Search invoices"
+            placeholder="Search invoices"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -788,7 +794,7 @@ function Invoices(props: SectionProps) {
                   <tr>
                     <th>Invoice</th>
                     <th>Date</th>
-                    <th>Amount</th>
+                    <th className="nzp-num">Amount</th>
                     <th>Status</th>
                     <th>PDF</th>
                   </tr>
@@ -798,7 +804,7 @@ function Invoices(props: SectionProps) {
                     <tr key={invoice.id}>
                       <td>{invoice.number}</td>
                       <td>{date(invoice.issuingDate, locale)}</td>
-                      <td>
+                      <td className="nzp-num">
                         {money(
                           invoice.totalAmountCents,
                           invoice.currency,

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useAppearance } from "../../appearance/context.js";
-import { T, border as themeBorder, buttonRadius, buttonStyle, surface, type Appearance } from "../../appearance/tokens.js";
+import { T, buttonRadius, buttonStyle, surface, table, type Appearance } from "../../appearance/tokens.js";
 import { formatDecimalString } from "../../core/decimal.js";
 
 /** The fields of the SDK's credit operation (`nozle.credits.operations`) that this component reads. */
@@ -37,7 +37,6 @@ const TYPE_LABELS: Record<CreditOperationData["type"], string> = {
 };
 
 const muted = T.mutedForeground;
-const cell = { padding: "0.5rem 0.75rem", borderBottom: themeBorder(), textAlign: "left" as const };
 
 function when(value: string): string {
   const parsed = new Date(value);
@@ -59,27 +58,32 @@ export function CreditHistory({
   if (operations.length === 0) return <p {...root("creditHistory", { ...surface, color: muted })} role="status">{emptyMessage}</p>;
 
   return (
-    <div {...root("creditHistory", { ...surface, overflowX: "auto" })}>
-      <table {...el("creditHistory__table", { width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" })}>
-        <thead>
-          <tr>
-            {["When", "Type", "Feature", "Credits", "Status"].map((heading) => (
-              <th key={heading} style={{ ...cell, color: muted, fontWeight: 500 }}>{heading}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {operations.map((operation) => (
-            <tr key={operation.id} {...el("creditHistory__row")}>
-              <td style={cell}>{when(operation.occurred_at)}</td>
-              <td style={cell}>{TYPE_LABELS[operation.type] ?? operation.type}</td>
-              <td style={cell}>{operation.feature_code ?? "—"}</td>
-              <td style={cell}>{formatDecimalString(operation.credit_amount)}</td>
-              <td style={{ ...cell, color: operation.status === "succeeded" ? undefined : muted }}>{operation.status}</td>
+    <div {...root("creditHistory", { fontFamily: T.font, color: T.foreground, minWidth: 0 })}>
+      <div style={table.frame}>
+        <table {...el("creditHistory__table", table.table)}>
+          <thead>
+            <tr>
+              {["When", "Type", "Feature", "Credits", "Status"].map((heading) => (
+                <th key={heading} style={table.head(heading === "Credits")}>{heading}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {operations.map((operation, index) => {
+              const last = index === operations.length - 1;
+              return (
+                <tr key={operation.id} {...el("creditHistory__row")}>
+                  <td style={table.cell(false, last)}>{when(operation.occurred_at)}</td>
+                  <td style={table.cell(false, last)}>{TYPE_LABELS[operation.type] ?? operation.type}</td>
+                  <td style={table.cell(false, last)}>{operation.feature_code ?? "—"}</td>
+                  <td style={table.cell(true, last)}>{formatDecimalString(operation.credit_amount)}</td>
+                  <td style={{ ...table.cell(false, last), color: operation.status === "succeeded" ? undefined : muted }}>{operation.status}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {hasMore && onLoadMore && (
         <button
           type="button"

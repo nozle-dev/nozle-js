@@ -16,7 +16,7 @@ import {
   type ComparisonRow,
 } from "./plan-features.js";
 import { useAppearance } from "../../appearance/context.js";
-import { T, border, surface, type Appearance } from "../../appearance/tokens.js";
+import { T, table, type Appearance } from "../../appearance/tokens.js";
 
 export type ComparisonFeature = ComparisonRow;
 
@@ -43,18 +43,17 @@ export function PlanComparison({
   const { root, el } = useAppearance(appearance);
   const plans = sort ? [...catalogPlans].sort(sort) : sortPlansByPrice(catalogPlans);
   const features = featureOverride ?? comparisonRows(plans);
-  const cell = (style: React.CSSProperties = {}) =>
-    el("planComparison__cell", { padding: "0.75rem 1rem", borderBottom: border(), ...style });
+  const cell = (style: React.CSSProperties) => el("planComparison__cell", style);
   return (
-    <div {...root("planComparison", { ...surface, padding: 0, overflowX: "auto" })}>
-      <table {...el("planComparison__table", { width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" })}>
+    <div {...root("planComparison", table.frame)}>
+      <table {...el("planComparison__table", table.table)}>
         <thead>
           <tr>
-            <th {...cell({ textAlign: "left", color: T.mutedForeground, fontWeight: 500 })}>Feature</th>
+            <th {...cell(table.head())}>Feature</th>
             {plans.map((plan) => (
-              <th key={plan.code} {...cell({ textAlign: "center", fontWeight: 600 })}>
+              <th key={plan.code} {...cell({ ...table.head(), textAlign: "center", padding: "10px 20px" })}>
                 {plan.name}
-                <div style={{ fontWeight: 400, color: T.mutedForeground }}>
+                <div style={{ fontFamily: T.font, fontSize: "12px", fontWeight: 400, letterSpacing: 0, textTransform: "none" }}>
                   {formatPlanPrice(plan.amount_cents, plan.amount_currency)} / {intervalLabel(plan.interval)}
                 </div>
               </th>
@@ -62,13 +61,13 @@ export function PlanComparison({
           </tr>
         </thead>
         <tbody>
-          {features.map((feature) => (
+          {features.map((feature, index) => (
             <tr key={feature.key} {...el("planComparison__row")}>
-              <td {...cell()}>{feature.label}</td>
+              <td {...cell(table.cell(false, index === features.length - 1))}>{feature.label}</td>
               {plans.map((plan) => {
                 const value = feature.values[plan.code];
                 return (
-                  <td key={plan.code} {...cell({ textAlign: "center" })}>
+                  <td key={plan.code} {...cell({ ...table.cell(false, index === features.length - 1), textAlign: "center" })}>
                     {typeof value === "boolean" ? (
                       value ? (
                         <span style={{ color: T.primary }} aria-label="Included">

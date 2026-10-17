@@ -25,10 +25,17 @@ export const portalStyles = `
 .nozle-billing-portal .nzp-badge{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.3px;border-radius:${r(0.4)};background:${T.accent};color:${T.accentForeground};padding:3px 7px}
 .nozle-billing-portal .nzp-empty{border:${T.borderWidth} dashed ${T.border};border-radius:${r(0.65)};padding:22px;text-align:center;color:${T.mutedForeground};margin-top:16px}
 .nozle-billing-portal .nzp-error{color:${T.danger};background:${T.dangerSoft};border:${T.borderWidth} solid ${T.dangerBorder};border-radius:${r(0.65)};padding:14px;margin:16px 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.nozle-billing-portal .nzp-table{overflow-x:auto;margin-top:16px}
-.nozle-billing-portal table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}
-.nozle-billing-portal th{font-weight:500;color:${T.mutedForeground};background:${T.muted}}
-.nozle-billing-portal th,.nozle-billing-portal td{padding:12px 10px;border-bottom:${line};white-space:nowrap}
+.nozle-billing-portal .nzp-table{overflow-x:auto;margin-top:16px;background:${T.card};border:${line};border-radius:${T.radius}}
+.nozle-billing-portal table{width:100%;border-collapse:collapse;text-align:left;font-size:14px}
+.nozle-billing-portal th{height:44px;padding:0 20px;font:${T.labelFont};letter-spacing:${T.labelSpacing};text-transform:${T.labelTransform};color:${T.mutedForeground};background:${T.tableHeader};border-bottom:${line};white-space:nowrap}
+.nozle-billing-portal td{height:48px;padding:14px 20px;border-bottom:${T.borderWidth} solid ${T.rowLine};white-space:nowrap}
+.nozle-billing-portal tbody tr:last-child td{border-bottom:0}
+.nozle-billing-portal .nzp-num{text-align:right}
+.nozle-billing-portal td.nzp-num{font-family:${T.fontNumbers};font-variant-numeric:tabular-nums}
+.nozle-billing-portal .nzp-search{display:flex;align-items:center;gap:8px;flex:1;min-width:min(100%,200px);height:40px;padding:0 12px;background:${T.card};border:${T.borderWidth} solid ${T.input};border-radius:${r(0.7)};color:${T.mutedForeground}}
+.nozle-billing-portal .nzp-search:focus-within{border-color:${T.foreground}}
+.nozle-billing-portal .nzp-search input{flex:1;height:100%;border:0;padding:0;background:transparent;color:${T.foreground};font-size:13px;font-weight:600;outline:none}
+.nozle-billing-portal .nzp-search input::placeholder{color:${T.mutedForeground};font-weight:400}
 .nozle-billing-portal label{display:grid;gap:6px;font-size:13px;font-weight:500;min-width:0}
 .nozle-billing-portal input,.nozle-billing-portal select{width:100%;min-width:0;font:inherit;color:inherit;background:${T.card};border:${line};border-radius:${r(0.5)};padding:9px 10px}
 .nozle-billing-portal .nzp-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:16px;margin:20px 0}

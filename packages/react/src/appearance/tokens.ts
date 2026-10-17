@@ -24,8 +24,14 @@ export interface Variables {
   /** Text on a filled highlighted card. Defaults to `colorPrimaryForeground`. */
   colorHighlightForeground?: string;
   fontFamily?: string;
-  /** Font of the short uppercase labels in the panel plan card layout. */
-  fontFamilyMono?: string;
+  /** Font of numbers in tables. Defaults to the surrounding font. */
+  fontFamilyNumbers?: string;
+  /** CSS `font` shorthand of small labels: table headers and plan card status labels. */
+  labelFont?: string;
+  /** `text-transform` of small labels, for example `uppercase`. */
+  labelTextTransform?: string;
+  /** `letter-spacing` of small labels. */
+  labelLetterSpacing?: string;
   borderRadius?: string;
   borderWidth?: string;
   shadow?: string;
@@ -145,7 +151,10 @@ const CSS_VAR: Record<ColorKey, string> = {
   colorHighlight: "--nozle-highlight",
   colorHighlightForeground: "--nozle-highlight-foreground",
   fontFamily: "--nozle-font",
-  fontFamilyMono: "--nozle-font-mono",
+  fontFamilyNumbers: "--nozle-font-numbers",
+  labelFont: "--nozle-label-font",
+  labelTextTransform: "--nozle-label-transform",
+  labelLetterSpacing: "--nozle-label-spacing",
   borderRadius: "--nozle-radius",
   borderWidth: "--nozle-border-width",
   shadow: "--nozle-shadow",
@@ -163,6 +172,10 @@ type DerivedKey =
   | "colorHighlightForeground"
   | "colorSecondary"
   | "colorInput"
+  | "fontFamilyNumbers"
+  | "labelFont"
+  | "labelTextTransform"
+  | "labelLetterSpacing"
   | "buttonRadius"
   | "buttonBorderWidth"
   | "buttonBorderColor"
@@ -183,7 +196,6 @@ export const LIGHT: Required<Omit<Variables, "colorScheme" | DerivedKey>> = {
   colorWarning: "#d97706",
   colorSuccess: "#16a34a",
   fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
-  fontFamilyMono: "ui-monospace, SFMono-Regular, Menlo, monospace",
   borderRadius: "12px",
   borderWidth: "1px",
   shadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
@@ -239,7 +251,10 @@ export const T = {
   warning,
   success,
   font: chain("fontFamily"),
-  fontMono: chain("fontFamilyMono"),
+  fontNumbers: "var(--nozle-font-numbers, inherit)",
+  labelFont: `var(--nozle-label-font, 600 12px/1.4 ${chain("fontFamily")})`,
+  labelTransform: "var(--nozle-label-transform, none)",
+  labelSpacing: "var(--nozle-label-spacing, normal)",
   radius: chain("borderRadius"),
   borderWidth: chain("borderWidth"),
   shadow: chain("shadow"),
@@ -253,6 +268,9 @@ export const T = {
   primarySoft: soft(primary, card, 10),
   primaryHover: soft(primary, "black", 88),
   skeleton: soft(foreground, card, 8),
+  /** Table header band and the lighter line between table rows. */
+  tableHeader: soft(chain("colorMuted"), card, 50),
+  rowLine: soft(chain("colorBorder"), card, 70),
 } as const;
 
 /** `border` shorthand using the theme's border width and colour. */
@@ -325,6 +343,51 @@ export const surface: CSSProperties = {
   boxShadow: T.shadow,
   padding: "1.25rem",
   fontFamily: T.font,
+};
+
+/** Tables, after the Nozle dashboard table: a bordered frame, a tinted header band with small
+ * uppercase labels, roomy rows, and numbers right-aligned in tabular figures. */
+export const table = {
+  frame: {
+    background: T.card,
+    color: T.foreground,
+    fontFamily: T.font,
+    border: border(),
+    borderRadius: T.radius,
+    overflowX: "auto",
+    minWidth: 0,
+    maxWidth: "100%",
+  } as CSSProperties,
+  table: { width: "100%", borderCollapse: "collapse", fontSize: "14px" } as CSSProperties,
+  head: (numeric = false): CSSProperties => ({
+    height: "44px",
+    padding: "0 20px",
+    textAlign: numeric ? "right" : "left",
+    verticalAlign: "middle",
+    font: T.labelFont,
+    letterSpacing: T.labelSpacing,
+    textTransform: T.labelTransform as CSSProperties["textTransform"],
+    whiteSpace: "nowrap",
+    color: T.mutedForeground,
+    background: T.tableHeader,
+    borderBottom: border(),
+  }),
+  /** `last`: the final body row, whose line the frame already draws. */
+  cell: (numeric = false, last = false): CSSProperties => ({
+    height: "48px",
+    padding: "14px 20px",
+    verticalAlign: "middle",
+    whiteSpace: "nowrap",
+    textAlign: numeric ? "right" : "left",
+    borderBottom: last ? "none" : border(T.rowLine),
+    ...(numeric && { fontFamily: T.fontNumbers, fontVariantNumeric: "tabular-nums" }),
+  }),
+  foot: (numeric = false): CSSProperties => ({
+    ...table.cell(numeric, true),
+    borderTop: border(),
+    background: T.tableHeader,
+    fontWeight: 600,
+  }),
 };
 
 export type ButtonVariant = "primary" | "secondary" | "outline";

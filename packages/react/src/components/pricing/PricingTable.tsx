@@ -165,6 +165,8 @@ interface CardProps {
   onSelect?: () => void;
   el: UseAppearance['el'];
   panel: boolean;
+  /** Priced above the current plan; undefined when there is no current plan to compare with. */
+  isUpgrade?: boolean;
 }
 
 function Card({
@@ -179,6 +181,7 @@ function Card({
   onSelect,
   el,
   panel,
+  isUpgrade,
 }: CardProps): React.ReactElement {
   const [hover, setHover] = useState(false);
   // A filled highlight swaps the card's colours: highlight background, highlight-foreground text.
@@ -199,11 +202,16 @@ function Card({
     onSelect?.();
   };
 
+  // Plans above the current one get the primary button; the current plan and cheaper ones the plain one.
+  // Without a current plan, only the highlighted plan does.
+  const emphasised = isUpgrade ?? isHighlighted;
   const cta = onSelect && (
     <CTAButton
       onClick={handleClick}
       disabled={isCurrent}
-      variant={isCurrent ? 'current' : isEnt ? 'outline' : filled ? 'inverse' : isHighlighted ? 'highlight' : 'secondary'}
+      variant={
+        isCurrent ? 'current' : isEnt ? 'outline' : !emphasised ? 'secondary' : filled ? 'inverse' : isHighlighted ? 'highlight' : 'primary'
+      }
       el={el}
     >
       {isCurrent ? 'Current Plan' : isEnt ? 'Contact Sales' : `Get ${plan.name}`}
@@ -525,6 +533,7 @@ export function PricingTable({
     ? [...plans].sort(sort)
     : [...sortPlansByPrice(plans.filter((p) => !isEnterprise(p))), ...plans.filter(isEnterprise)];
   const hasAnnual = ordered.some(p => p.interval === 'yearly');
+  const current = plans.find((p) => p.code === currentPlan);
   const filtered = showToggle && hasAnnual
     ? ordered.filter(p => p.interval === (isAnnual ? 'yearly' : 'monthly') || isEnterprise(p))
     : ordered;
@@ -552,6 +561,11 @@ export function PricingTable({
             plan={plan}
             features={featureLines(features, plan, i)}
             isCurrent={currentPlan === plan.code}
+            isUpgrade={
+              current && current.amount_currency === plan.amount_currency
+                ? plan.amount_cents > current.amount_cents
+                : undefined
+            }
             isHighlighted={highlightPlan === plan.code}
             filled={highlightStyle === 'filled'}
             highlightLabel={highlightLabel}
