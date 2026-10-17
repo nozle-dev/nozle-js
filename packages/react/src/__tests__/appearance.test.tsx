@@ -38,10 +38,11 @@ describe("toCssVars", () => {
       "--nozle-radius": "0px",
       colorScheme: "dark",
     });
-    expect(toCssVars({ colorSecondary: "#fff", colorInput: "#999", fontFamilyMono: "monospace" })).toEqual({
+    expect(toCssVars({ colorSecondary: "#fff", colorInput: "#999", labelFont: "600 12px serif", labelTextTransform: "uppercase" })).toEqual({
       "--nozle-secondary": "#fff",
       "--nozle-input": "#999",
-      "--nozle-font-mono": "monospace",
+      "--nozle-label-font": "600 12px serif",
+      "--nozle-label-transform": "uppercase",
     });
     expect(toCssVars({ buttonRadius: "10px", buttonBorderWidth: "2px", buttonBorderColor: "#000", buttonShadow: "none" })).toEqual({
       "--nozle-button-radius": "10px",
@@ -61,7 +62,7 @@ describe("themes", () => {
     expect(Object.keys(themes).sort()).toEqual(["dark", "light", "minimal", "neobrutal", "nozle", "nozleDark"]);
   });
 
-  it("gives nozle flat panel cards, ACTIVE on the current plan and the shadow on the primary button only", () => {
+  it("gives nozle panel cards with ACTIVE on the current plan, and the primary button only to plans above it", () => {
     render(
       <PricingTable
         plans={[
@@ -69,8 +70,8 @@ describe("themes", () => {
           { code: "pro", name: "Pro", amount_cents: 2900, amount_currency: "USD", interval: "monthly" },
           { code: "scale", name: "Scale", amount_cents: 9900, amount_currency: "USD", interval: "monthly" },
         ]}
-        currentPlanCode="free"
-        highlightPlan="pro"
+        currentPlanCode="pro"
+        highlightPlan="scale"
         highlightLabel={null}
         showToggle={false}
         onSelect={() => {}}
@@ -81,13 +82,13 @@ describe("themes", () => {
     expect(root.style.getPropertyValue("--nozle-shadow")).toBe("none");
     expect(root.style.getPropertyValue("--nozle-button-shadow")).toBe("4px 4px 0 0 hsl(138 53% 8%)");
     const header = (name: string) => screen.getByRole("heading", { name }).closest(".nozle-planCard__header") as HTMLElement;
-    expect(header("Free").textContent).toBe("FreeActive");
-    expect(header("Pro").textContent).toBe("Pro");
+    expect(header("Pro").textContent).toBe("ProActive");
+    expect(header("Scale").textContent).toBe("Scale");
     const ctas = [...document.querySelectorAll<HTMLElement>(".nozle-planCard__cta")];
     const style = (text: string) => ctas.find((cta) => cta.textContent === text)!.getAttribute("style")!;
-    expect(style("Get Pro")).toContain("var(--nozle-button-shadow, none)");
-    expect(style("Get Scale")).not.toContain("--nozle-button-shadow");
-    expect(style("Get Scale")).toContain("--nozle-input");
+    expect(style("Get Scale")).toContain("var(--nozle-button-shadow, none)");
+    expect(style("Get Free")).not.toContain("--nozle-button-shadow");
+    expect(style("Get Free")).toContain("--nozle-input");
     expect(ctas[0].style.fontWeight).toBe("800");
   });
 });
