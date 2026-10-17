@@ -7,6 +7,7 @@
 
 import { formatMinorAmount } from "../billing/amounts.js";
 import {
+  intervalLabel,
   planFeatures as catalogPlanFeatures,
   sortPlansByPrice,
   type CatalogCharge,
@@ -105,11 +106,17 @@ export interface PricingCard {
   isFallbackInterval: boolean;
   name: string;
   description: string | null;
-  /** Per-month equivalent of the plan's price, for example "$40.83". */
+  /**
+   * Family cards: the per-month equivalent of the plan's price, for example
+   * "$40.83". Without families: the plan's price, for example "$14.99".
+   */
   price: string;
-  /** "/mo" for known intervals. */
+  /** "/mo" on family cards; the plan's own interval ("/quarter") without families. */
   pricePeriod: string;
-  /** For example "Billed $490 yearly · save 17%" or "Billed monthly". */
+  /**
+   * Family cards: for example "Billed $490 yearly · save 17%" or "Billed
+   * monthly". Empty without families.
+   */
   billing: string;
   /** Whole-percent saving against the family's monthly plan, when positive. */
   savingsPercent: number | null;
@@ -583,6 +590,20 @@ export function yearlyMinor(plan: PricingPlan): bigint | null {
   return amount * PERIODS_PER_YEAR[plan.interval];
 }
 
+/** A card without families shows the plan's price per its own interval, as before families. */
+function planPriceStrings(
+  plan: PricingPlan,
+  locale: string,
+): { price: string; pricePeriod: string; billing: string; savingsPercent: null } {
+  const amount = toMinor(plan.amount_cents);
+  return {
+    price: fmt(amount ?? plan.amount_cents, plan.amount_currency, locale),
+    pricePeriod: plan.interval ? `/${intervalLabel(plan.interval)}` : "",
+    billing: "",
+    savingsPercent: null,
+  };
+}
+
 function priceStrings(
   plan: PricingPlan,
   monthly: PricingPlan | undefined,
@@ -685,7 +706,7 @@ export function getPricingCards(
       isFallbackInterval: families && interval !== null && plan.interval !== interval,
       name,
       description,
-      ...priceStrings(plan, monthlyPlanOf(group), locale),
+      ...(family ? priceStrings(plan, monthlyPlanOf(group), locale) : planPriceStrings(plan, locale)),
       features,
       highlighted,
       badge: highlighted ? badge(family) : null,

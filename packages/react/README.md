@@ -86,7 +86,7 @@ The interval switch offers the intervals of the visible families (Weekly, Monthl
 - Cards follow the `appearance` theme like the other components: the highlighted family uses `colorHighlight` (default `colorPrimary`) and `highlightStyle`, and a theme's `planCardLayout: "panel"` lays family cards out as panels with the same billing line. The default highlight (`#4f46e5` in the `light` theme) keeps its white text at WCAG AA contrast; if you set your own `colorHighlight`, check that `colorHighlightForeground` on it reaches 4.5:1.
 - `annualDiscountLabel` replaces the computed "Save N%" on the Annual option.
 - `locale` (default `en-US`) formats prices and feature values. Prices are exact in the currency's minor units (`¥1,500` for 1500 JPY), and whole amounts show no decimals (`$20`).
-- Pass `plans` and `families` to render without fetching. With `plans` alone, or with an older API that returns no `families`, each plan is its own card as before, sorted by price (or by `sort`), with what the plan gives as its features.
+- Pass `plans` and `families` to render without fetching. With `plans` alone, or with an older API that returns no `families`, each plan is its own card as before, sorted by price (or by `sort`), with its price per its own interval (`$14.99 /quarter`, no per-month price or billing line) and what the plan gives as its features.
 
 For a custom pricing page, use the same rules with `usePlans()`:
 

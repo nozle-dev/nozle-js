@@ -357,8 +357,9 @@ describe("getPricingCards", () => {
     expect(free.features).toEqual([{ label: "3 Seats" }, { label: "API" }]);
     expect(free.cta).toBe("Get Free");
     expect(getPricingCards(legacy, { interval: "yearly" })[0]).toMatchObject({
-      price: "$41.67",
-      billing: "Billed $500 yearly",
+      price: "$500",
+      pricePeriod: "/year",
+      billing: "",
       savingsPercent: null,
     });
     expect(getPricingCards(legacy, { highlight: "pro" }).filter((c) => c.highlighted).map((c) => c.key)).toEqual(["pro"]);
@@ -654,7 +655,10 @@ describe("PricingTable without families (older APIs)", () => {
     expect(intervalLabels()).toEqual(["Monthly", "Annual"]);
     fireEvent.click(intervalButton(/Annual/));
     expect(cardKeys()).toEqual(["starter_yearly", "pro_yearly"]);
-    expect(within(card("pro_yearly")).getByText("Billed $500 yearly")).toBeTruthy();
+    // Without families the price is the plan's own, per its interval, with no billing line.
+    expect(within(card("pro_yearly")).getByText("$500")).toBeTruthy();
+    expect(within(card("pro_yearly")).getByText("/year")).toBeTruthy();
+    expect(within(card("pro_yearly")).queryByTestId("pricing-billing")).toBeNull();
   });
 
   it("shows every plan, cheapest first, when the switch is hidden", () => {
