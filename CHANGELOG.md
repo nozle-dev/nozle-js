@@ -4,7 +4,7 @@
 
 ### Added
 
-- React: `nozle` and `nozleDark` themes in `@nozle-js/react/themes`, the Nozle dashboard look (flat cards, a hard ink shadow on buttons, Nunito). New variables `buttonRadius`, `buttonBorderWidth`, `buttonBorderColor` and `buttonShadow` style every button; their defaults keep the current look.
+- React: `nozle` and `nozleDark` themes in `@nozle-js/react/themes`, the Nozle dashboard look (flat cards, a hard ink shadow on buttons, Nunito). New variables `buttonRadius` and `buttonBorderWidth` (every button), `buttonBorderColor` and `buttonShadow` (primary buttons only), `colorSecondary` and `colorInput` (secondary buttons) and `fontFamilyMono`; a theme's `planCardLayout: "panel"` lays plan cards out like the dashboard, with `ACTIVE` on the current plan. Defaults keep the current look.
 - `createBillingHandler`'s `subscription` route and React `useSubscription()` include `past_due` (the customer has an unpaid invoice past its due date); `CurrentPlan` shows it as an alert. Node `invoices.list` takes `paymentOverdue`.
 - Node.js: `nozle.alerts.list / get / create / update / delete` manage usage alerts of a subscription (`{ subscriptionId }`) and balance alerts of a wallet (`{ customerId, walletCode }`). Nozle sends `alert.triggered` when one fires.
 - Node.js: `nozle.invoices.list(customerId, options)`, `get(invoiceId)` and `downloadUrl(invoiceId)` (the PDF URL, or `null` while it is generated). `createBillingHandler` serves `invoices` (the session customer's finalized invoices) and `invoice-download` (404 for another customer's invoice); React `useInvoices({ page })` and `useInvoiceDownload()` read them.

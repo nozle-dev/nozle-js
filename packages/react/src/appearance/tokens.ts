@@ -15,11 +15,17 @@ export interface Variables {
   colorDanger?: string;
   colorWarning?: string;
   colorSuccess?: string;
+  /** Fill of secondary buttons. Defaults to `colorMuted`. */
+  colorSecondary?: string;
+  /** Border of secondary buttons and other controls. Defaults to `colorBorder`. */
+  colorInput?: string;
   /** The highlighted pricing card (`highlightPlan`). Defaults to `colorPrimary`. */
   colorHighlight?: string;
   /** Text on a filled highlighted card. Defaults to `colorPrimaryForeground`. */
   colorHighlightForeground?: string;
   fontFamily?: string;
+  /** Font of the short uppercase labels in the panel plan card layout. */
+  fontFamilyMono?: string;
   borderRadius?: string;
   borderWidth?: string;
   shadow?: string;
@@ -27,9 +33,9 @@ export interface Variables {
   buttonRadius?: string;
   /** Border width of buttons. Defaults to `borderWidth`. */
   buttonBorderWidth?: string;
-  /** Border colour of every button. Defaults to each button's own colour. */
+  /** Border colour of primary buttons. Defaults to the button's fill colour. */
   buttonBorderColor?: string;
-  /** Shadow of buttons only, for example a hard offset. Defaults to none. */
+  /** Shadow of primary buttons only, for example a hard offset. Defaults to none. */
   buttonShadow?: string;
   /** Sets the CSS `color-scheme` of the component, so native controls follow the theme. */
   colorScheme?: "light" | "dark" | "light dark";
@@ -41,6 +47,7 @@ export type ElementKey =
   | "pricingTable__toggleButton"
   | "pricingTable__grid"
   | "planCard"
+  | "planCard__header"
   | "planCard__badge"
   | "planCard__name"
   | "planCard__description"
@@ -104,6 +111,12 @@ export type Elements = Partial<Record<ElementKey, string | CSSProperties>>;
 export interface Theme {
   variables?: Variables;
   elements?: Elements;
+  /**
+   * How plan cards are laid out. `card` (default): name, description, price and ticked features.
+   * `panel`: the name in a header band with the plan's status on the right, then price,
+   * description and plain feature lines.
+   */
+  planCardLayout?: "card" | "panel";
 }
 
 /** A theme (or a stack of themes, last wins) plus your own variables and elements on top. */
@@ -127,9 +140,12 @@ const CSS_VAR: Record<ColorKey, string> = {
   colorDanger: "--nozle-destructive",
   colorWarning: "--nozle-warning",
   colorSuccess: "--nozle-success",
+  colorSecondary: "--nozle-secondary",
+  colorInput: "--nozle-input",
   colorHighlight: "--nozle-highlight",
   colorHighlightForeground: "--nozle-highlight-foreground",
   fontFamily: "--nozle-font",
+  fontFamilyMono: "--nozle-font-mono",
   borderRadius: "--nozle-radius",
   borderWidth: "--nozle-border-width",
   shadow: "--nozle-shadow",
@@ -145,6 +161,8 @@ const CSS_VAR: Record<ColorKey, string> = {
 type DerivedKey =
   | "colorHighlight"
   | "colorHighlightForeground"
+  | "colorSecondary"
+  | "colorInput"
   | "buttonRadius"
   | "buttonBorderWidth"
   | "buttonBorderColor"
@@ -165,6 +183,7 @@ export const LIGHT: Required<Omit<Variables, "colorScheme" | DerivedKey>> = {
   colorWarning: "#d97706",
   colorSuccess: "#16a34a",
   fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+  fontFamilyMono: "ui-monospace, SFMono-Regular, Menlo, monospace",
   borderRadius: "12px",
   borderWidth: "1px",
   shadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
@@ -212,12 +231,15 @@ export const T = {
   muted: chain("colorMuted"),
   mutedForeground: chain("colorMutedForeground"),
   accent: chain("colorAccent"),
+  secondary: `var(--nozle-secondary, ${chain("colorMuted")})`,
+  input: `var(--nozle-input, ${chain("colorBorder")})`,
   accentForeground: chain("colorAccentForeground"),
   border: chain("colorBorder"),
   danger,
   warning,
   success,
   font: chain("fontFamily"),
+  fontMono: chain("fontFamilyMono"),
   radius: chain("borderRadius"),
   borderWidth: chain("borderWidth"),
   shadow: chain("shadow"),
@@ -236,9 +258,13 @@ export const T = {
 /** `border` shorthand using the theme's border width and colour. */
 export const border = (color: string = T.border) => `${T.borderWidth} solid ${color}`;
 
-/** `border` shorthand for a button: the button tokens first, then the general width and `color`. */
-export const buttonBorder = (color: string) =>
-  `var(--nozle-button-border-width, ${T.borderWidth}) solid var(--nozle-button-border, ${color})`;
+const buttonBorderWidth = `var(--nozle-button-border-width, ${T.borderWidth})`;
+
+/** `border` shorthand for a primary button: `buttonBorderColor` first, then `color`. */
+export const primaryButtonBorder = (color: string) => `${buttonBorderWidth} solid var(--nozle-button-border, ${color})`;
+
+/** `border` shorthand for any other button. */
+export const buttonBorder = (color: string) => `${buttonBorderWidth} solid ${color}`;
 
 /** Button corner radius: the `buttonRadius` token, else `fallback`. */
 export const buttonRadius = (fallback: string) => `var(--nozle-button-radius, ${fallback})`;
@@ -247,12 +273,14 @@ export const buttonShadow = "var(--nozle-button-shadow, none)";
 
 export interface ResolvedAppearance {
   variables: Variables;
+  planCardLayout?: "card" | "panel";
   elements: Partial<Record<ElementKey, { className?: string; style?: CSSProperties }>>;
 }
 
 function addTheme(target: ResolvedAppearance, theme: Theme | undefined) {
   if (!theme) return;
   Object.assign(target.variables, theme.variables);
+  if (theme.planCardLayout) target.planCardLayout = theme.planCardLayout;
   for (const [key, value] of Object.entries(theme.elements ?? {}) as [ElementKey, string | CSSProperties][]) {
     const current = target.elements[key] ?? {};
     target.elements[key] =
@@ -304,13 +332,12 @@ export type ButtonVariant = "primary" | "secondary" | "outline";
 /** Button look shared by every component, from the theme tokens. */
 export function buttonStyle(variant: ButtonVariant = "primary", busy = false): CSSProperties {
   const colors: Record<ButtonVariant, CSSProperties> = {
-    primary: { background: T.primary, color: T.primaryForeground, border: buttonBorder(T.primary) },
-    secondary: { background: T.muted, color: T.foreground, border: buttonBorder(T.border) },
+    primary: { background: T.primary, color: T.primaryForeground, border: primaryButtonBorder(T.primary), boxShadow: buttonShadow },
+    secondary: { background: T.secondary, color: T.foreground, border: buttonBorder(T.input) },
     outline: { background: "transparent", color: T.primary, border: buttonBorder(T.primary) },
   };
   return {
     ...colors[variant],
-    boxShadow: buttonShadow,
     padding: "0.75rem 1.5rem",
     borderRadius: buttonRadius(`calc(${T.radius} * 0.75)`),
     fontFamily: T.font,

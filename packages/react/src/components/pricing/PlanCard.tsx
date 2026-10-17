@@ -10,7 +10,8 @@ import React from "react";
 import type { CreateCheckoutInput } from "../../provider.js";
 import type { PricingPlan } from "./PricingTable.js";
 import { formatPlanPrice, intervalLabel, planFeatures } from "./plan-features.js";
-import { useAppearance } from "../../appearance/context.js";
+import { useAppearance, type ElementProps } from "../../appearance/context.js";
+import { PanelPlanCard } from "./PanelPlanCard.js";
 import { T, border, buttonStyle, type Appearance } from "../../appearance/tokens.js";
 
 export interface PlanCardProps {
@@ -36,11 +37,50 @@ export function PlanCard({
   onSelect,
   appearance,
 }: PlanCardProps): React.ReactElement {
-  const { root, el } = useAppearance(appearance);
+  const { root, el, planCardLayout } = useAppearance(appearance);
   const { code: id, name, description } = plan;
   const price = formatPlanPrice(plan.amount_cents, plan.amount_currency);
   const interval = intervalLabel(plan.interval);
   const features = featureOverride ?? planFeatures(plan);
+
+  const cta = onSelect && (
+    <button
+      onClick={() =>
+        onSelect?.({
+          planCode: id,
+          returnUrl: returnUrl ?? window.location.href,
+        })
+      }
+      {...el("planCard__cta", {
+        ...buttonStyle(isCurrent ? "secondary" : "primary"),
+        ...(isCurrent && { background: T.muted, color: T.mutedForeground, cursor: "default" }),
+        width: "100%",
+      })}
+      disabled={isCurrent}
+      aria-label={isCurrent ? `Current plan: ${name}` : `Select ${name}`}
+    >
+      {isCurrent ? "Current Plan" : "Get Started"}
+    </button>
+  );
+
+  if (planCardLayout === "panel") {
+    return (
+      <PanelPlanCard
+        frame={(style) => ({ "data-testid": `plan-card-${id}`, "aria-current": isCurrent ? "true" : undefined, ...root("planCard", style) }) as ElementProps}
+        el={el}
+        name={name}
+        description={description}
+        price={price}
+        interval={interval}
+        features={features}
+        isCurrent={Boolean(isCurrent)}
+        isHighlighted={false}
+        filled={false}
+      >
+        {cta}
+      </PanelPlanCard>
+    );
+  }
 
   return (
     <div
@@ -95,25 +135,7 @@ export function PlanCard({
         ))}
       </ul>
 
-      {onSelect && (
-        <button
-          onClick={() =>
-            onSelect?.({
-              planCode: id,
-              returnUrl: returnUrl ?? window.location.href,
-            })
-          }
-          {...el("planCard__cta", {
-            ...buttonStyle(isCurrent ? "secondary" : "primary"),
-            ...(isCurrent && { color: T.mutedForeground, cursor: "default" }),
-            width: "100%",
-          })}
-          disabled={isCurrent}
-          aria-label={isCurrent ? `Current plan: ${name}` : `Select ${name}`}
-        >
-          {isCurrent ? "Current Plan" : "Get Started"}
-        </button>
-      )}
+      {cta}
     </div>
   );
 }
