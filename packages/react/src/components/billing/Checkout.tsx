@@ -3,6 +3,7 @@
 import React, {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -16,7 +17,10 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
-import type { Appearance, StripeElementsOptions } from "@stripe/stripe-js";
+import type { Appearance as StripeAppearance, StripeElementsOptions } from "@stripe/stripe-js";
+import { useAppearance } from "../../appearance/context.js";
+import { NozleBranding } from "../branding/PoweredByNozle.js";
+import { T, buttonStyle, text, type Appearance } from "../../appearance/tokens.js";
 
 import {
   useOptionalBillingContext,
@@ -58,6 +62,8 @@ export interface StripeCheckoutProps {
   style?: React.CSSProperties;
   /** Optional custom controls for the PaymentIntent/PaymentElement branch. */
   children?: React.ReactNode;
+  /** Also passed to Stripe's Payment Element. Stripe's embedded Checkout uses your Stripe branding instead. */
+  appearance?: Appearance;
 }
 
 export interface UseCheckoutResult {
@@ -91,26 +97,77 @@ export function useCheckout(): UseCheckoutResult {
 
 // ── Stripe appearance builder ─────────────────────────────────────────────────
 
-function buildStripeAppearance(): Appearance {
-  if (typeof document === "undefined") {
-    return { theme: "stripe" };
-  }
+/** Colours resolved by the browser (any CSS colour syntax), read from a probe element. */
+export interface ResolvedColors {
+  primary?: string;
+  background?: string;
+  foreground?: string;
+  danger?: string;
+  radius?: string;
+  font?: string;
+}
 
-  const style = getComputedStyle(document.documentElement);
-  const get = (prop: string, fallback: string) =>
-    style.getPropertyValue(prop).trim() || fallback;
+function rgb(color: string | undefined): [number, number, number] | null {
+  const match = color?.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+}
 
-  return {
-    theme: "stripe",
-    variables: {
-      colorPrimary: get("--nozle-primary", "#16a34a"),
-      colorBackground: get("--nozle-background", "#f8fafc"),
-      colorText: get("--nozle-foreground", "#1e293b"),
-      colorDanger: get("--nozle-destructive", "#dc2626"),
-      borderRadius: get("--nozle-radius", "0.5rem"),
-      fontFamily: "inherit",
-    },
-  };
+// Stripe reads hex and rgb colours; a colour the browser reports in another space is left to Stripe's theme.
+function stripeColor(color: string | undefined): string | undefined {
+  return rgb(color) ? color : color?.startsWith("#") ? color : undefined;
+}
+
+/** Maps the theme's resolved colours to Stripe's appearance; a dark background picks Stripe's `night` theme. */
+export function toStripeAppearance(colors: ResolvedColors): StripeAppearance {
+  const background = rgb(colors.background);
+  const dark = background ? (0.2126 * background[0] + 0.7152 * background[1] + 0.0722 * background[2]) / 255 < 0.5 : false;
+  const variables = Object.fromEntries(
+    Object.entries({
+      colorPrimary: stripeColor(colors.primary),
+      colorBackground: stripeColor(colors.background),
+      colorText: stripeColor(colors.foreground),
+      colorDanger: stripeColor(colors.danger),
+      borderRadius: colors.radius,
+      fontFamily: colors.font,
+    }).filter(([, value]) => value),
+  );
+  return { theme: dark ? "night" : "stripe", variables };
+}
+
+/** A hidden element styled with the theme tokens, whose computed colours feed Stripe. */
+function useStripeAppearance(appearanceKey: unknown) {
+  const probe = useRef<HTMLSpanElement>(null);
+  const [stripeAppearance, setStripeAppearance] = useState<StripeAppearance | null>(null);
+  useEffect(() => {
+    if (!probe.current) return;
+    const style = getComputedStyle(probe.current);
+    setStripeAppearance(
+      toStripeAppearance({
+        primary: style.color,
+        background: style.backgroundColor,
+        foreground: style.borderTopColor,
+        danger: style.borderBottomColor,
+        radius: style.borderTopLeftRadius,
+        font: style.fontFamily,
+      }),
+    );
+  }, [appearanceKey]);
+  const probeElement = (
+    <span
+      ref={probe}
+      aria-hidden="true"
+      style={{
+        display: "none",
+        color: T.primary,
+        backgroundColor: T.card,
+        borderTop: `1px solid ${T.foreground}`,
+        borderBottom: `1px solid ${T.danger}`,
+        borderRadius: T.radius,
+        fontFamily: T.font,
+      }}
+    />
+  );
+  return { probeElement, stripeAppearance };
 }
 
 // ── Inner form component ──────────────────────────────────────────────────────
@@ -124,6 +181,7 @@ type CheckoutInnerProps = Pick<
   | "className"
   | "style"
   | "returnUrl"
+  | "appearance"
 > & { children?: React.ReactNode };
 
 function CheckoutInner({
@@ -135,9 +193,11 @@ function CheckoutInner({
   style,
   returnUrl,
   children,
+  appearance,
 }: CheckoutInnerProps) {
   const stripe = useStripe();
   const elements = useElements();
+  const { el } = useAppearance(appearance);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -177,7 +237,7 @@ function CheckoutInner({
 
   return (
     <CheckoutContext.Provider value={{ confirmPayment, isProcessing, error }}>
-      <div className={className} style={style}>
+      <div>
         <style>{`@keyframes nozle-skeleton-pulse { 0%{background-position:200% 0} 100%{background-position:-200% 0} }`}</style>
 
         {!isReady && (
@@ -185,9 +245,8 @@ function CheckoutInner({
             data-testid="checkout-skeleton"
             style={{
               height: "200px",
-              borderRadius: "var(--nozle-radius, 0.5rem)",
-              background:
-                "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
+              borderRadius: T.radius,
+              background: `linear-gradient(90deg, ${T.muted} 25%, ${T.skeleton} 50%, ${T.muted} 75%)`,
               backgroundSize: "200% 100%",
               animation: "nozle-skeleton-pulse 1.5s ease-in-out infinite",
             }}
@@ -202,12 +261,7 @@ function CheckoutInner({
         />
 
         {error !== null && (
-          <p
-            style={{
-              color: "var(--nozle-destructive, #dc2626)",
-              margin: "0.5rem 0 0",
-            }}
-          >
+          <p {...el("checkout__error", { color: T.dangerText, margin: "0.5rem 0 0" })}>
             {error.message}
           </p>
         )}
@@ -218,19 +272,7 @@ function CheckoutInner({
             onClick={() => void confirmPayment()}
             disabled={isProcessing || !stripe}
             aria-busy={isProcessing}
-            style={{
-              padding: "0.75rem 1.5rem",
-              borderRadius: "var(--nozle-radius, 0.5rem)",
-              border: "none",
-              background: "var(--nozle-primary, var(--primary))",
-              color:
-                "var(--nozle-primary-foreground, var(--primary-foreground))",
-              cursor: isProcessing ? "not-allowed" : "pointer",
-              fontWeight: 500,
-              opacity: isProcessing ? 0.7 : 1,
-              marginTop: "1rem",
-              width: "100%",
-            }}
+            {...el("checkout__submit", { ...buttonStyle("primary", isProcessing), marginTop: "1rem", width: "100%" })}
           >
             {isProcessing ? "Processing..." : (submitLabel ?? "Pay now")}
           </button>
@@ -255,14 +297,16 @@ function StripeCheckout({
   className,
   style,
   children,
+  appearance: themeAppearance,
 }: StripeCheckoutProps) {
+  const { root } = useAppearance(themeAppearance);
+  // Re-read the colours whenever the resolved theme variables change, from the provider or this component.
+  const { probeElement, stripeAppearance } = useStripeAppearance(JSON.stringify(root("checkout").style));
   const stripePromise = useMemo(
     () =>
       loadStripe(publishableKey, stripeAccount ? { stripeAccount } : undefined),
     [publishableKey, stripeAccount],
   );
-
-  const appearance = useMemo(() => buildStripeAppearance(), []);
 
   const embeddedOptions = useMemo(
     () => ({ clientSecret, onComplete }),
@@ -271,7 +315,7 @@ function StripeCheckout({
 
   if (clientSecret.startsWith("cs_")) {
     return (
-      <div className={className} style={style}>
+      <div {...root("checkout", { ...text.body, ...style }, className)}>
         <EmbeddedCheckoutProvider
           stripe={stripePromise}
           options={embeddedOptions}
@@ -282,21 +326,25 @@ function StripeCheckout({
     );
   }
 
-  const options: StripeElementsOptions = { clientSecret, appearance };
+  const options: StripeElementsOptions | null = stripeAppearance && { clientSecret, appearance: stripeAppearance };
 
   return (
-    <Elements key={clientSecret} stripe={stripePromise} options={options}>
-      <CheckoutInner
-        submitLabel={submitLabel}
-        onSuccess={onSuccess}
-        onError={onError}
-        onReady={onReady}
-        className={className}
-        style={style}
-        returnUrl={returnUrl}
-        children={children}
-      />
-    </Elements>
+    <div {...root("checkout", { ...text.body, ...style }, className)}>
+      {probeElement}
+      {options && (
+        <Elements key={clientSecret} stripe={stripePromise} options={options}>
+          <CheckoutInner
+            submitLabel={submitLabel}
+            onSuccess={onSuccess}
+            onError={onError}
+            onReady={onReady}
+            returnUrl={returnUrl}
+            children={children}
+            appearance={themeAppearance}
+          />
+        </Elements>
+      )}
+    </div>
   );
 }
 
@@ -312,12 +360,14 @@ export interface ProviderCheckoutProps {
   verifyCheckout?: VerifyCheckout;
   getCheckoutStatus?: GetCheckoutStatus;
   onDismiss?: () => void;
+  appearance?: Appearance;
 }
 
 export type CheckoutProps = StripeCheckoutProps | ProviderCheckoutProps;
 
 function ProviderCheckout(props: ProviderCheckoutProps) {
   const billing = useOptionalBillingContext();
+  const { root, el } = useAppearance(props.appearance);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -373,11 +423,13 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
           onSuccess={props.onSuccess}
           onComplete={props.onComplete}
           onError={props.onError}
+          className={props.className}
+          appearance={props.appearance}
         />
       );
     }
     return (
-      <p role="alert">
+      <p {...root("checkout", { ...text.body, color: T.dangerText }, props.className)} role="alert">
         Payment setup is incomplete. Contact support to continue.
       </p>
     );
@@ -386,12 +438,13 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
     <CheckoutContext.Provider
       value={{ confirmPayment: pay, isProcessing: busy, error }}
     >
-      <div className={props.className}>
+      <div {...root("checkout", text.body, props.className)}>
         <button
           type="button"
           disabled={busy}
           aria-busy={busy}
           onClick={() => void pay()}
+          {...el("checkout__submit", buttonStyle("primary", busy))}
         >
           {busy ? "Processing…" : props.submitLabel || "Pay now"}
         </button>
@@ -400,16 +453,20 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
             Payment is processing. Confirmation may take a little while.
           </p>
         )}
-        {error && <p role="alert">{error.message}</p>}
+        {error && (
+          <p role="alert" {...el("checkout__error", { color: T.dangerText })}>
+            {error.message}
+          </p>
+        )}
       </div>
     </CheckoutContext.Provider>
   );
 }
 
 export function Checkout(props: CheckoutProps) {
-  return "checkout" in props ? (
-    <ProviderCheckout {...props} />
-  ) : (
-    <StripeCheckout {...props} />
+  return (
+    <NozleBranding>
+      {"checkout" in props ? <ProviderCheckout {...props} /> : <StripeCheckout {...props} />}
+    </NozleBranding>
   );
 }

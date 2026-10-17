@@ -1,3 +1,5 @@
+import { request, type RequestPolicy } from "./http";
+import { apiError } from "./errors";
 import type {
   UsageCheckParams,
   UsageCheckResult,
@@ -10,12 +12,12 @@ export class UsageNamespace {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-    private readonly timeout: number,
+    private readonly policy: RequestPolicy,
   ) {}
 
   async check(params: UsageCheckParams): Promise<UsageCheckResult> {
     validateUsageParams(params);
-    const response = await fetch(`${this.baseUrl}/api/v1/usage/check`, {
+    const response = await request(this.policy, `${this.baseUrl}/api/v1/usage/check`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -31,13 +33,16 @@ export class UsageNamespace {
         properties: params.properties ?? {},
         occurred_at: params.occurredAt ?? new Date().toISOString(),
       }),
-      signal: AbortSignal.timeout(this.timeout),
-    });
+    }, { idempotent: true });
     if (!response.ok) {
-      throw new Error(`usage.check failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`usage.check`, response);
     }
     return response.json() as Promise<UsageCheckResult>;
   }
+
+  // Timestamps the SDK filled in, by idempotency key, so a retry of the same key sends the same request.
+  // shortcut: lives in this client's memory, so a retry from another process must pass `timestamp`; keeps the last 1000 keys.
+  private readonly generatedTimestamps = new Map<string, string>();
 
   async track(params: UsageTrackParams, options: UsageTrackOptions): Promise<UsageTrackResult> {
     requireSecretKey(this.apiKey, "usage.track");
@@ -49,7 +54,7 @@ export class UsageNamespace {
       throw new Error("usage.track idempotencyKey must not exceed 255 bytes");
     }
 
-    const response = await fetch(`${this.baseUrl}/api/v1/usage/track`, {
+    const response = await request(this.policy, `${this.baseUrl}/api/v1/usage/track`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -64,14 +69,24 @@ export class UsageNamespace {
           credit_system_code: params.creditSystemCode,
         }),
         properties: params.properties ?? {},
-        timestamp: params.timestamp ?? new Date().toISOString(),
+        timestamp: params.timestamp ?? this.timestampFor(options.idempotencyKey),
       }),
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`usage.track failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`usage.track`, response);
     }
     return response.json() as Promise<UsageTrackResult>;
+  }
+
+  private timestampFor(idempotencyKey: string): string {
+    const known = this.generatedTimestamps.get(idempotencyKey);
+    if (known) return known;
+    const generated = new Date().toISOString();
+    this.generatedTimestamps.set(idempotencyKey, generated);
+    if (this.generatedTimestamps.size > 1000) {
+      this.generatedTimestamps.delete(this.generatedTimestamps.keys().next().value as string);
+    }
+    return generated;
   }
 }
 

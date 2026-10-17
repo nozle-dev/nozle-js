@@ -8,6 +8,8 @@
  */
 
 import { useState } from "react";
+import { useAppearance } from "../../appearance/context.js";
+import { T, border, text, type Appearance } from "../../appearance/tokens.js";
 
 export interface UsageAlertFeature {
   key: string;
@@ -19,13 +21,16 @@ export interface UsageAlertProps {
   features: UsageAlertFeature[];
   threshold?: number;
   upgradeHref?: string;
+  appearance?: Appearance;
 }
 
 export function UsageAlert({
   features,
   threshold = 80,
   upgradeHref = "/plans",
+  appearance,
 }: UsageAlertProps) {
+  const { root, el } = useAppearance(appearance);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   const alertFeatures = features.filter(
@@ -41,17 +46,20 @@ export function UsageAlert({
   };
 
   return (
-    <div className="space-y-2">
+    <div {...root("usageAlert", { display: "flex", flexDirection: "column", gap: "0.5rem", ...text.body })}>
       {alertFeatures.map((f) => (
         <div
           key={f.key}
           role="alert"
-          className="flex items-center justify-between rounded-md px-4 py-3 text-sm"
           style={{
-            background: "var(--nozle-warning-bg, var(--warning-bg, #fef9c3))",
-            color: "var(--nozle-warning-text, var(--warning-text, #854d0e))",
-            border:
-              "1px solid var(--nozle-warning-border, var(--warning-border, #fde047))",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderRadius: `calc(${T.radius} / 2)`,
+            padding: "0.75rem 1rem",
+            background: T.warningSoft,
+            color: T.warningText,
+            border: border(T.warningBorder),
           }}
         >
           <span>
@@ -66,25 +74,25 @@ export function UsageAlert({
             <a
               href={upgradeHref}
               style={{
+                ...text.action,
                 color: "inherit",
-                fontWeight: 600,
                 textDecoration: "underline",
               }}
             >
               Upgrade
             </a>
           </span>
-          <button
+          <button type="button"
             onClick={() => handleDismiss(f.key)}
             aria-label={`Dismiss ${f.label} alert`}
-            style={{
+            {...el("usageAlert__dismiss", {
               background: "none",
               border: "none",
               cursor: "pointer",
               padding: "0 0 0 0.75rem",
-              fontSize: "1rem",
+              ...text.action,
               color: "inherit",
-            }}
+            })}
           >
             ×
           </button>

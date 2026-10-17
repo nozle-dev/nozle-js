@@ -54,7 +54,7 @@ describe("provider token normalization", () => {
 });
 
 describe("provider wrappers", () => {
-  it("links OpenAI token Cost Events to the generated Feature Event transaction", async () => {
+  it("links OpenAI token Cost Events to a Feature Event keyed by the provider response id", async () => {
     const nozle = tracker();
     const response = {
       id: "openai_request_1",
@@ -81,12 +81,12 @@ describe("provider wrappers", () => {
       "customer_1",
       "copilot_action",
       expect.objectContaining({ provider: "openai", input_tokens: 100, output_tokens: 20 }),
-      expect.objectContaining({ transactionId: "txn_123" }),
+      expect.objectContaining({ transactionId: "llm-openai-openai_request_1" }),
     );
     expect(nozle.costEvents.track).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        parentTransactionId: "txn_123",
+        parentTransactionId: "llm-openai-openai_request_1",
         requestId: "openai_request_1",
         operationKey: "input",
         properties: {

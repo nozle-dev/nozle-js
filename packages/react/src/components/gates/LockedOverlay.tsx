@@ -1,13 +1,15 @@
 /**
  * LockedOverlay — Wraps children with a blur filter + upgrade CTA overlay when locked.
  * UI-03: Applies CSS blur(4px) to children with an upgrade prompt overlay.
- * Uses CSS variable theming with --nozle-* namespace.
+ * Themed through `appearance` (see the appearance tokens).
  */
 
 "use client";
 
 import React, { type ReactNode } from "react";
 import { UpgradePrompt } from "./UpgradePrompt.js";
+import { useAppearance } from "../../appearance/context.js";
+import { T, type Appearance } from "../../appearance/tokens.js";
 
 export interface LockedOverlayProps {
   /** Whether to apply the locked blur + overlay state */
@@ -20,6 +22,7 @@ export interface LockedOverlayProps {
   onUpgrade?: () => void;
   /** Content to blur when locked */
   children: ReactNode;
+  appearance?: Appearance;
 }
 
 /**
@@ -43,13 +46,15 @@ export function LockedOverlay({
   upgradePlanName,
   onUpgrade,
   children,
+  appearance,
 }: LockedOverlayProps): React.ReactElement {
+  const { root, el } = useAppearance(appearance);
   if (!locked) {
     return <>{children}</>;
   }
 
   return (
-    <div style={{ position: "relative", display: "inline-block" }}>
+    <div {...root("lockedOverlay", { position: "relative", display: "inline-block" })}>
       {/* Blurred content — inaccessible to users */}
       <div
         style={{
@@ -64,16 +69,15 @@ export function LockedOverlay({
 
       {/* Upgrade CTA overlay */}
       <div
-        style={{
+        {...el("lockedOverlay__panel", {
           position: "absolute",
           inset: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "var(--nozle-background, var(--background))",
-          opacity: 0.92,
-          borderRadius: "var(--nozle-radius, 0.5rem)",
-        }}
+          background: `color-mix(in srgb, ${T.background} 92%, transparent)`,
+          borderRadius: T.radius,
+        })}
         role="dialog"
         aria-label="Feature locked — upgrade required"
       >
@@ -81,6 +85,7 @@ export function LockedOverlay({
           text={upgradeText}
           planName={upgradePlanName}
           onUpgrade={onUpgrade}
+          appearance={appearance}
         />
       </div>
     </div>

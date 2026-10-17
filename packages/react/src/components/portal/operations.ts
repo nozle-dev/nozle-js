@@ -28,7 +28,7 @@ export interface Customer extends Address {
 }
 export interface Identity {
   customerPortalUser: Customer;
-  customerPortalOrganization: { id: string; name: string };
+  customerPortalOrganization: { id: string; name: string; nozleBranding?: boolean };
 }
 export interface Subscription {
   id: string;
@@ -94,7 +94,7 @@ export const identityQuery = `query SdkPortalIdentity {
     addressLine1 addressLine2 city state zipcode country
     shippingAddress { addressLine1 addressLine2 city state zipcode country }
   }
-  customerPortalOrganization { id name }
+  customerPortalOrganization { id name nozleBranding }
 }`;
 export const subscriptionsQuery = `query SdkPortalSubscriptions($page: Int) {
   customerPortalSubscriptions(status: [active], limit: 20, page: $page) {

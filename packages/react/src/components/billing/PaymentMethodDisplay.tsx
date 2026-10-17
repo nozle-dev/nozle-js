@@ -5,6 +5,9 @@
  * Displays last4, brand, expiry. "Update Payment Method" button opens checkout.
  */
 
+import { useAppearance } from "../../appearance/context.js";
+import { T, border, buttonRadius, buttonStyle, surface, text, type Appearance } from "../../appearance/tokens.js";
+
 export interface PaymentMethod {
   last4: string;
   brand: string;
@@ -16,6 +19,7 @@ export interface PaymentMethodDisplayProps {
   paymentMethod?: PaymentMethod;
   onUpdatePaymentMethod?: () => void;
   updateHref?: string;
+  appearance?: Appearance;
 }
 
 const BRAND_LABELS: Record<string, string> = {
@@ -32,7 +36,9 @@ export function PaymentMethodDisplay({
   paymentMethod,
   onUpdatePaymentMethod,
   updateHref = "/billing/update-payment",
+  appearance,
 }: PaymentMethodDisplayProps) {
+  const { root } = useAppearance(appearance);
   const handleUpdate = () => {
     if (onUpdatePaymentMethod) {
       onUpdatePaymentMethod();
@@ -42,7 +48,7 @@ export function PaymentMethodDisplay({
   };
 
   return (
-    <div className="space-y-3">
+    <div {...root("paymentMethod", { ...surface, display: "flex", flexDirection: "column", gap: "0.75rem" })}>
       {paymentMethod ? (
         <div
           style={{
@@ -50,58 +56,32 @@ export function PaymentMethodDisplay({
             alignItems: "center",
             gap: "0.75rem",
             padding: "0.75rem 1rem",
-            border: "1px solid var(--nozle-border, var(--border))",
-            borderRadius: "0.5rem",
-            fontSize: "0.875rem",
+            border: border(),
+            borderRadius: `calc(${T.radius} * 0.6)`,
           }}
         >
-          <span
-            style={{
-              fontWeight: 600,
-              color: "var(--nozle-foreground, var(--foreground))",
-            }}
-          >
+          <span style={{ fontWeight: 600, color: T.foreground }}>
             {BRAND_LABELS[paymentMethod.brand.toLowerCase()] ??
               paymentMethod.brand}
           </span>
-          <span
-            style={{
-              color: "var(--nozle-muted-foreground, var(--muted-foreground))",
-            }}
-          >
-            •••• {paymentMethod.last4}
-          </span>
-          <span
-            style={{
-              color: "var(--nozle-muted-foreground, var(--muted-foreground))",
-              fontSize: "0.75rem",
-            }}
-          >
+          <span style={text.secondary}>•••• {paymentMethod.last4}</span>
+          <span style={text.meta}>
             Expires {String(paymentMethod.expMonth).padStart(2, "0")}/
             {String(paymentMethod.expYear).slice(-2)}
           </span>
         </div>
       ) : (
-        <p
-          style={{
-            color: "var(--nozle-muted-foreground, var(--muted-foreground))",
-            fontSize: "0.875rem",
-          }}
-        >
+        <p style={{ ...text.secondary, margin: 0 }}>
           No payment method on file.
         </p>
       )}
-      <button
+      <button type="button"
         onClick={handleUpdate}
         style={{
-          background: "transparent",
-          border: "1px solid var(--nozle-primary, var(--primary))",
-          color: "var(--nozle-primary, var(--primary))",
+          ...buttonStyle("outline"),
+          alignSelf: "flex-start",
           padding: "0.375rem 0.875rem",
-          borderRadius: "0.375rem",
-          fontSize: "0.875rem",
-          fontWeight: 500,
-          cursor: "pointer",
+          borderRadius: buttonRadius(`calc(${T.radius} / 2)`),
         }}
       >
         Update Payment Method

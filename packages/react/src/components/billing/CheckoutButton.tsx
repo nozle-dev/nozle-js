@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import { useAppearance } from "../../appearance/context.js";
+import { T, buttonStyle, text, type Appearance } from "../../appearance/tokens.js";
 import {
   useBillingContext,
   type CheckoutResult,
@@ -21,6 +23,7 @@ export interface CheckoutButtonProps
   returnUrl?: string;
   label?: string;
   className?: string;
+  appearance?: Appearance;
   style?: React.CSSProperties;
   onError?: (error: Error) => void;
   /** @deprecated The server supplies the public Razorpay key in the checkout response. */
@@ -99,7 +102,9 @@ export function CheckoutButton({
   onSuccess,
   onComplete,
   onScheduled,
+  appearance,
 }: CheckoutButtonProps): React.ReactElement {
+  const { root, vars } = useAppearance(appearance);
   const { createCheckout, verifyCheckout, getCheckoutStatus } =
     useBillingContext();
   const attempt = useRef<{ plan: string; key: string } | undefined>(undefined);
@@ -165,28 +170,17 @@ export function CheckoutButton({
         type="button"
         onClick={() => void handleClick()}
         disabled={loading}
-        className={className}
-        style={{
-          padding: "0.75rem 1.5rem",
-          borderRadius: "var(--nozle-radius, 0.5rem)",
-          border: "none",
-          background: "var(--nozle-primary, var(--primary))",
-          color: "var(--nozle-primary-foreground, var(--primary-foreground))",
-          cursor: loading ? "not-allowed" : "pointer",
-          fontWeight: 500,
-          opacity: loading ? 0.7 : 1,
-          ...style,
-        }}
+        {...root("checkoutButton", { ...buttonStyle("primary", loading), ...style }, className)}
         aria-busy={loading}
       >
         {loading ? "Loading..." : label}
       </button>
       {processing && (
-        <span role="status">
+        <span role="status" style={{ ...vars, ...text.body }}>
           Payment is processing. Confirmation may take a little while.
         </span>
       )}
-      {error && <span role="alert">{error.message}</span>}
+      {error && <span role="alert" style={{ ...vars, ...text.body, color: T.dangerText }}>{error.message}</span>}
     </>
   );
 }

@@ -1,17 +1,25 @@
+import { request, type RequestPolicy } from "./http";
 import { can as _can } from "./can";
+import { captureFetch as _captureFetch, type CaptureFetchOptions } from "./capture-fetch";
 import { CreditsNamespace } from "./credits";
 import { CostEventsNamespace } from "./cost-events";
 import { CreditSystemsNamespace } from "./credit-systems";
 import { EntitiesNamespace } from "./entities";
 import { EntitySubscriptionsNamespace } from "./entity-subscriptions";
-import { NozleApiError } from "./errors";
+import { apiError } from "./errors";
 import { EventsNamespace } from "./events";
 import { MarginClient } from "./margin";
+import { recordUsage as _recordUsage, type RecordUsageParams } from "./provider-usage";
 import { track as _track } from "./track";
 import { UsageNamespace } from "./usage";
+import { WebhooksNamespace } from "./webhooks";
+import { InvoicesNamespace } from "./invoices";
+import { AlertsNamespace } from "./alerts";
 import type {
   NozleConfig,
   CanResult,
+  CoreSubscription,
+  CustomerUsage,
   TrackOptions,
   Plan,
   CheckoutResult,
@@ -54,24 +62,40 @@ export class Nozle {
   readonly entitySubscriptions: EntitySubscriptionsNamespace;
   readonly credits: CreditsNamespace;
   readonly usage: UsageNamespace;
+  /** Verifies webhooks Nozle sends to your endpoint. */
+  readonly webhooks: WebhooksNamespace;
+  /** A customer's invoices and their PDFs. */
+  readonly invoices: InvoicesNamespace;
+  /** Usage and wallet-balance alerts; Nozle sends `alert.triggered` when one fires. */
+  readonly alerts: AlertsNamespace;
 
-  private readonly timeout: number;
+  private readonly policy: RequestPolicy;
   private subCache = new Map<string, string>();
 
-  constructor(config: NozleConfig) {
-    this.apiKey = config.apiKey;
-    this.baseUrl = trimTrailingSlashes(config.baseUrl ?? "https://api.nozle.app/engine");
-    this.eventsUrl = trimTrailingSlashes(config.eventsUrl ?? "https://api.nozle.app/core");
-    this.timeout = config.timeout ?? 10_000;
-    this.margin = new MarginClient(this.baseUrl, this.apiKey, this.timeout);
+  constructor(config: NozleConfig = {}) {
+    const apiKey = config.apiKey ?? (typeof process === "undefined" ? undefined : process.env?.NOZLE_SECRET_KEY);
+    if (apiKey === undefined) throw new Error("Nozle: pass apiKey or set the NOZLE_SECRET_KEY environment variable");
+    this.apiKey = apiKey;
+    const host = trimTrailingSlashes(config.host ?? "https://api.nozle.app");
+    this.baseUrl = trimTrailingSlashes(config.baseUrl ?? `${host}/engine`);
+    this.eventsUrl = trimTrailingSlashes(config.eventsUrl ?? `${host}/core`);
+    this.policy = {
+      timeout: config.timeout ?? 10_000,
+      maxRetries: Math.max(0, Math.trunc(config.maxRetries ?? 0)),
+      retryDelayMs: config.retryDelayMs ?? 500,
+    };
+    this.margin = new MarginClient(this.baseUrl, this.apiKey, this.policy);
     this.events = new EventsNamespace();
-    this.costEvents = new CostEventsNamespace(this.baseUrl, this.apiKey, this.timeout);
-    this.customers = new CustomersNamespace(this.eventsUrl, this.apiKey, this.timeout);
-    this.creditSystems = new CreditSystemsNamespace(this.eventsUrl, this.apiKey, this.timeout);
-    this.entities = new EntitiesNamespace(this.baseUrl, this.apiKey, this.timeout);
-    this.entitySubscriptions = new EntitySubscriptionsNamespace(this.eventsUrl, this.apiKey, this.timeout);
-    this.credits = new CreditsNamespace(this.baseUrl, this.apiKey, this.timeout);
-    this.usage = new UsageNamespace(this.baseUrl, this.apiKey, this.timeout);
+    this.costEvents = new CostEventsNamespace(this.baseUrl, this.apiKey, this.policy);
+    this.customers = new CustomersNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.creditSystems = new CreditSystemsNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.entities = new EntitiesNamespace(this.baseUrl, this.apiKey, this.policy);
+    this.entitySubscriptions = new EntitySubscriptionsNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.credits = new CreditsNamespace(this.baseUrl, this.apiKey, this.policy);
+    this.usage = new UsageNamespace(this.baseUrl, this.apiKey, this.policy);
+    this.webhooks = new WebhooksNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.invoices = new InvoicesNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.alerts = new AlertsNamespace(this.eventsUrl, this.apiKey, this.policy);
   }
 
   async track(
@@ -84,19 +108,18 @@ export class Nozle {
     if (!opts.subscriptionId) {
       opts.subscriptionId = await this.resolveSubscription(customerId);
     }
-    return _track(this.baseUrl, this.apiKey, customerId, event, metadata, opts, this.timeout);
+    return _track(this.baseUrl, this.apiKey, customerId, event, metadata, opts, this.policy);
   }
 
   async can(customerId: string, feature: string, metadata?: Record<string, string>): Promise<CanResult> {
-    return _can(this.baseUrl, this.apiKey, customerId, feature, metadata, this.timeout);
+    return _can(this.baseUrl, this.apiKey, customerId, feature, metadata, this.policy);
   }
 
   async plans(): Promise<Plan[]> {
-    const res = await fetch(`${this.baseUrl}/api/v1/plans`, {
+    const res = await request(this.policy, `${this.baseUrl}/api/v1/plans`, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`plans failed: ${res.status} ${res.statusText}`);
+    if (!res.ok) throw await apiError(`plans`, res);
     const data = await res.json();
     return data.plans ?? [];
   }
@@ -216,12 +239,12 @@ export class Nozle {
 
   private async subscriptionManagementRequest<T>(method: string, path: string, body?: unknown, idempotencyKey?: string): Promise<T> {
     if (!this.apiKey.startsWith("sk_")) throw new Error("subscription management requires a secret key");
-    const response = await fetch(`${this.baseUrl}${path}`, {
+    const response = await request(this.policy, `${this.baseUrl}${path}`, {
       method, headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json",
         ...(idempotencyKey && { "Idempotency-Key": idempotencyKey }) },
-      ...(body !== undefined && { body: JSON.stringify(body) }), signal: AbortSignal.timeout(this.timeout),
+      ...(body !== undefined && { body: JSON.stringify(body) })
     });
-    if (!response.ok) throw new Error(`subscriptionManagement failed: ${response.status} ${response.statusText}`);
+    if (!response.ok) throw await apiError(`subscriptionManagement`, response);
     return response.json();
   }
 
@@ -240,7 +263,7 @@ export class Nozle {
     ) {
       throw new Error("checkout requires a valid idempotencyKey");
     }
-    const res = await fetch(`${this.baseUrl}/api/v1/checkout${suffix}`, {
+    const res = await request(this.policy, `${this.baseUrl}/api/v1/checkout${suffix}`, {
       method,
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -248,16 +271,9 @@ export class Nozle {
         ...(idempotencyKey && { "Idempotency-Key": idempotencyKey }),
       },
       ...(body !== undefined && { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!res.ok)
-      throw new NozleApiError(
-        operation,
-        res,
-        await Promise.resolve()
-          .then(() => res.json())
-          .catch(() => undefined),
-      );
+      throw await apiError(operation, res);
     return res.json();
   }
 
@@ -265,7 +281,7 @@ export class Nozle {
     if (!this.apiKey.startsWith("sk_")) {
       throw new Error("subscribe requires a secret key");
     }
-    const res = await fetch(`${this.baseUrl}/api/v1/subscribe`, {
+    const res = await request(this.policy, `${this.baseUrl}/api/v1/subscribe`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -275,9 +291,8 @@ export class Nozle {
         plan_code: planCode,
         customer_id: customerId,
       }),
-      signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`subscribe failed: ${res.status} ${res.statusText}`);
+    if (!res.ok) throw await apiError(`subscribe`, res);
     this.subCache.delete(customerId);
     return res.json();
   }
@@ -300,16 +315,15 @@ export class Nozle {
       customer_id: customerId,
       cancellation_policy: policy,
     });
-    const res = await fetch(
+    const res = await request(this.policy, 
       `${this.baseUrl}/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}?${query}`,
       {
         method: "DELETE",
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
     if (!res.ok) {
-      throw new Error(`cancelSubscription failed: ${res.status} ${res.statusText}`);
+      throw await apiError(`cancelSubscription`, res);
     }
     this.subCache.delete(customerId);
     return res.json();
@@ -319,17 +333,16 @@ export class Nozle {
     params: SubscriptionTransitionParams,
   ): Promise<SubscriptionTransitionPreview> {
     this.validateSubscriptionTransition(params);
-    const res = await fetch(`${this.baseUrl}/api/v1/subscriptions/transitions/preview`, {
+    const res = await request(this.policy, `${this.baseUrl}/api/v1/subscriptions/transitions/preview`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(this.subscriptionTransitionBody(params)),
-      signal: AbortSignal.timeout(this.timeout),
-    });
+    }, { idempotent: true });
     if (!res.ok) {
-      throw new Error(`previewSubscriptionTransition failed: ${res.status} ${res.statusText}`);
+      throw await apiError(`previewSubscriptionTransition`, res);
     }
     return res.json();
   }
@@ -342,7 +355,7 @@ export class Nozle {
     if (!idempotencyKey.trim() || new TextEncoder().encode(idempotencyKey).length > 255) {
       throw new Error("applySubscriptionTransition requires an Idempotency-Key up to 255 bytes");
     }
-    const res = await fetch(`${this.baseUrl}/api/v1/subscriptions/transitions`, {
+    const res = await request(this.policy, `${this.baseUrl}/api/v1/subscriptions/transitions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -350,10 +363,9 @@ export class Nozle {
         "Idempotency-Key": idempotencyKey,
       },
       body: JSON.stringify(this.subscriptionTransitionBody(params)),
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!res.ok) {
-      throw new Error(`applySubscriptionTransition failed: ${res.status} ${res.statusText}`);
+      throw await apiError(`applySubscriptionTransition`, res);
     }
     this.subCache.delete(params.customerId);
     return res.json();
@@ -422,17 +434,36 @@ export class Nozle {
     };
   }
 
+  /**
+   * Returns a `fetch` that records the token usage of every LLM response it sees. Pass it as the
+   * `fetch` option of the OpenAI or Anthropic SDK, a Vercel AI SDK provider, LangChain, or any
+   * client that accepts one. See {@link CaptureFetchOptions}.
+   */
+  captureFetch(options: CaptureFetchOptions = {}, fetchImpl: typeof fetch = globalThis.fetch): typeof fetch {
+    return _captureFetch(this, options, fetchImpl);
+  }
+
+  /** Records one LLM call's token usage that your code read itself. */
+  recordUsage(params: RecordUsageParams): Promise<void> {
+    return _recordUsage(this, params);
+  }
+
   async ping(): Promise<PingResult> {
-    const res = await fetch(`${this.baseUrl}/api/v1/ping`, {
+    const res = await request(this.policy, `${this.baseUrl}/api/v1/ping`, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`ping failed: ${res.status} ${res.statusText}`);
+    if (!res.ok) throw await apiError(`ping`, res);
     return res.json();
   }
 
+  /**
+   * Legacy wallet adapter: deducts `credits` from the customer's wallet.
+   *
+   * @deprecated Use {@link Nozle.usage}`.check()` and `.track()` with a credit system, which keep
+   * metric conversion, source ordering, idempotency and the credit ledger authoritative.
+   */
   async checkAndDeduct(params: CheckAndDeductParams): Promise<CheckAndDeductResult> {
-    const res = await fetch(`${this.baseUrl}/api/v1/check-and-deduct`, {
+    const res = await request(this.policy, `${this.baseUrl}/api/v1/check-and-deduct`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -442,24 +473,63 @@ export class Nozle {
         customer_id: params.customerId,
         credits: params.credits,
       }),
-      signal: AbortSignal.timeout(this.timeout),
     });
-    if (!res.ok) throw new Error(`checkAndDeduct failed: ${res.status} ${res.statusText}`);
+    if (!res.ok) throw await apiError(`checkAndDeduct`, res);
     return res.json();
+  }
+
+  /** The customer's active subscriptions, from Core. */
+  async getSubscriptions(customerId: string): Promise<CoreSubscription[]> {
+    if (!this.apiKey.startsWith("sk_")) throw new Error("getSubscriptions requires a secret key");
+    if (!customerId.trim()) throw new Error("getSubscriptions requires customerId");
+    const res = await request(this.policy,
+      `${this.eventsUrl}/api/v1/subscriptions?external_customer_id=${encodeURIComponent(customerId)}&status[]=active`,
+      { headers: { Authorization: `Bearer ${this.apiKey}` } },
+    );
+    if (!res.ok) throw await apiError("getSubscriptions", res);
+    return ((await res.json()) as { subscriptions?: CoreSubscription[] }).subscriptions ?? [];
+  }
+
+  /** Usage of the current billing period. Without `subscriptionId`, the one active subscription is used. */
+  async currentUsage(customerId: string, options: { subscriptionId?: string } = {}): Promise<CustomerUsage> {
+    if (!this.apiKey.startsWith("sk_")) throw new Error("currentUsage requires a secret key");
+    const subscriptionId = options.subscriptionId ?? (await this.resolveSubscription(customerId));
+    const res = await request(this.policy,
+      `${this.eventsUrl}/api/v1/customers/${encodeURIComponent(customerId)}/current_usage?external_subscription_id=${encodeURIComponent(subscriptionId)}`,
+      { headers: { Authorization: `Bearer ${this.apiKey}` } },
+    );
+    if (!res.ok) throw await apiError("currentUsage", res);
+    return ((await res.json()) as { customer_usage: CustomerUsage }).customer_usage;
+  }
+
+  /** Usage of past billing periods, newest first. `periods` limits how many (Core default otherwise). */
+  async pastUsage(
+    customerId: string,
+    options: { subscriptionId?: string; periods?: number } = {},
+  ): Promise<CustomerUsage[]> {
+    if (!this.apiKey.startsWith("sk_")) throw new Error("pastUsage requires a secret key");
+    const subscriptionId = options.subscriptionId ?? (await this.resolveSubscription(customerId));
+    const query = new URLSearchParams({ external_subscription_id: subscriptionId });
+    if (options.periods !== undefined) query.set("periods_count", String(options.periods));
+    const res = await request(this.policy,
+      `${this.eventsUrl}/api/v1/customers/${encodeURIComponent(customerId)}/past_usage?${query}`,
+      { headers: { Authorization: `Bearer ${this.apiKey}` } },
+    );
+    if (!res.ok) throw await apiError("pastUsage", res);
+    return ((await res.json()) as { usage_periods?: CustomerUsage[] }).usage_periods ?? [];
   }
 
   private async resolveSubscription(customerId: string): Promise<string> {
     const cached = this.subCache.get(customerId);
     if (cached) return cached;
 
-    const res = await fetch(
+    const res = await request(this.policy, 
       `${this.eventsUrl}/api/v1/subscriptions?external_customer_id=${encodeURIComponent(customerId)}&status[]=active`,
       {
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
-    if (!res.ok) throw new Error(`subscription lookup failed: ${res.status}`);
+    if (!res.ok) throw await apiError("subscription lookup", res);
 
     const data = await res.json();
     const subs = data.subscriptions ?? [];
@@ -483,7 +553,7 @@ class CustomersNamespace {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-    private readonly timeout: number,
+    private readonly policy: RequestPolicy,
   ) {}
 
   async upsert(params: CustomerUpsertParams): Promise<CustomerUpsertResult> {
@@ -497,7 +567,7 @@ class CustomersNamespace {
     if (billing && !billing.paymentProvider?.trim()) {
       throw new Error("customers.upsert billingConfiguration requires paymentProvider");
     }
-    const res = await fetch(`${this.baseUrl}/api/v1/customers`, {
+    const res = await request(this.policy, `${this.baseUrl}/api/v1/customers`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -517,9 +587,8 @@ class CustomersNamespace {
           },
         },
       }),
-      signal: AbortSignal.timeout(this.timeout),
-    });
-    if (!res.ok) throw new Error(`customers.upsert failed: ${res.status} ${res.statusText}`);
+    }, { idempotent: true });
+    if (!res.ok) throw await apiError(`customers.upsert`, res);
     const payload = (await res.json()) as { customer: CustomerUpsertResult };
     return payload.customer;
   }

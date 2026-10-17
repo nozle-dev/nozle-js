@@ -1,12 +1,18 @@
 "use client";
 
 import {
+  createContext,
+  useContext,
   useEffect,
   useRef,
   useState,
   type CSSProperties,
   type FormEvent,
+  type HTMLAttributes,
 } from "react";
+import { useAppearance, type UseAppearance } from "../../appearance/context.js";
+import { NozleBranding } from "../branding/PoweredByNozle.js";
+import type { Appearance, ElementKey } from "../../appearance/tokens.js";
 import {
   BillingPortalError,
   invoiceDownloadUrl,
@@ -61,6 +67,24 @@ export interface BillingPortalProps {
   /** CSP nonce for the component's scoped stylesheet. No Tailwind setup is required. */
   nonce?: string;
   onError?: (error: BillingPortalError) => void;
+  appearance?: Appearance;
+}
+
+// Element overrides for the portal's inner parts, set once by BillingPortal.
+const PortalAppearance = createContext<{ el: UseAppearance["el"]; appearance?: Appearance }>({
+  el: (key) => ({ className: "nozle-" + key }),
+});
+
+/** A portal element that also takes its `appearance.elements` class name and style. */
+function Part({
+  as: Tag = "div",
+  part,
+  className,
+  style,
+  ...rest
+}: HTMLAttributes<HTMLElement> & { as?: "div" | "section" | "article"; part: ElementKey }) {
+  const themed = useContext(PortalAppearance).el(part, style, className);
+  return <Tag {...rest} {...themed} />;
 }
 
 function asError(error: unknown) {
@@ -79,7 +103,9 @@ export function BillingPortal({
   style,
   nonce,
   onError,
+  appearance,
 }: BillingPortalProps) {
+  const { root, el } = useAppearance(appearance);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{
     source: CreateBillingPortalSession;
@@ -130,9 +156,9 @@ export function BillingPortal({
       : undefined;
   const reconnect = () => setAttempt((value) => value + 1);
   return (
+    <PortalAppearance.Provider value={{ el, appearance }}>
     <div
-      className={`nozle-billing-portal ${className}`}
-      style={style}
+      {...root("billingPortal", style, `nozle-billing-portal ${className}`)}
       aria-label="Nozle billing portal"
     >
       <style nonce={nonce}>{portalStyles}</style>
@@ -153,6 +179,7 @@ export function BillingPortal({
         <Loading label="Starting billing session…" />
       )}
     </div>
+    </PortalAppearance.Provider>
   );
 }
 
@@ -257,14 +284,14 @@ function Failure({
 }) {
   const action = error.code === "unauthorized" ? (reconnect ?? retry) : retry;
   return (
-    <div role="alert" className="nzp-error">
+    <Part role="alert" className="nzp-error" part="billingPortal__error">
       <span>{error.message}</span>
       {action && (
         <button type="button" onClick={action}>
           {error.code === "unauthorized" ? "Reconnect" : "Try again"}
         </button>
       )}
-    </div>
+    </Part>
   );
 }
 function money(cents: Cents, currency: string, locale: string) {
@@ -329,7 +356,7 @@ function Portal(props: SectionProps) {
   if (!data) return <Loading />;
   const customer = data.customerPortalUser;
   return (
-    <>
+    <NozleBranding show={data.customerPortalOrganization.nozleBranding === true}>
       <header>
         <div className="nzp-row">
           <span className="nzp-muted">
@@ -347,7 +374,7 @@ function Portal(props: SectionProps) {
             "Your account"}
         </p>
       </header>
-      {notice && <p role="status">{notice}</p>}
+      {notice && <p className="nzp-notice" role="status">{notice}</p>}
       {view.kind !== "overview" && (
         <button type="button" onClick={back}>
           ← Back to overview
@@ -364,7 +391,7 @@ function Portal(props: SectionProps) {
             {...props}
             onWallet={(wallet) => setView({ kind: "wallet", wallet })}
           />
-          <section aria-label="Billing information">
+          <Part as="section" part="billingPortal__section" aria-label="Billing information">
             <div className="nzp-row">
               <h3>Billing information</h3>
               <button type="button" onClick={() => setView({ kind: "edit" })}>
@@ -404,7 +431,7 @@ function Portal(props: SectionProps) {
                 </dd>
               </div>
             </dl>
-          </section>
+          </Part>
           <Invoices {...props} />
         </>
       )}
@@ -439,8 +466,7 @@ function Portal(props: SectionProps) {
           }}
         />
       )}
-      <footer>Powered by Nozle</footer>
-    </>
+    </NozleBranding>
   );
 }
 
@@ -490,6 +516,7 @@ function Subscriptions({
   timezone: string;
   onUsage: (subscription: Subscription) => void;
 }) {
+  const portalAppearance = useContext(PortalAppearance).appearance;
   const [page, setPage] = useState(1);
   const [updated, setUpdated] = useState<Record<string, Subscription>>({});
   const { data, error, retry } = useQuery<{
@@ -498,7 +525,7 @@ function Subscriptions({
   const result = data?.customerPortalSubscriptions;
   useEffect(() => setUpdated({}), [result]);
   return (
-    <section aria-label="Subscriptions">
+    <Part as="section" part="billingPortal__section" aria-label="Subscriptions">
       <h3>Subscriptions</h3>
       {error ? (
         <Failure error={error} retry={retry} reconnect={reconnect} />
@@ -513,7 +540,9 @@ function Subscriptions({
               {result.collection
                 .map((item) => updated[item.id] ?? item)
                 .map((subscription) => (
-                  <article
+                  <Part
+                    as="article"
+                    part="billingPortal__card"
                     className="nzp-card"
                     data-subscription-id={subscription.externalId}
                     key={subscription.externalId || subscription.id}
@@ -536,24 +565,16 @@ function Subscriptions({
                           subscription.plan.interval}
                       </span>
                     </div>
-                    <div className="nzp-row">
-                      <p className="nzp-muted">
-                        Base price, excluding tax and usage
-                        <br />
-                        Current period ends{" "}
-                        {date(
-                          subscription.currentBillingPeriodEndingAt,
-                          locale,
-                          timezone,
-                        )}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => onUsage(subscription)}
-                      >
-                        View usage
-                      </button>
-                    </div>
+                    <p className="nzp-muted">
+                      Base price, excluding tax and usage
+                      <br />
+                      Current period ends{" "}
+                      {date(
+                        subscription.currentBillingPeriodEndingAt,
+                        locale,
+                        timezone,
+                      )}
+                    </p>
                     {subscription.endingAt && (
                       <p>
                         Cancels on{" "}
@@ -566,54 +587,64 @@ function Subscriptions({
                         {subscription.nextSubscription.plan.name}
                       </p>
                     )}
-                    {cancellationActions && subscription.externalId && (
-                      <CancellationControl
-                        subscription={cancellationState(subscription)}
-                        actions={cancellationActions}
-                        locale={locale}
-                        timezone={timezone}
-                        nonce={nonce}
-                        onError={onError}
-                        onChanged={retry}
-                        refresh={async (signal) => {
-                          const result = await client.request<{
-                            customerPortalSubscription: Subscription | null;
-                          }>(
-                            subscriptionQuery,
-                            { id: subscription.id },
-                            signal,
-                          );
-                          if (
-                            !signal.aborted &&
-                            result.customerPortalSubscription
-                          ) {
-                            const fresh = result.customerPortalSubscription;
-                            setUpdated((previous) => ({
-                              ...previous,
-                              [fresh.id]: fresh,
-                            }));
-                          }
-                          return result.customerPortalSubscription
-                            ? cancellationState(
-                                result.customerPortalSubscription,
-                              )
-                            : null;
-                        }}
-                      />
-                    )}
-                    {planChangeActions && subscription.externalId && (
-                      <PlanChangeControl
-                        subscriptionId={subscription.externalId}
-                        refreshKey={`${subscription.id}:${subscription.endingAt ?? ""}:${subscription.nextSubscription?.id ?? ""}:${subscription.plan.code}`}
-                        actions={planChangeActions}
-                        locale={locale}
-                        timezone={timezone}
-                        nonce={nonce}
-                        onError={onError}
-                        onChanged={retry}
-                      />
-                    )}
-                  </article>
+                    <div className="nzp-card-actions">
+                      <button
+                        type="button"
+                        onClick={() => onUsage(subscription)}
+                      >
+                        View usage
+                      </button>
+                      {planChangeActions && subscription.externalId && (
+                        <PlanChangeControl
+                          subscriptionId={subscription.externalId}
+                          refreshKey={`${subscription.id}:${subscription.endingAt ?? ""}:${subscription.nextSubscription?.id ?? ""}:${subscription.plan.code}`}
+                          actions={planChangeActions}
+                          appearance={portalAppearance}
+                          locale={locale}
+                          timezone={timezone}
+                          nonce={nonce}
+                          onError={onError}
+                          onChanged={retry}
+                        />
+                      )}
+                      {cancellationActions && subscription.externalId && (
+                        <CancellationControl
+                          subscription={cancellationState(subscription)}
+                          actions={cancellationActions}
+                          appearance={portalAppearance}
+                          locale={locale}
+                          timezone={timezone}
+                          nonce={nonce}
+                          onError={onError}
+                          onChanged={retry}
+                          refresh={async (signal) => {
+                            const result = await client.request<{
+                              customerPortalSubscription: Subscription | null;
+                            }>(
+                              subscriptionQuery,
+                              { id: subscription.id },
+                              signal,
+                            );
+                            if (
+                              !signal.aborted &&
+                              result.customerPortalSubscription
+                            ) {
+                              const fresh = result.customerPortalSubscription;
+                              setUpdated((previous) => ({
+                                ...previous,
+                                [fresh.id]: fresh,
+                              }));
+                            }
+                            return result.customerPortalSubscription
+                              ? cancellationState(
+                                  result.customerPortalSubscription,
+                                )
+                              : null;
+                          }}
+                        />
+                      )}
+                    </div>
+                  </Part>
                 ))}
             </div>
           )}
@@ -624,7 +655,7 @@ function Subscriptions({
           />
         </>
       )}
-    </section>
+    </Part>
   );
 }
 function cancellationState(
@@ -655,7 +686,7 @@ function UsageDetails({
   }>(client, usageQuery, { subscriptionId: subscription.id }, onError);
   const usage = data?.customerPortalCustomerUsage;
   return (
-    <section aria-label="Subscription usage">
+    <Part as="section" part="billingPortal__section" aria-label="Subscription usage">
       <h3>{planName(subscription)} · Usage</h3>
       {error ? (
         <Failure error={error} retry={retry} reconnect={reconnect} />
@@ -672,13 +703,13 @@ function UsageDetails({
           </p>
           <p className="nzp-muted">Current usage, excluding tax</p>
           {usage.chargesUsage.length ? (
-            <div className="nzp-table">
+            <Part className="nzp-table" part="billingPortal__table">
               <table>
                 <thead>
                   <tr>
                     <th>Feature</th>
-                    <th>Units</th>
-                    <th>Amount</th>
+                    <th className="nzp-num">Units</th>
+                    <th className="nzp-num">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -690,15 +721,15 @@ function UsageDetails({
                           charge.feature?.code ||
                           "Usage"}
                       </td>
-                      <td>{charge.units}</td>
-                      <td>
+                      <td className="nzp-num">{charge.units}</td>
+                      <td className="nzp-num">
                         {money(charge.amountCents, usage.currency, locale)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Part>
           ) : (
             <p className="nzp-empty">
               No usage recorded for this billing period.
@@ -706,7 +737,7 @@ function UsageDetails({
           )}
         </>
       )}
-    </section>
+    </Part>
   );
 }
 
@@ -719,19 +750,25 @@ function Invoices(props: SectionProps) {
   }>(client, invoicesQuery, filter, onError);
   const result = data?.customerPortalInvoices;
   return (
-    <section aria-label="Invoice history">
+    <Part as="section" part="billingPortal__section" aria-label="Invoice history">
       <h3>Invoice history</h3>
       <form
         className="nzp-actions"
+        role="search"
         onSubmit={(event) => {
           event.preventDefault();
           setFilter({ page: 1, searchTerm: search.trim() });
         }}
       >
-        <label>
-          Search invoices
+        <label className="nzp-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
           <input
             type="search"
+            aria-label="Search invoices"
+            placeholder="Search invoices"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -751,13 +788,13 @@ function Invoices(props: SectionProps) {
                 : "No invoices yet."}
             </p>
           ) : (
-            <div className="nzp-table">
+            <Part className="nzp-table" part="billingPortal__table">
               <table>
                 <thead>
                   <tr>
                     <th>Invoice</th>
                     <th>Date</th>
-                    <th>Amount</th>
+                    <th className="nzp-num">Amount</th>
                     <th>Status</th>
                     <th>PDF</th>
                   </tr>
@@ -767,7 +804,7 @@ function Invoices(props: SectionProps) {
                     <tr key={invoice.id}>
                       <td>{invoice.number}</td>
                       <td>{date(invoice.issuingDate, locale)}</td>
-                      <td>
+                      <td className="nzp-num">
                         {money(
                           invoice.totalAmountCents,
                           invoice.currency,
@@ -790,7 +827,7 @@ function Invoices(props: SectionProps) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Part>
           )}
           <Pager
             page={filter.page}
@@ -799,7 +836,7 @@ function Invoices(props: SectionProps) {
           />
         </>
       )}
-    </section>
+    </Part>
   );
 }
 function InvoiceDownload({
@@ -909,7 +946,7 @@ function CustomerForm({
     });
   };
   return (
-    <section aria-label="Edit billing information">
+    <Part as="section" part="billingPortal__section" aria-label="Edit billing information">
       <h3>Edit billing information</h3>
       <form onSubmit={submit}>
         <div className="nzp-fields">
@@ -944,7 +981,7 @@ function CustomerForm({
           </button>
         </div>
       </form>
-    </section>
+    </Part>
   );
 }
 function Wallets({
@@ -961,7 +998,7 @@ function Wallets({
   const result = data?.customerPortalWallets;
   if (result && !result.collection.length) return null;
   return (
-    <section aria-label="Wallets">
+    <Part as="section" part="billingPortal__section" aria-label="Wallets">
       <h3>Wallets</h3>
       {error ? (
         <Failure error={error} retry={retry} reconnect={reconnect} />
@@ -971,7 +1008,7 @@ function Wallets({
         <>
           <div className="nzp-stack">
             {result.collection.map((wallet) => (
-              <article className="nzp-card" key={wallet.id}>
+              <Part as="article" part="billingPortal__card" className="nzp-card" key={wallet.id}>
                 <h3>{wallet.name || "Prepaid credits"}</h3>
                 <div className="nzp-price">
                   {money(wallet.balanceCents, wallet.currency, locale)}
@@ -985,7 +1022,7 @@ function Wallets({
                     Add credits
                   </button>
                 </div>
-              </article>
+              </Part>
             ))}
           </div>
           <Pager
@@ -995,7 +1032,7 @@ function Wallets({
           />
         </>
       )}
-    </section>
+    </Part>
   );
 }
 function WalletTopUp({
@@ -1028,7 +1065,7 @@ function WalletTopUp({
         String(wallet.paidTopUpMaxAmountCents),
       ) <= 0);
   return (
-    <section aria-label="Add credits">
+    <Part as="section" part="billingPortal__section" aria-label="Add credits">
       <h3>Add credits · {wallet.name || "Wallet"}</h3>
       <p className="nzp-muted">
         A paid top-up creates a billing transaction. Credits become available
@@ -1090,6 +1127,6 @@ function WalletTopUp({
           </button>
         </div>
       </form>
-    </section>
+    </Part>
   );
 }

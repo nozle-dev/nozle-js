@@ -1,6 +1,6 @@
 {
   "name": "@nozle-js/node",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -23,29 +23,32 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "generate:openapi": "openapi-typescript ${NOZLE_OPENAPI_SPEC:-https://docs.nozle.dev/nozle-openapi.yaml} -o src/generated/openapi.ts"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "peerDependencies": {
-    "openai": ">=4.0.0",
-    "anthropic": ">=0.30.0"
+    "@anthropic-ai/sdk": ">=0.30.0",
+    "openai": ">=4.0.0"
   },
   "peerDependenciesMeta": {
     "openai": {
       "optional": true
     },
-    "anthropic": {
+    "@anthropic-ai/sdk": {
       "optional": true
     }
   },
   "devDependencies": {
-    "@types/node": "^18.19.0",
+    "@anthropic-ai/sdk": "0.131.0",
+    "@types/node": "^20.19.0",
+    "openai": "7.27.0",
+    "openapi-typescript": "7.13.0",
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
-    "vite": "^6.4.3",
-    "vitest": "^3.2.6"
+    "vitest": "^4.1.12"
   },
   "keywords": [
     "billing",
@@ -62,5 +65,10 @@
     "url": "git+https://github.com/nozle-dev/nozle-js.git",
     "directory": "packages/node"
   },
-  "homepage": "https://nozle.ai"
+  "homepage": "https://nozle.ai",
+  "overrides": {
+    "esbuild": "^0.28.2",
+    "postcss": "^8.5.23",
+    "source-map-js": "^1.2.2"
+  }
 }

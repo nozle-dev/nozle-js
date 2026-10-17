@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Checkout } from "../billing/Checkout.js";
 import { UpgradeModal } from "../billing/UpgradeModal.js";
+import { useAppearance } from "../../appearance/context.js";
+import { T, type Appearance } from "../../appearance/tokens.js";
 import { formatBillingDate, formatMinorAmount } from "../billing/amounts.js";
+import { useQuery } from "@tanstack/react-query";
+import { useOptionalBillingContext } from "../../provider.js";
+import { catalogQuery, idleQueryClient } from "../../hooks/use-plans.js";
+import { planFeatures } from "../pricing/plan-features.js";
 import type {
   CheckoutResult,
   CheckoutStatus,
@@ -94,6 +100,7 @@ export interface PlanChangeControlProps {
   locale?: string;
   timezone?: string;
   nonce?: string;
+  appearance?: Appearance;
 }
 type Attempt = {
   key: string;
@@ -106,16 +113,29 @@ type Attempt = {
   attempted: boolean;
 };
 const styles = `
-.nozle-plan-change{font:inherit;color:var(--nozle-portal-text,#202922);margin-top:12px}
-.nozle-plan-change button{font:inherit;padding:9px 14px;border:1px solid var(--nozle-portal-border,#dce2d9);border-radius:7px;background:var(--nozle-portal-background,#fff);color:inherit;cursor:pointer}
+.nozle-plan-change{font:${T.fontBody};color:${T.foreground};margin-top:12px}
+.nozle-plan-change button{font:${T.fontAction};padding:9px 14px;border:var(--nozle-button-border-width, ${T.borderWidth}) solid ${T.input};border-radius:var(--nozle-button-radius, calc(${T.radius} * 0.6));background:${T.card};color:inherit;cursor:pointer}
 .nozle-plan-change button:disabled{opacity:.55;cursor:wait}
-.nozle-plan-change :focus-visible{outline:2px solid var(--nozle-portal-accent,#526949);outline-offset:3px}
-.nozle-plan-change [role=alert]{color:#922e25}
+.nozle-plan-change :focus-visible{outline:2px solid ${T.primary};outline-offset:3px}
+.nozle-plan-change [role=alert]{color:${T.dangerText}}
 .nozle-plan-change .nzpc-actions{display:flex;gap:10px;flex-wrap:wrap}
-.nozle-upgrade-modal select{box-sizing:border-box;width:100%;font:inherit;color:inherit;padding:10px;margin:8px 0;border:1px solid #dce2d9;border-radius:7px;background:var(--nozle-portal-background,#fff)}
+.nozle-upgrade-modal select{box-sizing:border-box;width:100%;font:inherit;color:inherit;padding:10px;margin:8px 0;border:${T.borderWidth} solid ${T.border};border-radius:calc(${T.radius} * 0.6);background:${T.card}}
 .nozle-upgrade-modal dl{display:block;margin:16px 0;padding:0}
 .nozle-upgrade-modal dl div{display:flex;justify-content:space-between;gap:16px;margin:12px 0}
+.nozle-upgrade-modal dt{font:${T.fontMeta};color:${T.mutedForeground}}
 .nozle-upgrade-modal dd{margin:0;text-align:right}
+.nozle-upgrade-modal label{font:${T.fontBody};font-weight:500}
+.nozle-plan-change .nzpc-plans{display:grid;gap:10px}
+.nozle-plan-change label.nzpc-plan{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:${T.borderWidth} solid ${T.border};border-radius:calc(${T.radius} * 0.75);background:${T.card};cursor:pointer;font:${T.fontBody};color:${T.foreground}}
+.nozle-plan-change label.nzpc-plan[data-selected]{border-color:${T.primary};background:${T.primarySoft}}
+.nozle-plan-change label.nzpc-plan input{flex:none;width:auto;margin:4px 0 0;padding:0;accent-color:${T.primary}}
+.nozle-plan-change .nzpc-plan-body{display:grid;gap:4px;min-width:0;flex:1}
+.nozle-plan-change .nzpc-plan-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.nozle-plan-change .nzpc-plan-name{font:${T.fontHeading}}
+.nozle-plan-change .nzpc-plan-op{font:${T.labelFont};letter-spacing:${T.labelSpacing};text-transform:${T.labelTransform};color:${T.mutedForeground}}
+.nozle-plan-change .nzpc-plan-price{font-variant-numeric:tabular-nums}
+.nozle-plan-change .nzpc-plan-muted{font:${T.fontMeta};color:${T.mutedForeground};margin:0}
+.nozle-plan-change .nzpc-plan ul{list-style:none;margin:2px 0 0;padding:0;display:grid;gap:2px;font:${T.fontMeta};color:${T.mutedForeground}}
 `;
 const paymentPending = (state: PlanChangeState) =>
   ["awaiting_payment", "processing", "needs_review"].includes(
@@ -155,7 +175,9 @@ function PlanChangeFlow({
   locale = "en-US",
   timezone = "UTC",
   nonce,
+  appearance,
 }: PlanChangeControlProps) {
+  const { root } = useAppearance(appearance);
   const owner = useMemo(
     () => ({ controller: new AbortController() }),
     [subscriptionId, actions],
@@ -173,6 +195,13 @@ function PlanChangeFlow({
     null,
   );
   const [target, setTarget] = useState("");
+  // The public catalog adds each plan's description and features to the choices, when the
+  // control is inside a BillingProvider; without one the choices show name and price.
+  const billing = useOptionalBillingContext();
+  const catalog = useQuery(
+    { ...catalogQuery(billing?.client), enabled: Boolean(billing) },
+    billing?.queryClient ?? idleQueryClient,
+  );
   const [quote, setQuote] = useState<PlanChangePreview>();
   const [checkout, setCheckout] = useState<CheckoutResult | null>(null);
   const [withdrawTarget, setWithdrawTarget] = useState<{
@@ -511,7 +540,7 @@ function PlanChangeFlow({
       pending.current?.accepted,
   );
   return (
-    <div className="nozle-plan-change">
+    <div {...root("planChangeControl", undefined, "nozle-plan-change")}>
       <style nonce={nonce}>{styles}</style>
       {!state ? (
         <>
@@ -652,6 +681,7 @@ function PlanChangeFlow({
             />
           )}
           <UpgradeModal
+            appearance={appearance}
             isOpen={mode !== null}
             planCode={target}
             title={
@@ -679,34 +709,63 @@ function PlanChangeFlow({
                       : "Confirm upgrade"
             }
             onCancel={() => setMode(null)}
+            onBack={
+              mode === "confirm"
+                ? () => {
+                    setMode("choose");
+                    setQuote(undefined);
+                    setFailure(undefined);
+                  }
+                : undefined
+            }
             onSubmit={confirm}
           >
             {failure && <p role="alert">{failure}</p>}
             {mode === "choose" && (
-              <label>
-                Choose a plan
-                <select
-                  value={target}
-                  onChange={(event) => {
-                    setTarget(event.target.value);
-                    setQuote(undefined);
-                  }}
-                  disabled={busy}
-                >
-                  <option value="">Select a plan</option>
-                  {state.eligiblePlans.map((plan) => (
-                    <option key={plan.code} value={plan.code}>
-                      {plan.name} —{" "}
-                      {formatMinorAmount(
-                        plan.amountCents,
-                        plan.currency,
-                        locale,
-                      )}{" "}
-                      / {plan.interval} ({plan.operation})
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="nzpc-plans" role="radiogroup" aria-label="Choose a plan">
+                {state.eligiblePlans.map((plan) => {
+                  const details = catalog.data?.plans.find((entry) => entry.code === plan.code);
+                  const features = details ? planFeatures(details) : [];
+                  return (
+                    <label
+                      key={plan.code}
+                      className="nzpc-plan"
+                      data-selected={target === plan.code ? "" : undefined}
+                    >
+                      <input
+                        type="radio"
+                        name={`nozle-plan-${subscriptionId}`}
+                        value={plan.code}
+                        checked={target === plan.code}
+                        disabled={busy}
+                        onChange={() => {
+                          setTarget(plan.code);
+                          setQuote(undefined);
+                        }}
+                      />
+                      <span className="nzpc-plan-body">
+                        <span className="nzpc-plan-head">
+                          <span className="nzpc-plan-name">{plan.name}</span>
+                          <span className="nzpc-plan-op">
+                            {plan.operation === "upgrade" ? "Upgrade" : "Downgrade"}
+                          </span>
+                        </span>
+                        <span className="nzpc-plan-price">
+                          {formatMinorAmount(plan.amountCents, plan.currency, locale)} / {plan.interval}
+                        </span>
+                        {details?.description && <p className="nzpc-plan-muted">{details.description}</p>}
+                        {features.length > 0 && (
+                          <ul>
+                            {features.map((feature) => (
+                              <li key={feature}>{feature}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
             )}
             {mode === "withdraw" && (
               <p>

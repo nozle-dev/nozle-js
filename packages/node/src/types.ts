@@ -1,9 +1,18 @@
 export interface NozleConfig {
-  apiKey: string;
+  /** Organization credential. Defaults to the NOZLE_SECRET_KEY environment variable. */
+  apiKey?: string;
+  /** Root URL of the Nozle API. Engine calls go to `${host}/engine` and Core calls to `${host}/core`. Defaults to https://api.nozle.app. */
+  host?: string;
+  /** Engine URL. Overrides the engine address derived from `host`. */
   baseUrl?: string;
-  /** Core billing resources and subscription discovery. Event writes use baseUrl. */
+  /** Core billing resources and subscription discovery. Overrides the Core address derived from `host`. */
   eventsUrl?: string;
+  /** Per-attempt timeout in milliseconds. Default 10000. */
   timeout?: number;
+  /** Extra attempts after a network error, timeout, 429 or 5xx. Default 0: no retries. Only requests that are safe to repeat are retried: reads, calls with an idempotency key, and event, cost event and customer writes. */
+  maxRetries?: number;
+  /** First retry delay in milliseconds, doubled each retry up to 10 seconds, or the `Retry-After` header when sent. Default 500. */
+  retryDelayMs?: number;
 }
 
 export interface TrackOptions {
@@ -34,8 +43,10 @@ export interface CanResult {
   feature_type?: string;
   configuration?: Record<string, string>;
   used: number;
-  limit?: number;
-  remaining?: number;
+  /** `null` when the feature has no limit. */
+  limit: number | null;
+  /** `null` when the feature has no limit. */
+  remaining: number | null;
   overage?: boolean;
   economics?: CanEconomics;
   policy?: CanPolicy;
@@ -166,7 +177,6 @@ export interface SubscriptionOptions {
     timing: "immediate" | "end_of_period";
   }>;
   checkout?: { id: string; status: string; plan_code: string } | null;
-  blocked_reason?: string | null;
 }
 
 export interface SubscriptionChangePreview {
@@ -446,7 +456,6 @@ export interface TrendParams extends MarginQueryParams {
 export interface PingResult {
   ok: boolean;
   engine: string;
-  version?: string;
 }
 
 export interface CustomerBillingConfiguration {
@@ -770,3 +779,9 @@ export interface UsageTrackResult {
   reason?: string;
   deductions?: UsageDeduction[];
 }
+
+/** One subscription as Core returns it (`GET /subscriptions`). */
+export type CoreSubscription = import("./generated/openapi").components["schemas"]["SubscriptionObject"];
+
+/** A customer's usage for one billing period (Core `current_usage`, or one `past_usage` period). */
+export type CustomerUsage = import("./generated/openapi").components["schemas"]["CustomerUsageObject"];

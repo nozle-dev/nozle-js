@@ -1,0 +1,105 @@
+"use client";
+
+import React from "react";
+import { useAppearance } from "../../appearance/context.js";
+import { T, buttonRadius, buttonStyle, surface, table, text, type Appearance } from "../../appearance/tokens.js";
+import { formatDecimalString } from "../../core/decimal.js";
+
+/** The fields of the SDK's credit operation (`nozle.credits.operations`) that this component reads. */
+export interface CreditOperationData {
+  id: string;
+  type: "consume" | "grant" | "adjustment" | "expire" | "revoke" | "refund" | "transfer";
+  status: "succeeded" | "denied" | "reversed";
+  credit_amount: string;
+  feature_code: string | null;
+  occurred_at: string;
+}
+
+export interface CreditHistoryProps {
+  operations?: CreditOperationData[];
+  isLoading?: boolean;
+  error?: Error | string | null;
+  emptyMessage?: string;
+  /** When true a "Load more" button is shown. Fetch the next page with the SDK's `next_cursor`. */
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  appearance?: Appearance;
+}
+
+const TYPE_LABELS: Record<CreditOperationData["type"], string> = {
+  consume: "Used",
+  grant: "Granted",
+  adjustment: "Adjustment",
+  expire: "Expired",
+  revoke: "Revoked",
+  refund: "Refunded",
+  transfer: "Transfer",
+};
+
+const muted = T.mutedForeground;
+
+function when(value: string): string {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+}
+
+export function CreditHistory({
+  operations = [],
+  isLoading = false,
+  error = null,
+  emptyMessage = "No credit activity yet.",
+  hasMore = false,
+  onLoadMore,
+  appearance,
+}: CreditHistoryProps): React.ReactElement {
+  const { root, el } = useAppearance(appearance);
+  if (error) return <p {...root("creditHistory", { ...surface, color: T.dangerText })} role="alert">{typeof error === "string" ? error : error.message}</p>;
+  if (isLoading && operations.length === 0) return <div {...root("creditHistory", { ...surface, height: 120, background: T.skeleton })} role="status" aria-label="Loading credit history" />;
+  if (operations.length === 0) return <p {...root("creditHistory", { ...surface, color: muted })} role="status">{emptyMessage}</p>;
+
+  return (
+    <div {...root("creditHistory", { ...text.body, minWidth: 0 })}>
+      <div style={table.frame}>
+        <table {...el("creditHistory__table", table.table)}>
+          <thead>
+            <tr>
+              {["When", "Type", "Feature", "Credits", "Status"].map((heading) => (
+                <th key={heading} style={table.head(heading === "Credits")}>{heading}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {operations.map((operation, index) => {
+              const last = index === operations.length - 1;
+              return (
+                <tr key={operation.id} {...el("creditHistory__row")}>
+                  <td style={table.cell(false, last)}>{when(operation.occurred_at)}</td>
+                  <td style={table.cell(false, last)}>{TYPE_LABELS[operation.type] ?? operation.type}</td>
+                  <td style={table.cell(false, last)}>{operation.feature_code ?? "—"}</td>
+                  <td style={table.cell(true, last)}>{formatDecimalString(operation.credit_amount)}</td>
+                  <td style={{ ...table.cell(false, last), color: operation.status === "succeeded" ? undefined : muted }}>{operation.status}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {hasMore && onLoadMore && (
+        <button
+          type="button"
+          onClick={onLoadMore}
+          disabled={isLoading}
+          style={{
+            ...buttonStyle("secondary", isLoading),
+            marginTop: "0.75rem",
+            padding: "0.5rem 0.875rem",
+            borderRadius: buttonRadius(`calc(${T.radius} / 2)`),
+            opacity: 1,
+          }}
+        >
+          {isLoading ? "Loading…" : "Load more"}
+        </button>
+      )}
+    </div>
+  );
+}

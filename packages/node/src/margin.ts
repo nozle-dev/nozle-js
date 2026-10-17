@@ -1,15 +1,16 @@
-import { NozleApiError } from "./errors";
+import { request, type RequestPolicy } from "./http";
+import { apiError } from "./errors";
 import type { MarginQueryParams, TrendParams } from "./types";
 
 export class MarginClient {
   private readonly base: string;
   private readonly headers: Record<string, string>;
-  private readonly timeout: number;
+  private readonly policy: RequestPolicy;
 
-  constructor(baseUrl: string, apiKey: string, timeout = 10_000) {
+  constructor(baseUrl: string, apiKey: string, policy: RequestPolicy) {
     this.base = `${baseUrl}/api/v1/margin`;
     this.headers = { Authorization: `Bearer ${apiKey}` };
-    this.timeout = timeout;
+    this.policy = policy;
   }
 
   private async get<T = unknown>(path: string, params?: Record<string, string | undefined>): Promise<T> {
@@ -20,19 +21,12 @@ export class MarginClient {
       }
     }
 
-    const res = await fetch(url, {
+    const res = await request(this.policy, url, {
       headers: this.headers,
-      signal: AbortSignal.timeout(this.timeout),
     });
 
     if (!res.ok) {
-      throw new NozleApiError(
-        `margin${path}`,
-        res,
-        await Promise.resolve()
-          .then(() => res.json())
-          .catch(() => undefined),
-      );
+      throw await apiError(`margin${path}`, res);
     }
 
     return res.json();

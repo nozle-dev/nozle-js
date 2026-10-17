@@ -1,3 +1,5 @@
+import { request, type RequestPolicy } from "./http";
+import { apiError } from "./errors";
 import type {
   CreditBalance,
   CreditBalances,
@@ -15,7 +17,7 @@ export class CreditsNamespace {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-    private readonly timeout: number,
+    private readonly policy: RequestPolicy,
   ) {}
 
   async getBalance(customerId: string, creditSystemCode: string): Promise<CreditBalance> {
@@ -24,15 +26,14 @@ export class CreditsNamespace {
       throw new Error("credits.getBalance requires creditSystemCode");
     }
 
-    const response = await fetch(
+    const response = await request(this.policy, 
       `${this.baseUrl}/api/v1/customers/${encodeURIComponent(customerId)}/credit-systems/${encodeURIComponent(creditSystemCode)}/balance`,
       {
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
     if (!response.ok) {
-      throw new Error(`credits.getBalance failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`credits.getBalance`, response);
     }
     return response.json() as Promise<CreditBalance>;
   }
@@ -40,15 +41,14 @@ export class CreditsNamespace {
   async listBalances(customerId: string): Promise<CreditBalances> {
     if (!customerId.trim()) throw new Error("credits.listBalances requires customerId");
 
-    const response = await fetch(
+    const response = await request(this.policy, 
       `${this.baseUrl}/api/v1/customers/${encodeURIComponent(customerId)}/credit-systems`,
       {
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
     if (!response.ok) {
-      throw new Error(`credits.listBalances failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`credits.listBalances`, response);
     }
     return response.json() as Promise<CreditBalances>;
   }
@@ -69,12 +69,11 @@ export class CreditsNamespace {
     if (query.limit !== undefined) url.searchParams.set("limit", String(query.limit));
     if (query.cursor) url.searchParams.set("cursor", query.cursor);
 
-    const response = await fetch(url, {
+    const response = await request(this.policy, url, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`credits.listOperations failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`credits.listOperations`, response);
     }
     return response.json() as Promise<CreditOperationPage>;
   }
@@ -88,17 +87,14 @@ export class CreditsNamespace {
     if (!creditSystemCode.trim()) {
       throw new Error("credits.getEntityBalance requires creditSystemCode");
     }
-    const response = await fetch(
+    const response = await request(this.policy, 
       `${this.entityCreditBaseUrl(customerId, entityId)}/${encodeURIComponent(creditSystemCode)}/balance`,
       {
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
     if (!response.ok) {
-      throw new Error(
-        `credits.getEntityBalance failed: ${response.status} ${response.statusText}`,
-      );
+      throw await apiError(`credits.getEntityBalance`, response);
     }
     return response.json() as Promise<EntityCreditBalance>;
   }
@@ -108,14 +104,11 @@ export class CreditsNamespace {
     entityId: string,
   ): Promise<EntityCreditBalances> {
     validateEntityCreditPath(customerId, entityId, "credits.listEntityBalances");
-    const response = await fetch(this.entityCreditBaseUrl(customerId, entityId), {
+    const response = await request(this.policy, this.entityCreditBaseUrl(customerId, entityId), {
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(
-        `credits.listEntityBalances failed: ${response.status} ${response.statusText}`,
-      );
+      throw await apiError(`credits.listEntityBalances`, response);
     }
     return response.json() as Promise<EntityCreditBalances>;
   }
@@ -133,14 +126,11 @@ export class CreditsNamespace {
     if (query.creditSystemCode) url.searchParams.set("credit_system_code", query.creditSystemCode);
     if (query.limit !== undefined) url.searchParams.set("limit", String(query.limit));
     if (query.cursor) url.searchParams.set("cursor", query.cursor);
-    const response = await fetch(url, {
+    const response = await request(this.policy, url, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(
-        `credits.listEntityOperations failed: ${response.status} ${response.statusText}`,
-      );
+      throw await apiError(`credits.listEntityOperations`, response);
     }
     return response.json() as Promise<EntityCreditOperationPage>;
   }
@@ -175,7 +165,7 @@ export class CreditsNamespace {
     validateTransferParams(params, `credits.${operation}`);
     validateIdempotencyKey(options, `credits.${operation}`);
     const suffix = operation === "allocate" ? "credit-allocations" : "credit-deallocations";
-    const response = await fetch(
+    const response = await request(this.policy, 
       `${this.baseUrl}/api/v1/customers/${encodeURIComponent(customerId)}/entities/${encodeURIComponent(entityId)}/${suffix}`,
       {
         method: "POST",
@@ -188,11 +178,10 @@ export class CreditsNamespace {
           credit_system: params.creditSystemCode,
           amount: params.amount,
         }),
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
     if (!response.ok) {
-      throw new Error(`credits.${operation} failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`credits.${operation}`, response);
     }
     return response.json() as Promise<EntityCreditTransferResult>;
   }

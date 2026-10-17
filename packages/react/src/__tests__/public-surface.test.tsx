@@ -105,7 +105,7 @@ describe("public presentation components", () => {
     rerender(<UsageMeter used={0} limit={0} label="Empty" />);
     expect(container.innerHTML).not.toContain("NaN");
     rerender(<UsageDashboard loading />);
-    expect(container.querySelector(".animate-pulse")).toBeTruthy();
+    expect(container.querySelector(".nozle-usageDashboard[aria-busy=\"true\"]")).toBeTruthy();
     rerender(
       <UsageDashboard
         features={[{ key: "api", label: "API", used: 5, limit: 10 }]}
@@ -156,27 +156,30 @@ describe("public presentation components", () => {
     rerender(<PlanBadge plan="Enterprise" tier="enterprise" />);
     expect(screen.getByText("Enterprise")).toBeTruthy();
   });
-  it("compares included, excluded, numeric and missing feature values", () => {
+  it("compares what each catalog plan gives", () => {
+    const base = { amount_currency: "USD", interval: "monthly" };
     render(
       <PlanComparison
         plans={[
-          { id: "free", name: "Free", price: 0, interval: "month" },
-          { id: "pro", name: "Pro", price: 10, interval: "month" },
-        ]}
-        features={[
-          { key: "seats", label: "Seats", values: { free: "1", pro: "10" } },
+          { ...base, code: "free", name: "Free", amount_cents: 0, entitlements: [{ feature_type: "metered", code: "seats", name: "Seats", usage_limit: 1 }] },
           {
-            key: "reports",
-            label: "Reports",
-            values: { free: false, pro: true },
+            ...base,
+            code: "pro",
+            name: "Pro",
+            amount_cents: 1000,
+            entitlements: [
+              { feature_type: "metered", code: "seats", name: "Seats", usage_limit: 10 },
+              { feature_type: "boolean", code: "reports", name: "Reports" },
+            ],
           },
-          { key: "extra", label: "Extra", values: {} },
         ]}
       />,
     );
+    expect(screen.getByText("1")).toBeTruthy();
+    expect(screen.getByText("10")).toBeTruthy();
     expect(screen.getByLabelText("Included")).toBeTruthy();
     expect(screen.getByLabelText("Not included")).toBeTruthy();
-    expect(screen.getAllByText("—")).toHaveLength(2);
+    expect(screen.getByText("$10 / month")).toBeTruthy();
   });
 });
 

@@ -31,14 +31,20 @@ export type {
 
 /** @nozle-js/react — public catalog and merchant-BFF checkout components. */
 
+export { useAppearance } from "./appearance/context.js";
+export type { UseAppearance, ElementProps } from "./appearance/context.js";
+export type { Appearance, Elements, ElementKey, Theme, Variables } from "./appearance/tokens.js";
+
 export {
   BillingProvider,
   BillingContext,
   useBillingContext,
   useOptionalBillingContext,
   useNozleClient,
+  BillingRequestError,
 } from "./provider.js";
 export type {
+  BillingFetch,
   BillingContextValue,
   BillingProviderProps,
   CheckoutResult,
@@ -51,6 +57,25 @@ export type {
 } from "./provider.js";
 
 export { usePlans } from "./hooks/use-plans.js";
+export { PoweredByNozle, useNozleBranding } from "./components/branding/PoweredByNozle.js";
+export {
+  useSubscription,
+  useEntitlement,
+  useCreditBalance,
+  useCreditHistory,
+  useUsage,
+  useUpgradePreview,
+  useBillingRefresh,
+  useInvoices,
+  useInvoiceDownload,
+} from "./hooks/use-billing.js";
+export type {
+  BillingSubscription,
+  EntitlementResult,
+  InvoiceData,
+  InvoicePageData,
+  UpgradePreview,
+} from "./hooks/use-billing.js";
 export type { Plan as CatalogPlan } from "./hooks/use-plans.js";
 
 export { useCheckout as useCheckoutSession } from "./hooks/use-checkout.js";
@@ -62,14 +87,24 @@ export type {
   PricingPlan,
 } from "./components/pricing/PricingTable.js";
 
+export { planFeatures } from "./components/pricing/plan-features.js";
+export type {
+  CatalogCharge,
+  CatalogCreditGrantRule,
+  CatalogEntitlement,
+  CatalogPrivilege,
+} from "./components/pricing/plan-features.js";
+
 export { PlanCard } from "./components/pricing/PlanCard.js";
-export type { Plan, PlanCardProps } from "./components/pricing/PlanCard.js";
+export type { PlanCardProps } from "./components/pricing/PlanCard.js";
 
 export { PlanComparison } from "./components/pricing/PlanComparison.js";
 export type {
   ComparisonFeature,
   PlanComparisonProps,
 } from "./components/pricing/PlanComparison.js";
+export { comparisonRows, sortPlansByPrice } from "./components/pricing/plan-features.js";
+export type { ComparisonRow } from "./components/pricing/plan-features.js";
 
 export { CheckoutButton } from "./components/billing/CheckoutButton.js";
 export type { CheckoutButtonProps } from "./components/billing/CheckoutButton.js";
@@ -110,10 +145,11 @@ export {
 } from "./components/usage/UsageMeter.js";
 export type { UsageMeterProps } from "./components/usage/UsageMeter.js";
 
-export { UsageDashboard } from "./components/usage/UsageDashboard.js";
+export { UsageDashboard, usageItems } from "./components/usage/UsageDashboard.js";
 export type {
   UsageDashboardProps,
   UsageDashboardFeature,
+  UsageResult,
 } from "./components/usage/UsageDashboard.js";
 
 export { UsageAlert } from "./components/usage/UsageAlert.js";
@@ -121,6 +157,9 @@ export type {
   UsageAlertProps,
   UsageAlertFeature,
 } from "./components/usage/UsageAlert.js";
+
+export { CurrentPlan, currentPlanMeters } from "./components/billing/CurrentPlan.js";
+export type { CurrentPlanProps, CurrentPlanDetail } from "./components/billing/CurrentPlan.js";
 
 export { PlanBadge } from "./components/billing/PlanBadge.js";
 export type { PlanBadgeProps } from "./components/billing/PlanBadge.js";
@@ -140,3 +179,23 @@ export type {
   VerifyCheckout,
   GetCheckoutStatus,
 } from "./provider.js";
+
+export { CreditBalance } from "./components/credits/CreditBalance.js";
+export type {
+  CreditBalanceData,
+  CreditBalanceProps,
+  CreditBalanceSource,
+} from "./components/credits/CreditBalance.js";
+
+export { CreditHistory } from "./components/credits/CreditHistory.js";
+export type {
+  CreditHistoryProps,
+  CreditOperationData,
+} from "./components/credits/CreditHistory.js";
+
+export { UsageBreakdown } from "./components/usage/UsageBreakdown.js";
+export type { UsageBreakdownProps } from "./components/usage/UsageBreakdown.js";
+
+export { UsageTrend } from "./components/usage/UsageTrend.js";
+export type { UsageTrendProps } from "./components/usage/UsageTrend.js";
+export type { ChargeUsageData, CustomerUsageData } from "./components/usage/usage-data.js";

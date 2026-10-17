@@ -1,3 +1,5 @@
+import { request, type RequestPolicy } from "./http";
+import { apiError } from "./errors";
 import type { CreditSystem } from "./types";
 
 interface CoreCreditSystem {
@@ -20,7 +22,7 @@ export class CreditSystemsNamespace {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-    private readonly timeout: number,
+    private readonly policy: RequestPolicy,
   ) {}
 
   async list(): Promise<CreditSystem[]> {
@@ -33,12 +35,11 @@ export class CreditSystemsNamespace {
       url.searchParams.set("page", String(page));
       url.searchParams.set("per_page", "100");
 
-      const response = await fetch(url, {
+      const response = await request(this.policy, url, {
         headers: { Authorization: `Bearer ${this.apiKey}` },
-        signal: AbortSignal.timeout(this.timeout),
       });
       if (!response.ok) {
-        throw new Error(`creditSystems.list failed: ${response.status} ${response.statusText}`);
+        throw await apiError(`creditSystems.list`, response);
       }
       const data = (await response.json()) as CoreCreditSystemPage;
       systems.push(...(data.credit_systems ?? []).map(normalizeCreditSystem));

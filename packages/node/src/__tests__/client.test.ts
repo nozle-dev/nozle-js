@@ -27,6 +27,36 @@ describe("Nozle", () => {
     expect(client.eventsUrl).toBe("https://api.nozle.app/core");
   });
 
+  it("reads the key from NOZLE_SECRET_KEY and lets an explicit key win", () => {
+    vi.stubEnv("NOZLE_SECRET_KEY", "sk_env");
+    expect(new Nozle().apiKey).toBe("sk_env");
+    expect(new Nozle({ baseUrl: "https://e.example" }).apiKey).toBe("sk_env");
+    expect(new Nozle({ apiKey: "sk_explicit" }).apiKey).toBe("sk_explicit");
+    vi.unstubAllEnvs();
+  });
+
+  it("throws when no key is passed and NOZLE_SECRET_KEY is unset", () => {
+    vi.stubEnv("NOZLE_SECRET_KEY", undefined);
+    expect(() => new Nozle()).toThrow("NOZLE_SECRET_KEY");
+    vi.unstubAllEnvs();
+  });
+
+  it("derives both service URLs from host", () => {
+    const client = new Nozle({ apiKey: "sk_test", host: "http://localhost:8888//" });
+    expect(client.baseUrl).toBe("http://localhost:8888/engine");
+    expect(client.eventsUrl).toBe("http://localhost:8888/core");
+  });
+
+  it("lets baseUrl and eventsUrl override the host", () => {
+    const client = new Nozle({
+      apiKey: "sk_test",
+      host: "http://localhost:8888",
+      baseUrl: "https://engine.example",
+    });
+    expect(client.baseUrl).toBe("https://engine.example");
+    expect(client.eventsUrl).toBe("http://localhost:8888/core");
+  });
+
   it("strips trailing slashes", () => {
     const client = new Nozle({
       apiKey: "sk_test",
@@ -872,6 +902,32 @@ describe("Nozle", () => {
         properties: { model: "gpt-5" },
         occurred_at: "2026-07-20T12:00:00.750Z",
       });
+    });
+
+    it("reuses the generated timestamp when the same idempotency key is retried", async () => {
+      vi.useFakeTimers();
+      try {
+        fetchMock.mockImplementation(async () => jsonResponse({ allowed: true, operation_id: "op", remaining: "1" }));
+        const client = new Nozle({ apiKey: "sk_test" });
+        const params = { customerId: "acme", featureCode: "emails" };
+
+        vi.setSystemTime(new Date("2026-10-15T10:00:00.000Z"));
+        await client.usage.track(params, { idempotencyKey: "k1" });
+        vi.setSystemTime(new Date("2026-10-15T10:00:05.000Z"));
+        await client.usage.track(params, { idempotencyKey: "k1" });
+        await client.usage.track(params, { idempotencyKey: "k2" });
+        await client.usage.track({ ...params, timestamp: "2026-01-01T00:00:00Z" }, { idempotencyKey: "k3" });
+
+        const stamps = fetchMock.mock.calls.map(([, options]) => JSON.parse(options.body).timestamp);
+        expect(stamps).toEqual([
+          "2026-10-15T10:00:00.000Z",
+          "2026-10-15T10:00:00.000Z",
+          "2026-10-15T10:00:05.000Z",
+          "2026-01-01T00:00:00Z",
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("tracks atomically with the caller's idempotency key and millisecond timestamp", async () => {

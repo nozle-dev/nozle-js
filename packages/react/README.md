@@ -13,8 +13,10 @@ React components for Nozle's public catalog, checkout, and customer billing port
 ## Install
 
 ```bash
-npm install @nozle-js/react@0.10.2 react react-dom @stripe/stripe-js @stripe/react-stripe-js
+npm install @nozle-js/react@0.11.0 @tanstack/react-query react react-dom @stripe/stripe-js @stripe/react-stripe-js
 ```
+
+The billing hooks (`useSubscription`, `useUsage`, `useInvoices` and the others) read your backend through `BillingProvider billingEndpoint`, served by `createBillingHandler` from `@nozle-js/node`; see [Hooks](https://docs.nozle.dev/sdks/react/hooks). Components need no Tailwind or host CSS. Style them with `appearance` on `BillingProvider` or on a component, using a theme from `@nozle-js/react/themes`, your own variables and per-element overrides; see [Styling](https://docs.nozle.dev/sdks/react/styling).
 
 ## Merchant-backed checkout
 

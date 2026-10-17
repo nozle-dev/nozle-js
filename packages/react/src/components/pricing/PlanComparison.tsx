@@ -1,130 +1,82 @@
 /**
  * PlanComparison — Side-by-side feature comparison table.
  * UI-01: Renders shadcn-style table with plan names as headers and features as rows.
- * Check/cross icons for boolean values. Uses CSS variable theming.
+ * Check/cross icons for boolean values. Themed through `appearance`.
  */
 
 "use client";
 import React from "react";
 
-import type { Plan } from "./PlanCard.js";
+import type { PricingPlan } from "./PricingTable.js";
+import {
+  comparisonRows,
+  formatPlanPrice,
+  intervalLabel,
+  sortPlansByPrice,
+  type ComparisonRow,
+} from "./plan-features.js";
+import { useAppearance } from "../../appearance/context.js";
+import { NozleBranding } from "../branding/PoweredByNozle.js";
+import { T, table, text, type Appearance } from "../../appearance/tokens.js";
 
-export interface ComparisonFeature {
-  key: string;
-  label: string;
-  values: Record<string, string | boolean>;
-}
+export type ComparisonFeature = ComparisonRow;
 
 export interface PlanComparisonProps {
-  plans: Plan[];
-  features: ComparisonFeature[];
+  /** Plans from the public catalog. The rows are built from their entitlements and credit grants. */
+  plans: PricingPlan[];
+  /** Optional. Replaces the rows built from the plans. `values` is keyed by plan code. */
+  features?: ComparisonFeature[];
+  /** Optional. Orders the plans. By default they are sorted by base price, cheapest first. */
+  sort?: (a: PricingPlan, b: PricingPlan) => number;
+  appearance?: Appearance;
 }
 
 /**
- * PlanComparison renders a side-by-side feature comparison table.
- *
- * Usage:
- * ```tsx
- * <PlanComparison
- *   plans={plans}
- *   features={[
- *     { key: 'api_calls', label: 'API Calls', values: { starter: '10K', pro: '100K' } },
- *     { key: 'analytics', label: 'Analytics', values: { starter: false, pro: true } },
- *   ]}
- * />
- * ```
+ * PlanComparison renders a side-by-side comparison of catalog plans. A plan that does not have an
+ * entitlement shows a cross, so the table shows the real difference between plans.
  */
 export function PlanComparison({
-  plans,
-  features,
+  plans: catalogPlans,
+  features: featureOverride,
+  sort,
+  appearance,
 }: PlanComparisonProps): React.ReactElement {
+  const { root, el } = useAppearance(appearance);
+  const plans = sort ? [...catalogPlans].sort(sort) : sortPlansByPrice(catalogPlans);
+  const features = featureOverride ?? comparisonRows(plans);
+  const cell = (style: React.CSSProperties) => el("planComparison__cell", style);
   return (
-    <div
-      style={{
-        overflowX: "auto",
-        background: "var(--nozle-background, var(--background))",
-      }}
-    >
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          fontSize: "0.875rem",
-          color: "var(--nozle-foreground, var(--foreground))",
-        }}
-      >
+    <div {...root("planComparison", { minWidth: 0 })}>
+    <div style={table.frame}>
+      <table {...el("planComparison__table", table.table)}>
         <thead>
           <tr>
-            <th
-              style={{
-                padding: "0.75rem 1rem",
-                textAlign: "left",
-                borderBottom: "1px solid var(--nozle-border, var(--border))",
-                color:
-                  "var(--nozle-muted-foreground, var(--muted-foreground))",
-                fontWeight: 500,
-              }}
-            >
-              Feature
-            </th>
+            <th {...cell(table.head())}>Feature</th>
             {plans.map((plan) => (
-              <th
-                key={plan.id}
-                style={{
-                  padding: "0.75rem 1rem",
-                  textAlign: "center",
-                  borderBottom: "1px solid var(--nozle-border, var(--border))",
-                  fontWeight: 600,
-                  color: "var(--nozle-foreground, var(--foreground))",
-                }}
-              >
+              <th key={plan.code} {...cell({ ...table.head(), textAlign: "center", padding: "10px 20px" })}>
                 {plan.name}
+                <div style={{ ...text.meta, letterSpacing: "normal", textTransform: "none" }}>
+                  {formatPlanPrice(plan.amount_cents, plan.amount_currency)} / {intervalLabel(plan.interval)}
+                </div>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {features.map((feature) => (
-            <tr key={feature.key}>
-              <td
-                style={{
-                  padding: "0.75rem 1rem",
-                  borderBottom: "1px solid var(--nozle-border, var(--border))",
-                  color: "var(--nozle-foreground, var(--foreground))",
-                }}
-              >
-                {feature.label}
-              </td>
+          {features.map((feature, index) => (
+            <tr key={feature.key} {...el("planComparison__row")}>
+              <td {...cell(table.cell(false, index === features.length - 1))}>{feature.label}</td>
               {plans.map((plan) => {
-                const value = feature.values[plan.id];
+                const value = feature.values[plan.code];
                 return (
-                  <td
-                    key={plan.id}
-                    style={{
-                      padding: "0.75rem 1rem",
-                      textAlign: "center",
-                      borderBottom:
-                        "1px solid var(--nozle-border, var(--border))",
-                    }}
-                  >
+                  <td key={plan.code} {...cell({ ...table.cell(false, index === features.length - 1), textAlign: "center" })}>
                     {typeof value === "boolean" ? (
                       value ? (
-                        <span
-                          style={{
-                            color: "var(--nozle-primary, var(--primary))",
-                          }}
-                          aria-label="Included"
-                        >
+                        <span style={{ color: T.primary }} aria-label="Included">
                           ✓
                         </span>
                       ) : (
-                        <span
-                          style={{
-                            color:
-                              "var(--nozle-muted-foreground, var(--muted-foreground))",
-                          }}
-                          aria-label="Not included"
-                        >
+                        <span style={{ color: T.mutedForeground }} aria-label="Not included">
                           ✕
                         </span>
                       )
@@ -138,6 +90,8 @@ export function PlanComparison({
           ))}
         </tbody>
       </table>
+    </div>
+    <NozleBranding />
     </div>
   );
 }

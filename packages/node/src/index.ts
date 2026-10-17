@@ -9,11 +9,21 @@ export { CreditsNamespace } from "./credits";
 export { EntitiesNamespace } from "./entities";
 export { EntitySubscriptionsNamespace } from "./entity-subscriptions";
 export { UsageNamespace } from "./usage";
+export { WebhooksNamespace, WebhookVerificationError, createWebhookHandler } from "./webhooks";
+export { InvoicesNamespace } from "./invoices";
+export { AlertsNamespace } from "./alerts";
+export type { Alert, AlertTarget, AlertThreshold, AlertType, CreateAlertInput, UpdateAlertInput } from "./alerts";
+export type { Invoice, InvoicePage, ListInvoicesOptions } from "./invoices";
+export type { NozleWebhookEvent, VerifyWebhookInput, WebhookHandlerOptions, WebhookHeaders, WebhookVerificationCode } from "./webhooks";
 export { wrapOpenAI } from "./wrap-openai";
 export type { WrapOptions } from "./wrap-openai";
 export { wrapAnthropic } from "./wrap-anthropic";
-export { normalizeOpenAIUsage, normalizeAnthropicUsage } from "./provider-usage";
-export type { ProviderTokenType, ProviderTokenUsage } from "./provider-usage";
+export { normalizeOpenAIUsage, normalizeAnthropicUsage, normalizeGeminiUsage, detectUsage } from "./provider-usage";
+export type { ProviderTokenType, ProviderTokenUsage, ProviderUsageFormat, DetectedUsage, RecordUsageParams } from "./provider-usage";
+export { captureFetch } from "./capture-fetch";
+export { createBillingHandler, BILLING_ROUTES } from "./billing-handler";
+export type { BillingHandlerOptions } from "./billing-handler";
+export type { CaptureFetchOptions, CaptureRequest } from "./capture-fetch";
 export type {
   NozleConfig,
   TrackOptions,
@@ -95,4 +105,6 @@ export type {
   UsageDeduction,
   UsageCheckResult,
   UsageTrackResult,
+  CoreSubscription,
+  CustomerUsage,
 } from "./types";

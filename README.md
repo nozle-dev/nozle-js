@@ -4,14 +4,14 @@ This monorepo contains the Nozle SDK for Node.js backends and the React package 
 
 | Package | Current release | Use it for |
 | --- | --- | --- |
-| [`@nozle-js/node`](packages/node/README.md) | `0.10.0` | Billing, subscriptions, credits, usage and Cost Events, entitlements, margins, and OpenAI/Anthropic capture |
-| [`@nozle-js/react`](packages/react/README.md) | `0.10.2` | Public catalog, checkout UI, billing portal, and customer-facing controls |
+| [`@nozle-js/node`](packages/node/README.md) | `0.13.0` | Billing, subscriptions, credits, usage and Cost Events, entitlements, margins, invoices, alerts, webhooks, and LLM usage capture |
+| [`@nozle-js/react`](packages/react/README.md) | `0.11.0` | Public catalog, checkout UI, billing portal, billing hooks, and customer-facing controls |
 
 ## Install
 
 ```bash
-npm install @nozle-js/node@0.10.0
-npm install @nozle-js/react@0.10.2 react react-dom @stripe/stripe-js @stripe/react-stripe-js
+npm install @nozle-js/node@0.13.0
+npm install @nozle-js/react@0.11.0 @tanstack/react-query react react-dom @stripe/stripe-js @stripe/react-stripe-js
 ```
 
 Install only the package your application needs. The React package runs in the browser; all customer-scoped writes and reads that need a secret key belong on your backend.
@@ -34,7 +34,7 @@ if (allowed) {
 }
 ```
 
-Set `NOZLE_SECRET_KEY` to an `sk_` key in your server environment. The default Engine and Core URLs are `https://api.nozle.app/engine` and `https://api.nozle.app/core`; override `baseUrl` and `eventsUrl` in the `Nozle` constructor for a local stack. See the [Node package guide](packages/node/README.md) for checkout, credits, subscriptions, Cost Events, and provider wrappers.
+Set `NOZLE_SECRET_KEY` to an `sk_` key in your server environment. The default Engine and Core URLs are `https://api.nozle.app/engine` and `https://api.nozle.app/core`; set `host`, or override `baseUrl` and `eventsUrl`, in the `Nozle` constructor for a local stack. See the [Node package guide](packages/node/README.md) for checkout, credits, subscriptions, Cost Events, and provider wrappers.
 
 ## React checkout
 
@@ -79,8 +79,8 @@ See the [React package guide](packages/react/README.md) for the complete callbac
 - [Changelog](CHANGELOG.md)
 - [Release process](RELEASING.md)
 
-Node `0.10.0` reads `nozle_id` for credit systems (breaking against servers that still send the old key), adds `NozleApiError`, and documents Stripe and Razorpay checkout. React `0.10.2` adds checkout result types and documents the same checkout flows. See each package guide for the full API and the changelog for release history.
+Node `0.13.0` adds `captureFetch` and `recordUsage` for any LLM client, `createBillingHandler` for the React billing hooks, webhook verification, invoices, alerts and opt-in retries, and throws `NozleApiError` on every failed call. React `0.11.0` adds billing hooks on TanStack Query, the `appearance` API with predefined themes, `CurrentPlan`, credit and usage components, and pricing components that read the catalog; it has breaking changes to styling and to `PlanCard` and `PlanComparison` props. See each package guide for the full API and the changelog for release history.
 
 ## License
 
-The Node package is licensed under [MIT](packages/node/LICENSE). The React package is proprietary and is not covered by the Node package's MIT license. Contact Nozle about React licensing.
+Both packages are licensed under MIT: see [packages/node/LICENSE](packages/node/LICENSE) and [packages/react/LICENSE](packages/react/LICENSE).

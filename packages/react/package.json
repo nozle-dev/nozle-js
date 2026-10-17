@@ -1,6 +1,6 @@
 {
   "name": "@nozle-js/react",
-  "version": "0.10.2",
+  "version": "0.11.0",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -25,18 +25,28 @@
         "types": "./dist/styles/preset.d.cts",
         "default": "./dist/styles/preset.cjs"
       }
+    },
+    "./themes": {
+      "import": {
+        "types": "./dist/themes.d.ts",
+        "default": "./dist/themes.js"
+      },
+      "require": {
+        "types": "./dist/themes.d.cts",
+        "default": "./dist/themes.cjs"
+      }
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/check-use-client.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
   "devDependencies": {
+    "@tanstack/react-query": "^5.101.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
@@ -45,18 +55,24 @@
     "react-dom": "^19.2.6",
     "tsup": "^8.4.0",
     "typescript": "^5.8.0",
-    "vitest": "^3.1.0"
+    "vitest": "^4.1.12"
   },
   "peerDependencies": {
     "@stripe/react-stripe-js": ">=3.0.0",
     "@stripe/stripe-js": ">=5.0.0",
     "react": ">=18.0.0",
-    "react-dom": ">=18.0.0"
+    "react-dom": ">=18.0.0",
+    "@tanstack/react-query": ">=5.0.0"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nozle-dev/nozle-js.git",
     "directory": "packages/react"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "overrides": {
+    "esbuild": "^0.28.2",
+    "postcss": "^8.5.23",
+    "source-map-js": "^1.2.2"
+  }
 }

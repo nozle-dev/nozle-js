@@ -1,3 +1,5 @@
+import { request, type RequestPolicy } from "./http";
+import { apiError } from "./errors";
 import type {
   CustomerEntity,
   CustomerEntityBulkMutationResult,
@@ -13,17 +15,16 @@ export class EntitiesNamespace {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
-    private readonly timeout: number,
+    private readonly policy: RequestPolicy,
   ) {}
 
   async get(customerId: string, entityId: string): Promise<CustomerEntity> {
     validateEntityPath(customerId, entityId, "entities.get");
-    const response = await fetch(this.entityUrl(customerId, entityId), {
+    const response = await request(this.policy, this.entityUrl(customerId, entityId), {
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`entities.get failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`entities.get`, response);
     }
     const payload = (await response.json()) as { entity: CustomerEntity };
     return payload.entity;
@@ -46,12 +47,11 @@ export class EntitiesNamespace {
     if (query.limit !== undefined) url.searchParams.set("limit", String(query.limit));
     if (query.cursor) url.searchParams.set("cursor", query.cursor);
 
-    const response = await fetch(url, {
+    const response = await request(this.policy, url, {
       headers: { Authorization: `Bearer ${this.apiKey}` },
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`entities.list failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`entities.list`, response);
     }
     return response.json() as Promise<CustomerEntityPage>;
   }
@@ -67,7 +67,7 @@ export class EntitiesNamespace {
     validateMutationOptions(options, "entities.upsert");
     validateEntityData(data, "entities.upsert");
 
-    const response = await fetch(this.entityUrl(customerId, entityId), {
+    const response = await request(this.policy, this.entityUrl(customerId, entityId), {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
@@ -79,10 +79,9 @@ export class EntitiesNamespace {
         status: data.status,
         metadata: data.metadata ?? {},
       }),
-      signal: AbortSignal.timeout(this.timeout),
     });
     if (!response.ok) {
-      throw new Error(`entities.upsert failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`entities.upsert`, response);
     }
     return response.json() as Promise<CustomerEntityMutationResult>;
   }
@@ -160,7 +159,7 @@ export class EntitiesNamespace {
       };
     });
 
-    const response = await fetch(
+    const response = await request(this.policy, 
       `${this.baseUrl}/api/v1/customers/${encodeURIComponent(customerId)}/entities/bulk-upsert`,
       {
         method: "POST",
@@ -170,11 +169,10 @@ export class EntitiesNamespace {
           "Idempotency-Key": options.idempotencyKey,
         },
         body: JSON.stringify({ entities: body }),
-        signal: AbortSignal.timeout(this.timeout),
       },
     );
     if (!response.ok) {
-      throw new Error(`entities.bulkUpsert failed: ${response.status} ${response.statusText}`);
+      throw await apiError(`entities.bulkUpsert`, response);
     }
     return response.json() as Promise<CustomerEntityBulkMutationResult>;
   }
