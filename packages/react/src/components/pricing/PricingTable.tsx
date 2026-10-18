@@ -21,8 +21,9 @@ import {
   type PricingIntervalOption,
   type PricingPlan,
 } from './catalog.js';
-import { useAppearance, type UseAppearance } from '../../appearance/context.js';
+import { useAppearance, useSavedPricingTable, type UseAppearance } from '../../appearance/context.js';
 import { PanelPlanCard } from './PanelPlanCard.js';
+import { currentButtonStyle, planButtonState } from './button-state.js';
 import { NozleBranding } from '../branding/PoweredByNozle.js';
 import { useQuery } from '@tanstack/react-query';
 import { catalogQuery, idleQueryClient } from '../../hooks/use-plans.js';
@@ -197,7 +198,7 @@ interface CardProps {
   onSelect?: () => void;
   el: UseAppearance['el'];
   panel: boolean;
-  /** Costs more per year than the current plan; undefined when there is no current plan to compare with. */
+  /** Costs more per year than the current plan; undefined when there is no current plan to compare with (every plan then gets the primary button). */
   isUpgrade?: boolean;
 }
 
@@ -239,15 +240,13 @@ function Card({
     ? 'Contact Sales'
     : card.cta;
 
-  // Plans above the current one get the primary button; the current plan and cheaper ones the plain one.
-  // Without a current plan, only the highlighted plan does.
-  const emphasised = isUpgrade ?? isHighlighted;
+  const state = planButtonState({ isCurrent, isUpgrade });
   const cta = onSelect && (
     <CTAButton
       onClick={handleClick}
       disabled={isCurrent}
       variant={
-        isCurrent ? 'current' : isEnt ? 'outline' : !emphasised ? 'secondary' : filled ? 'inverse' : isHighlighted ? 'highlight' : 'primary'
+        state === 'current' ? 'current' : isEnt ? 'outline' : state === 'secondary' ? 'secondary' : filled ? 'inverse' : isHighlighted ? 'highlight' : 'primary'
       }
       el={el}
     >
@@ -445,7 +444,7 @@ function CTAButton({
   const [hover, setHover] = useState(false);
   const look =
     variant === 'current'
-      ? { ...buttonStyle('secondary'), background: T.muted, color: T.mutedForeground, cursor: 'default' }
+      ? currentButtonStyle
       : variant === 'highlight'
         ? { ...buttonStyle('primary'), background: T.highlight, color: T.highlightForeground, border: primaryButtonBorder(T.highlight) }
         : variant === 'inverse'
@@ -510,19 +509,25 @@ export function PricingTable({
   onStripeClientSecret,
   onCheckoutResult,
   onCheckoutError,
-  showToggle = true,
+  showToggle: showToggleProp,
   defaultInterval,
   highlightPlan,
-  highlightStyle = 'outline',
-  highlightLabel,
+  highlightStyle: highlightStyleProp,
+  highlightLabel: highlightLabelProp,
   className,
   contactSalesPlans,
   enterpriseEmail,
-  annualDiscountLabel,
+  annualDiscountLabel: annualDiscountLabelProp,
   locale: localeProp,
   appearance,
 }: PricingTableProps): React.ReactElement {
   const { root, el, planCardLayout } = useAppearance(appearance);
+  // Options saved in the dashboard are the defaults; props win.
+  const saved = useSavedPricingTable();
+  const showToggle = showToggleProp ?? saved?.showToggle ?? true;
+  const highlightStyle = highlightStyleProp ?? saved?.highlightStyle ?? 'outline';
+  const highlightLabel = highlightLabelProp !== undefined ? highlightLabelProp : saved?.highlightLabel === '' ? null : saved?.highlightLabel;
+  const annualDiscountLabel = annualDiscountLabelProp ?? saved?.annualDiscountLabel;
   // A malformed tag (e.g. "en_US") falls back to en-US instead of throwing
   // during render or turning every price into "Amount unavailable".
   const locale = resolvePricingLocale(localeProp);

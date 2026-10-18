@@ -1,5 +1,6 @@
 import { QueryClient, useQuery } from "@tanstack/react-query";
 import { useBillingContext, type NozleClient } from "../provider.js";
+import { sanitizeSavedAppearance } from "../appearance/saved.js";
 import type {
   PricingFamily,
   PricingPlan,
@@ -16,7 +17,7 @@ export const idleQueryClient = new QueryClient();
 
 /**
  * One request for the catalog: the plans, the plan families (null when the API returns no `families`
- * key) and whether the components show "Powered by Nozle".
+ * key), whether the components show "Powered by Nozle" and the appearance saved in the dashboard.
  */
 export function catalogQuery(client: NozleClient | undefined) {
   return {
@@ -27,12 +28,13 @@ export function catalogQuery(client: NozleClient | undefined) {
       const data = (await response.json()) as {
         plans?: Plan[];
         families?: PricingFamily[] | null;
-        meta?: { nozle_branding?: boolean };
+        meta?: { nozle_branding?: boolean; sdk_appearance?: unknown };
       };
       return {
         plans: data.plans ?? [],
         families: Array.isArray(data.families) ? data.families : null,
         nozleBranding: data.meta?.nozle_branding === true,
+        saved: sanitizeSavedAppearance(data.meta?.sdk_appearance),
       };
     },
     staleTime: 5 * 60_000,

@@ -7,7 +7,8 @@ import React, {
   useState,
   type ReactNode,
 } from "react";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, useQuery } from "@tanstack/react-query";
+import { catalogQuery } from "./hooks/use-plans.js";
 import { AppearanceProvider } from "./appearance/context.js";
 import type { Appearance } from "./appearance/tokens.js";
 
@@ -282,6 +283,13 @@ export interface BillingProviderProps {
    * variables, and per-element class names or styles. A component's own `appearance` goes on top.
    */
   appearance?: Appearance;
+  /**
+   * Apply the theme, colours and pricing table options saved in the Nozle dashboard (Developers >
+   * Customize SDK). They are the lowest layer: `appearance` here and on a component win. The
+   * provider reads them from the plan catalog request that `PricingTable` shares. Pass `false` to
+   * never fetch or apply them. Default true.
+   */
+  savedAppearance?: boolean;
   children: ReactNode;
 }
 
@@ -295,6 +303,7 @@ export function BillingProvider({
   billingHeaders,
   queryClient,
   appearance,
+  savedAppearance = true,
   children,
 }: BillingProviderProps): React.ReactElement {
   if (!publishableKey.startsWith("pk_")) {
@@ -326,10 +335,22 @@ export function BillingProvider({
     [client, createCheckout, verifyCheckout, getCheckoutStatus, activeQueryClient, billingFetch, billingEndpoint],
   );
 
+  // Same cache entry as PricingTable and usePlans, so one request. A failure leaves it unset.
+  const catalog = useQuery(
+    { ...catalogQuery(client), enabled: savedAppearance },
+    activeQueryClient,
+  );
+  const saved = savedAppearance ? catalog.data?.saved : undefined;
+
   return React.createElement(
     BillingContext.Provider,
     { value: contextValue },
-    React.createElement(AppearanceProvider, { appearance, children }),
+    React.createElement(AppearanceProvider, {
+      saved: saved?.appearance,
+      savedPricingTable: saved?.pricingTable,
+      appearance,
+      children,
+    }),
   );
 }
 
