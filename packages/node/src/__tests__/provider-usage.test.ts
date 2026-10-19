@@ -69,12 +69,12 @@ describe("provider wrappers", () => {
       chat: { completions: { create: vi.fn(async () => response) } },
     };
 
-    wrapOpenAI(provider, nozle as any, {
+    const wrapped = wrapOpenAI(provider, nozle as any, {
       customerId: "customer_1",
       metricCode: "copilot_action",
       costMeterCode: "ai_tokens",
     });
-    expect(await provider.chat.completions.create()).toBe(response);
+    expect(await wrapped.chat.completions.create()).toBe(response);
 
     await vi.waitFor(() => expect(nozle.costEvents.track).toHaveBeenCalledTimes(3));
     expect(nozle.track).toHaveBeenCalledWith(
@@ -113,12 +113,12 @@ describe("provider wrappers", () => {
     const create = vi.fn(async () => responseStream());
     const provider = { chat: { completions: { create } } };
 
-    wrapOpenAI(provider, nozle as any, {
+    const wrapped = wrapOpenAI(provider, nozle as any, {
       customerId: "customer_1",
       metricCode: "copilot_action",
       costMeterCode: "ai_tokens",
     });
-    const stream = await provider.chat.completions.create({ model: "gpt-test", stream: true } as any);
+    const stream = await wrapped.chat.completions.create({ model: "gpt-test", stream: true } as any);
     for await (const _chunk of stream) {
       // Consume the stream so the final usage chunk is captured.
     }
@@ -145,11 +145,11 @@ describe("provider wrappers", () => {
     };
     const provider = { messages: { create: vi.fn(async () => response) } };
 
-    wrapAnthropic(provider, nozle as any, {
+    const wrapped = wrapAnthropic(provider, nozle as any, {
       customerId: "customer_1",
       costMeterCode: "ai_tokens",
     });
-    expect(await provider.messages.create()).toBe(response);
+    expect(await wrapped.messages.create()).toBe(response);
 
     await vi.waitFor(() => expect(nozle.costEvents.track).toHaveBeenCalledTimes(4));
     expect(nozle.costEvents.track).toHaveBeenCalledWith(

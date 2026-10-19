@@ -117,6 +117,18 @@ const message = await anthropic.messages.create({
 });
 ```
 
+`wrapOpenAI` and `wrapAnthropic` return a new client view and never change the client you pass in, so a server can keep one provider client and wrap it per request:
+
+```ts
+const openai = new OpenAI();
+app.post("/chat", async (req) => {
+  const client = wrapOpenAI(openai, nozle, { customerId: req.team.id });
+  return client.chat.completions.create({ model: "gpt-4o", messages: req.body.messages });
+});
+```
+
+Calls on the original client record nothing.
+
 Each provider call creates one Feature Event. When `costMeterCode` is set, the wrapper generates the Feature Event `transaction_id` before sending and attaches separate detailed Cost Events for `input`, `cached_input`, `cache_write`, `output`, and `reasoning` token categories when present. OpenAI and Anthropic field names are normalized into the same Cost Event properties: `{ tokens, provider, model, type }`. Delivery can arrive out of order because the Cost Event processor resolves the shared `transaction_id` asynchronously.
 
 ## Usage Tracking

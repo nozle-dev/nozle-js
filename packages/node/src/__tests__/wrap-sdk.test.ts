@@ -190,3 +190,88 @@ describe("wrapAnthropic with the Anthropic SDK", () => {
     expect(nozle.track).not.toHaveBeenCalled();
   });
 });
+
+describe("wrapping one shared client per customer", () => {
+  const customers = ["cust_a", "cust_b", "cust_c"];
+  const billed = (nozle: ReturnType<typeof tracker>) => nozle.track.mock.calls.map((call: any[]) => call[0]);
+
+  it("records each OpenAI call once for its own customer and leaves the client unwrapped", async () => {
+    const nozle = tracker();
+    const shared = openai(fakeFetch(json(completion)).fetch);
+    const create = shared.chat.completions.create;
+
+    for (const customerId of customers) {
+      const client = wrapOpenAI(shared, nozle as any, { customerId });
+      await client.chat.completions.create(request);
+      await client.chat.completions.create(request).withResponse();
+    }
+    await shared.chat.completions.create(request);
+
+    expect(billed(nozle)).toEqual(["cust_a", "cust_a", "cust_b", "cust_b", "cust_c", "cust_c"]);
+    expect(shared.chat.completions.create).toBe(create);
+  });
+
+  it("keeps concurrent OpenAI calls, streams and parse() on their own customer", async () => {
+    const nozle = tracker();
+    const chunks = [
+      { id: "chatcmpl_2", object: "chat.completion.chunk", created: 1, model: "gpt-test", choices: [], usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 } },
+    ];
+    const shared = openai(fakeFetch(sse(chunks.map((chunk) => [null, chunk]))).fetch);
+    const clients = customers.map((customerId) => wrapOpenAI(shared, nozle as any, { customerId }));
+
+    await Promise.all(
+      clients.map(async (client) => {
+        for await (const _chunk of await client.chat.completions.create({ ...request, stream: true }));
+      }),
+    );
+
+    expect(billed(nozle)).toEqual(customers);
+
+    const parsing = openai(fakeFetch(json(completion)).fetch);
+    await wrapOpenAI(parsing, nozle as any, { customerId: "cust_parse" }).chat.completions.parse(request);
+    expect(billed(nozle)).toEqual([...customers, "cust_parse"]);
+  });
+
+  it("wraps the original client when given a wrapped one", async () => {
+    const nozle = tracker();
+    const shared = openai(fakeFetch(json(completion)).fetch);
+    const first = wrapOpenAI(shared, nozle as any, { customerId: "cust_a" });
+
+    await wrapOpenAI(first, nozle as any, { customerId: "cust_b" }).chat.completions.create(request);
+
+    expect(billed(nozle)).toEqual(["cust_b"]);
+    expect(first).toBeInstanceOf(OpenAI);
+  });
+
+  it("records each Anthropic call once for its own customer and leaves the client unwrapped", async () => {
+    const nozle = tracker();
+    const shared = anthropic(fakeFetch(json(message)).fetch);
+    const create = shared.messages.create;
+
+    for (const customerId of customers) {
+      const client = wrapAnthropic(shared, nozle as any, { customerId });
+      await client.messages.create(anthropicRequest);
+      await client.messages.create(anthropicRequest).withResponse();
+    }
+    await shared.messages.create(anthropicRequest);
+
+    expect(billed(nozle)).toEqual(["cust_a", "cust_a", "cust_b", "cust_b", "cust_c", "cust_c"]);
+    expect(shared.messages.create).toBe(create);
+  });
+
+  it("records each Anthropic stream once for its own customer", async () => {
+    const nozle = tracker();
+    const events: Array<[string, unknown]> = [
+      ["message_start", { type: "message_start", message: { ...message, content: [], usage: { input_tokens: 9, output_tokens: 1 } } }],
+      ["message_delta", { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 4 } }],
+      ["message_stop", { type: "message_stop" }],
+    ];
+    const shared = anthropic(fakeFetch(sse(events)).fetch);
+
+    for (const customerId of customers) {
+      await wrapAnthropic(shared, nozle as any, { customerId }).messages.stream(anthropicRequest).finalMessage();
+    }
+
+    expect(billed(nozle)).toEqual(customers);
+  });
+});

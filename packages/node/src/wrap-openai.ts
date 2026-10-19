@@ -15,18 +15,43 @@ export function wrapOpenAI<T extends { chat: { completions: { create: Function }
   nozle: Nozle,
   opts: WrapOptions,
 ): T {
-  const original = client.chat.completions.create.bind(client.chat.completions);
-
-  client.chat.completions.create = function wrappedCreate(...args: any[]) {
+  return withMethod(client, ["chat", "completions", "create"], (original) => (...args: any[]) => {
     const params = { ...(args[0] ?? {}) };
     if (params.stream) {
       params.stream_options = { ...(params.stream_options ?? {}), include_usage: true };
       args[0] = params;
     }
     return recordOnRead(original(...args), params, nozle, opts, "openai");
-  };
+  });
+}
 
-  return client;
+const originals = new WeakMap<object, object>();
+
+/**
+ * Returns a view of `client` whose method at `path` is replaced by `wrap(original)`, as the Go SDK
+ * returns a copy. The client passed in is never changed, so wrapping one shared client per request
+ * keeps each wrapper's customer to its own calls. Wrapping a view wraps its original client again.
+ */
+export function withMethod<T extends object>(client: T, path: string[], wrap: (original: Function) => Function): T {
+  const source: any = originals.get(client) ?? client;
+  let root: any;
+  const view = (target: any, depth: number): any => {
+    const key = path[depth];
+    const child = depth === path.length - 1 ? wrap(target[key].bind(target)) : view(target[key], depth + 1);
+    return new Proxy(target, {
+      get(t, prop) {
+        if (prop === key) return child;
+        // SDK helpers such as OpenAI's parse() and stream() call back through `this._client`.
+        if (prop === "_client" && depth > 0 && t._client === source) return root;
+        const value = Reflect.get(t, prop);
+        // Client methods read private fields, which a proxy receiver cannot reach.
+        return depth === 0 && typeof value === "function" ? value.bind(t) : value;
+      },
+    });
+  };
+  root = view(source, 0);
+  originals.set(root, source);
+  return root;
 }
 
 /**
