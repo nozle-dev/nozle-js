@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## React 0.13.0 — unreleased
+## React 0.13.0 — 2026-10-19
 
 ### Added
 
@@ -17,7 +17,7 @@
 - Plan buttons follow the current plan. Without a current plan every plan (except contact sales, which stays outline) gets the primary button, with the theme's `buttonShadow`, and the highlighted plan keeps its highlight colours. With a current plan, plans above it get the primary button, the current plan gets the primary colour without the shadow, and plans at or below it, a highlighted one included, get the secondary button. Before, only the highlighted plan was primary when there was no current plan. In the `panel` layout the "Active" label of the current plan takes the primary colour.
 - `BillingProvider` requests the plan catalog (cached, never retried, errors not shown) unless `savedAppearance={false}`, also on pages that only use components such as `UsageMeter`.
 
-## React 0.12.0 — unreleased
+## React 0.12.0 — 2026-10-17
 
 ### Added
 
