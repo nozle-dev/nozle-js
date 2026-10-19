@@ -24,7 +24,7 @@ export function UsageBreakdown({
   emptyMessage = "No usage in this period yet.",
   appearance,
 }: UsageBreakdownProps): React.ReactElement {
-  const { root, el } = useAppearance(appearance);
+  const { root, el } = useAppearance(appearance, 'UsageBreakdown');
   if (isLoading) return <div {...root("usageBreakdown", { ...surface, height: 120, background: T.skeleton })} role="status" aria-label="Loading usage" />;
   if (error) return <p {...root("usageBreakdown", { ...surface, color: T.dangerText })} role="alert">{typeof error === "string" ? error : error.message}</p>;
   if (!usage || usage.charges_usage.length === 0) return <p {...root("usageBreakdown", { ...surface, color: muted })} role="status">{emptyMessage}</p>;

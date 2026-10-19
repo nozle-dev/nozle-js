@@ -12,6 +12,7 @@ import type { PricingPlan } from "./PricingTable.js";
 import { formatPlanPrice, intervalLabel, planFeatures } from "./plan-features.js";
 import { useAppearance, type ElementProps } from "../../appearance/context.js";
 import { PanelPlanCard } from "./PanelPlanCard.js";
+import { currentButtonStyle, planButtonState } from "./button-state.js";
 import { T, border, buttonStyle, text, type Appearance } from "../../appearance/tokens.js";
 
 export interface PlanCardProps {
@@ -20,6 +21,12 @@ export interface PlanCardProps {
   /** Optional. Replaces the lines read from the plan. */
   features?: string[];
   isCurrent: boolean;
+  /**
+   * Whether the plan costs more than the customer's current plan. Plans above it get the primary
+   * button, the current plan its own look, and the rest the secondary one. Leave unset when there
+   * is no current plan: the plan then gets the primary button.
+   */
+  isUpgrade?: boolean;
   returnUrl?: string;
   onSelect?: (input: CreateCheckoutInput) => void;
   appearance?: Appearance;
@@ -33,16 +40,18 @@ export function PlanCard({
   plan,
   features: featureOverride,
   isCurrent,
+  isUpgrade,
   returnUrl,
   onSelect,
   appearance,
 }: PlanCardProps): React.ReactElement {
-  const { root, el, planCardLayout } = useAppearance(appearance);
+  const { root, el, planCardLayout } = useAppearance(appearance, 'PlanCard');
   const { code: id, name, description } = plan;
   const price = formatPlanPrice(plan.amount_cents, plan.amount_currency);
   const interval = intervalLabel(plan.interval);
   const features = featureOverride ?? planFeatures(plan);
 
+  const state = planButtonState({ isCurrent, isUpgrade });
   const cta = onSelect && (
     <button type="button"
       onClick={() =>
@@ -52,8 +61,7 @@ export function PlanCard({
         })
       }
       {...el("planCard__cta", {
-        ...buttonStyle(isCurrent ? "secondary" : "primary"),
-        ...(isCurrent && { background: T.muted, color: T.mutedForeground, cursor: "default" }),
+        ...(isCurrent ? currentButtonStyle : buttonStyle(state === "secondary" ? "secondary" : "primary")),
         width: "100%",
       })}
       disabled={isCurrent}

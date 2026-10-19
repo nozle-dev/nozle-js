@@ -30,7 +30,7 @@ export function UsageAlert({
   upgradeHref = "/plans",
   appearance,
 }: UsageAlertProps) {
-  const { root, el } = useAppearance(appearance);
+  const { root, el } = useAppearance(appearance, 'UsageAlert');
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   const alertFeatures = features.filter(

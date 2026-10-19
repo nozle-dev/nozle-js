@@ -83,7 +83,7 @@ export function PanelPlanCard({
               ...role.label,
               whiteSpace: "nowrap",
               // The current plan's label takes the colour of its button.
-              color: filled ? text : isCurrent ? T.mutedForeground : T.highlight,
+              color: filled ? text : isCurrent ? T.primary : T.highlight,
             })}
           >
             {label}

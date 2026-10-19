@@ -34,7 +34,7 @@ export function UsageMeter({
   showText = true,
   appearance,
 }: UsageMeterProps) {
-  const { root, el } = useAppearance(appearance);
+  const { root, el } = useAppearance(appearance, 'UsageMeter');
   const unlimited = limit == null;
   const percentage = !unlimited && limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
   const color = getUsageMeterColor(percentage);

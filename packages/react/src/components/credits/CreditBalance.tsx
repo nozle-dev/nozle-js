@@ -52,7 +52,7 @@ export function CreditBalance({
   emptyMessage = "No credit balance yet.",
   appearance,
 }: CreditBalanceProps): React.ReactElement {
-  const { root, el } = useAppearance(appearance);
+  const { root, el } = useAppearance(appearance, 'CreditBalance');
   if (isLoading) return <div {...root("creditBalance", { ...surface, height: 96, background: T.skeleton })} role="status" aria-label="Loading credit balance" />;
   if (error) return <p {...root("creditBalance", { ...surface, color: T.dangerText })} role="alert">{typeof error === "string" ? error : error.message}</p>;
   if (!balance) return <p {...root("creditBalance", { ...surface, color: muted })} role="status">{emptyMessage}</p>;

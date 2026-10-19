@@ -27,7 +27,7 @@ export function UpgradePrompt({
   onUpgrade,
   appearance,
 }: UpgradePromptProps): React.ReactElement {
-  const { root } = useAppearance(appearance);
+  const { root } = useAppearance(appearance, 'UpgradePrompt');
   const displayText = planName
     ? `Upgrade to ${planName} to access this feature`
     : text;

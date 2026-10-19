@@ -104,7 +104,7 @@ function CancellationFlow({
   nonce,
   appearance,
 }: CancellationControlProps) {
-  const { root } = useAppearance(appearance);
+  const { root } = useAppearance(appearance, 'CancellationControl');
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<CancellationPreview>();

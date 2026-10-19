@@ -2,7 +2,22 @@
 
 ## Unreleased
 
-## React 0.12.0 — unreleased
+## React 0.13.0 — 2026-10-19
+
+### Added
+
+- Saved appearance. The theme, colours and pricing table options a merchant saves in the Nozle dashboard (Developers > Customize SDK) reach every component without code. `BillingProvider` reads `meta.sdk_appearance` from the plan catalog request (`GET /api/v1/plans`), the same cached request `PricingTable` and `usePlans` use, so a page makes one call. The saved theme, variables and `planCardLayout` are the lowest layer: `appearance` on `BillingProvider` and on a component win. With nothing saved, or when the request fails, no variables are written and the components look as before. Pass `savedAppearance={false}` on `BillingProvider` to never fetch or apply it.
+- `PricingTable` takes `highlightStyle`, `highlightLabel` (an empty saved label means no badge), `annualDiscountLabel` and `showToggle` from the saved options when the props are unset; props win.
+- The SDK reads only a closed schema: a theme name (`light`, `dark`, `minimal`, `neobrutal`, `nozle`, `nozleDark`), colour variables as `#rgb` or `#rrggbb`, radius and width variables as `px`, `rem` or `em` lengths, `planCardLayout`, and the four pricing table options. Anything else is ignored, so a saved value never writes free CSS.
+- `PlanCard` takes `isUpgrade`, with the same button states as `PricingTable`.
+- Saved appearance for a single component. The dashboard can save a theme, variables, card layout and pricing table options for one component (`components.<Name>` in `meta.sdk_appearance`, for example `PricingTable` or `UsageMeter`). They apply to that component only, above the saved global appearance and below `appearance` on `BillingProvider` and on the component. A component rendered inside another (a `UsageMeter` in `UsageDashboard`, an `UpgradeModal` in `UpgradeButton`) uses its own saved settings.
+
+### Changed
+
+- Plan buttons follow the current plan. Without a current plan every plan (except contact sales, which stays outline) gets the primary button, with the theme's `buttonShadow`, and the highlighted plan keeps its highlight colours. With a current plan, plans above it get the primary button, the current plan gets the primary colour without the shadow, and plans at or below it, a highlighted one included, get the secondary button. Before, only the highlighted plan was primary when there was no current plan. In the `panel` layout the "Active" label of the current plan takes the primary colour.
+- `BillingProvider` requests the plan catalog (cached, never retried, errors not shown) unless `savedAppearance={false}`, also on pages that only use components such as `UsageMeter`.
+
+## React 0.12.0 — 2026-10-17
 
 ### Added
 

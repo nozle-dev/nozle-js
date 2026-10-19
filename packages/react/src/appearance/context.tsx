@@ -1,19 +1,41 @@
 "use client";
 
 import React, { createContext, useContext, useMemo, type CSSProperties } from "react";
+import type { SavedAppearance, SavedComponent, SavedPricingTable } from "./saved.js";
 import { mergeAppearance, toCssVars, type Appearance, type ElementKey } from "./tokens.js";
 
-const AppearanceContext = createContext<Appearance | undefined>(undefined);
+interface AppearanceValue {
+  /** The appearance saved in the dashboard: the lowest layer. */
+  saved?: Appearance;
+  savedPricingTable?: SavedPricingTable;
+  /** What the dashboard saved for single components: above the global layer, below code. */
+  savedComponents?: SavedAppearance["components"];
+  /** The `appearance` prop of `BillingProvider`. */
+  appearance?: Appearance;
+}
+
+const AppearanceContext = createContext<AppearanceValue>({});
 
 /** Set by `BillingProvider`; renders no element of its own. */
 export function AppearanceProvider({
+  saved,
+  savedPricingTable,
+  savedComponents,
   appearance,
   children,
-}: {
-  appearance?: Appearance;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return <AppearanceContext.Provider value={appearance}>{children}</AppearanceContext.Provider>;
+}: AppearanceValue & { children: React.ReactNode }): React.ReactElement {
+  const value = useMemo(
+    () => ({ saved, savedPricingTable, savedComponents, appearance }),
+    [saved, savedPricingTable, savedComponents, appearance],
+  );
+  return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
+}
+
+/** Pricing table defaults saved in the dashboard, the component's own over the global ones; props win. */
+export function useSavedPricingTable(component?: SavedComponent): SavedPricingTable | undefined {
+  const { savedPricingTable, savedComponents } = useContext(AppearanceContext);
+  const own = component ? savedComponents?.[component]?.pricingTable : undefined;
+  return own ? { ...savedPricingTable, ...own } : savedPricingTable;
 }
 
 export interface ElementProps {
@@ -33,13 +55,15 @@ export interface UseAppearance {
 }
 
 /**
- * Resolves the provider's appearance with the component's own on top. Without any appearance no
- * variables are written, so CSS variables an app sets on `:root` keep working.
+ * Resolves, lowest first: the appearance saved for the organization, the one saved for this component, the
+ * provider's and the component's own props. Without any appearance no variables are written, so CSS variables
+ * an app sets on `:root` keep working.
  */
-export function useAppearance(appearance?: Appearance): UseAppearance {
-  const inherited = useContext(AppearanceContext);
+export function useAppearance(appearance?: Appearance, component?: SavedComponent): UseAppearance {
+  const { saved, savedComponents, appearance: inherited } = useContext(AppearanceContext);
+  const savedOwn = component ? savedComponents?.[component]?.appearance : undefined;
   return useMemo(() => {
-    const { variables, elements, planCardLayout = "card" } = mergeAppearance(inherited, appearance);
+    const { variables, elements, planCardLayout = "card" } = mergeAppearance(saved, savedOwn, inherited, appearance);
     const vars = toCssVars(variables);
     const el = (key: ElementKey, style?: CSSProperties, className?: string): ElementProps => {
       const override = elements[key];
@@ -57,5 +81,5 @@ export function useAppearance(appearance?: Appearance): UseAppearance {
         return { ...props, style: { ...vars, ...props.style } };
       },
     };
-  }, [inherited, appearance]);
+  }, [saved, savedOwn, inherited, appearance]);
 }

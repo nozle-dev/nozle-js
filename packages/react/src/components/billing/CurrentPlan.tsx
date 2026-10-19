@@ -123,7 +123,7 @@ function CurrentPlanView({
   locale = "en-US",
   appearance,
 }: CurrentPlanProps): React.ReactElement {
-  const { root, el } = useAppearance(appearance);
+  const { root, el } = useAppearance(appearance, 'CurrentPlan');
   const frame = { ...surface, padding: 0, overflow: "hidden" } as const;
   const header = (
     <div

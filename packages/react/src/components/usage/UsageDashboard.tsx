@@ -58,7 +58,7 @@ export function UsageDashboard({
   emptyMessage = "No usage to show yet.",
   appearance,
 }: UsageDashboardProps) {
-  const { root } = useAppearance(appearance);
+  const { root } = useAppearance(appearance, 'UsageDashboard');
   const props = root("usageDashboard", {
     ...surface,
     margin: 0,

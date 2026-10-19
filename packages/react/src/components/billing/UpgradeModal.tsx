@@ -69,7 +69,7 @@ export function UpgradeModal(
   const dialog = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const busy = Boolean(props.busy || confirming);
-  const { root, el } = useAppearance(props.appearance);
+  const { root, el } = useAppearance(props.appearance, 'UpgradeModal');
   useEffect(() => {
     if (!props.isOpen) return;
     const previous = document.activeElement as HTMLElement | null;

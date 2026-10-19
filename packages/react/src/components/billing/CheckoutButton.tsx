@@ -104,7 +104,7 @@ export function CheckoutButton({
   onScheduled,
   appearance,
 }: CheckoutButtonProps): React.ReactElement {
-  const { root, vars } = useAppearance(appearance);
+  const { root, vars } = useAppearance(appearance, 'CheckoutButton');
   const { createCheckout, verifyCheckout, getCheckoutStatus } =
     useBillingContext();
   const attempt = useRef<{ plan: string; key: string } | undefined>(undefined);

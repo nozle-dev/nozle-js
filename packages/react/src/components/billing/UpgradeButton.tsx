@@ -41,7 +41,7 @@ export function UpgradeButton({
   appearance,
 }: UpgradeButtonProps): React.ReactElement {
   const [isOpen, setIsOpen] = useState(false);
-  const { root } = useAppearance(appearance);
+  const { root } = useAppearance(appearance, 'UpgradeButton');
 
   return (
     <>

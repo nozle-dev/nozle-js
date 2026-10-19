@@ -48,7 +48,7 @@ export function LockedOverlay({
   children,
   appearance,
 }: LockedOverlayProps): React.ReactElement {
-  const { root, el } = useAppearance(appearance);
+  const { root, el } = useAppearance(appearance, 'LockedOverlay');
   if (!locked) {
     return <>{children}</>;
   }
