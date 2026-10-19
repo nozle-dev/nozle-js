@@ -33,7 +33,7 @@ describe("sanitizeSavedAppearance", () => {
 
   it("gives nothing for empty, null, array and non-object input", () => {
     for (const raw of [{}, null, undefined, [], "x", 3]) {
-      expect(sanitizeSavedAppearance(raw)).toEqual({ pricingTable: {} });
+      expect(sanitizeSavedAppearance(raw)).toEqual({ pricingTable: {}, components: {} });
     }
   });
 
@@ -67,7 +67,23 @@ describe("sanitizeSavedAppearance", () => {
     expect(sanitizeSavedAppearance({ pricingTable: { highlightLabel: "x".repeat(41) } }).pricingTable).toEqual({});
     expect(sanitizeSavedAppearance({ pricingTable: { highlightLabel: "x".repeat(40) } }).pricingTable.highlightLabel).toHaveLength(40);
     expect(sanitizeSavedAppearance({ pricingTable: { highlightLabel: "a\u0007b" } }).pricingTable).toEqual({});
-    expect(sanitizeSavedAppearance({ theme: "dark", pad: "x".repeat(5000) })).toEqual({ pricingTable: {} });
+    expect(sanitizeSavedAppearance({ theme: "dark", pad: "x".repeat(9000) })).toEqual({ pricingTable: {}, components: {} });
+  });
+
+  it("reads each component's own settings and ignores unknown components and empty entries", () => {
+    const saved = sanitizeSavedAppearance({
+      theme: "dark",
+      components: {
+        UsageMeter: { variables: { colorPrimary: "#e0482b", colorCard: "red" }, theme: "neobrutal" },
+        PricingTable: { pricingTable: { highlightStyle: "filled" } },
+        CreditBalance: {},
+        Checkout: { theme: "dark" },
+        PlanCard: "x",
+      },
+    });
+    expect(Object.keys(saved.components).sort()).toEqual(["PricingTable", "UsageMeter"]);
+    expect(saved.components.UsageMeter?.appearance).toEqual({ theme: neobrutal, variables: { colorPrimary: "#e0482b" } });
+    expect(saved.components.PricingTable?.pricingTable).toEqual({ highlightStyle: "filled" });
   });
 
   it("keeps an empty highlight label, which means no label", () => {
@@ -117,6 +133,24 @@ describe("BillingProvider saved appearance", () => {
     await waitFor(() => expect(meter().style.getPropertyValue("--nozle-border")).toBe("#111111"));
     expect(meter().style.getPropertyValue("--nozle-card")).toBe("#222222");
     expect(meter().style.getPropertyValue("--nozle-primary")).toBe("#333333");
+  });
+
+  it("applies a component's own saved settings to that component only, below code", async () => {
+    stubCatalog({
+      variables: { colorPrimary: "#111111", colorBorder: "#111111" },
+      components: { UsageMeter: { variables: { colorPrimary: "#444444", colorBorder: "#444444" } } },
+    });
+    render(
+      <Provider appearance={{ variables: { colorBorder: "#222222" } }}>
+        <UsageMeter used={5} limit={10} label="Seats" />
+        <PlanCard plan={plans[1]!} onSelect={() => undefined} />
+      </Provider>,
+    );
+    await waitFor(() => expect(meter().style.getPropertyValue("--nozle-primary")).toBe("#444444"));
+    // Code (the provider prop) still beats the component's saved border.
+    expect(meter().style.getPropertyValue("--nozle-border")).toBe("#222222");
+    const card = document.querySelector(".nozle-planCard") as HTMLElement;
+    expect(card.style.getPropertyValue("--nozle-primary")).toBe("#111111");
   });
 
   it("never fetches or applies it with savedAppearance={false}", async () => {

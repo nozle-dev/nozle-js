@@ -36,7 +36,7 @@ export function UsageTrend({
   emptyMessage = "No past usage yet.",
   appearance,
 }: UsageTrendProps): React.ReactElement {
-  const { root, el } = useAppearance(appearance);
+  const { root, el } = useAppearance(appearance, 'UsageTrend');
   if (isLoading) return <div {...root("usageTrend", { ...surface, height: 160, background: T.skeleton })} role="status" aria-label="Loading usage trend" />;
   if (error) return <p {...root("usageTrend", { ...surface, color: T.dangerText })} role="alert">{typeof error === "string" ? error : error.message}</p>;
   if (!periods || periods.length === 0) return <p {...root("usageTrend", { ...surface, color: muted })} role="status">{emptyMessage}</p>;

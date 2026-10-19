@@ -177,7 +177,7 @@ function PlanChangeFlow({
   nonce,
   appearance,
 }: PlanChangeControlProps) {
-  const { root } = useAppearance(appearance);
+  const { root } = useAppearance(appearance, 'PlanChangeControl');
   const owner = useMemo(
     () => ({ controller: new AbortController() }),
     [subscriptionId, actions],

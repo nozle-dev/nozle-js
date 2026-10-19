@@ -38,7 +38,7 @@ export function PaymentMethodDisplay({
   updateHref = "/billing/update-payment",
   appearance,
 }: PaymentMethodDisplayProps) {
-  const { root } = useAppearance(appearance);
+  const { root } = useAppearance(appearance, 'PaymentMethodDisplay');
   const handleUpdate = () => {
     if (onUpdatePaymentMethod) {
       onUpdatePaymentMethod();

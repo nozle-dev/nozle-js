@@ -22,7 +22,7 @@ const TIER_STYLES: Record<string, React.CSSProperties> = {
 };
 
 export function PlanBadge({ plan, tier = "free", appearance }: PlanBadgeProps) {
-  const { root } = useAppearance(appearance);
+  const { root } = useAppearance(appearance, 'PlanBadge');
   const style = TIER_STYLES[tier] ?? TIER_STYLES.free;
 
   return (

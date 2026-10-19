@@ -41,7 +41,7 @@ export function PlanComparison({
   sort,
   appearance,
 }: PlanComparisonProps): React.ReactElement {
-  const { root, el } = useAppearance(appearance);
+  const { root, el } = useAppearance(appearance, 'PlanComparison');
   const plans = sort ? [...catalogPlans].sort(sort) : sortPlansByPrice(catalogPlans);
   const features = featureOverride ?? comparisonRows(plans);
   const cell = (style: React.CSSProperties) => el("planComparison__cell", style);

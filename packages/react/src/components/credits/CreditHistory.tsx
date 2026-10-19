@@ -52,7 +52,7 @@ export function CreditHistory({
   onLoadMore,
   appearance,
 }: CreditHistoryProps): React.ReactElement {
-  const { root, el } = useAppearance(appearance);
+  const { root, el } = useAppearance(appearance, 'CreditHistory');
   if (error) return <p {...root("creditHistory", { ...surface, color: T.dangerText })} role="alert">{typeof error === "string" ? error : error.message}</p>;
   if (isLoading && operations.length === 0) return <div {...root("creditHistory", { ...surface, height: 120, background: T.skeleton })} role="status" aria-label="Loading credit history" />;
   if (operations.length === 0) return <p {...root("creditHistory", { ...surface, color: muted })} role="status">{emptyMessage}</p>;

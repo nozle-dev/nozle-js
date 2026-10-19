@@ -10,10 +10,24 @@ export interface SavedPricingTable {
   showToggle?: boolean;
 }
 
-export interface SavedAppearance {
-  /** Theme, variables and card layout, ready to be the lowest `mergeAppearance` layer. */
+export interface SavedBase {
+  /** Theme, variables and card layout, ready to be a `mergeAppearance` layer. */
   appearance?: Appearance;
   pricingTable: SavedPricingTable;
+}
+
+/** The SDK components that can have a saved appearance of their own. */
+export const SAVED_COMPONENTS = [
+  "PricingTable", "PlanCard", "PlanComparison", "PlanBadge", "CurrentPlan", "PlanChangeControl",
+  "CancellationControl", "UsageMeter", "UsageDashboard", "UsageAlert", "UsageBreakdown", "UsageTrend",
+  "CreditBalance", "CreditHistory", "PaymentMethodDisplay", "CheckoutButton", "UpgradeButton",
+  "UpgradeModal", "UpgradePrompt", "LockedOverlay",
+] as const;
+export type SavedComponent = (typeof SAVED_COMPONENTS)[number];
+
+export interface SavedAppearance extends SavedBase {
+  /** What the dashboard saved for one component only; it sits above the global layer. */
+  components: Partial<Record<SavedComponent, SavedBase>>;
 }
 
 const THEMES: Record<string, Theme> = { light, dark, minimal, neobrutal, nozle, nozleDark };
@@ -28,7 +42,7 @@ const LENGTH_KEYS = ["borderRadius", "buttonRadius", "borderWidth", "buttonBorde
 
 const COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const LENGTH = /^\d{1,3}(\.\d+)?(px|rem|em)$/;
-const MAX_JSON = 4096;
+const MAX_JSON = 8192;
 const MAX_STRING = 40;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -47,39 +61,57 @@ function label(value: unknown): string | undefined {
  * fit. Never throws: anything unusable gives an empty result and the components look as before.
  */
 export function sanitizeSavedAppearance(raw: unknown): SavedAppearance {
-  const out: SavedAppearance = { pricingTable: {} };
+  const out: SavedAppearance = { pricingTable: {}, components: {} };
   try {
     if (!isObject(raw) || JSON.stringify(raw).length > MAX_JSON) return out;
 
-    const appearance: Appearance = {};
-    if (typeof raw.theme === "string" && Object.hasOwn(THEMES, raw.theme)) appearance.theme = THEMES[raw.theme];
+    const base = sanitizeBase(raw);
+    if (base.appearance) out.appearance = base.appearance;
+    out.pricingTable = base.pricingTable;
 
-    if (isObject(raw.variables)) {
-      const variables: Record<string, string> = {};
-      for (const [keys, pattern] of [[COLOR_KEYS, COLOR], [LENGTH_KEYS, LENGTH]] as const) {
-        for (const key of keys) {
-          const value = raw.variables[key];
-          if (typeof value === "string" && pattern.test(value)) variables[key] = value;
-        }
+    if (isObject(raw.components)) {
+      for (const name of SAVED_COMPONENTS) {
+        const entry = raw.components[name];
+        if (!isObject(entry)) continue;
+        const own = sanitizeBase(entry);
+        if (own.appearance || Object.keys(own.pricingTable).length) out.components[name] = own;
       }
-      if (Object.keys(variables).length) appearance.variables = variables as Variables;
-    }
-
-    if (raw.planCardLayout === "card" || raw.planCardLayout === "panel") appearance.planCardLayout = raw.planCardLayout;
-    if (Object.keys(appearance).length) out.appearance = appearance;
-
-    if (isObject(raw.pricingTable)) {
-      const table = raw.pricingTable;
-      const pricing = out.pricingTable;
-      if (table.highlightStyle === "outline" || table.highlightStyle === "filled") pricing.highlightStyle = table.highlightStyle;
-      const highlightLabel = label(table.highlightLabel);
-      if (highlightLabel !== undefined) pricing.highlightLabel = highlightLabel;
-      const annual = label(table.annualDiscountLabel);
-      if (annual) pricing.annualDiscountLabel = annual;
-      if (typeof table.showToggle === "boolean") pricing.showToggle = table.showToggle;
     }
   } catch {
-    return { pricingTable: {} };
+    return { pricingTable: {}, components: {} };
+  }
+  return out;
+}
+
+/** Theme, variables, card layout and pricing table of one saved object (the global one or a component's). */
+function sanitizeBase(raw: Record<string, unknown>): SavedBase {
+  const out: SavedBase = { pricingTable: {} };
+  const appearance: Appearance = {};
+  if (typeof raw.theme === "string" && Object.hasOwn(THEMES, raw.theme)) appearance.theme = THEMES[raw.theme];
+
+  if (isObject(raw.variables)) {
+    const variables: Record<string, string> = {};
+    for (const [keys, pattern] of [[COLOR_KEYS, COLOR], [LENGTH_KEYS, LENGTH]] as const) {
+      for (const key of keys) {
+        const value = raw.variables[key];
+        if (typeof value === "string" && pattern.test(value)) variables[key] = value;
+      }
+    }
+    if (Object.keys(variables).length) appearance.variables = variables as Variables;
+  }
+
+  if (raw.planCardLayout === "card" || raw.planCardLayout === "panel") appearance.planCardLayout = raw.planCardLayout;
+  if (Object.keys(appearance).length) out.appearance = appearance;
+
+  if (isObject(raw.pricingTable)) {
+    const table = raw.pricingTable;
+    const pricing = out.pricingTable;
+    if (table.highlightStyle === "outline" || table.highlightStyle === "filled") pricing.highlightStyle = table.highlightStyle;
+    const highlightLabel = label(table.highlightLabel);
+    if (highlightLabel !== undefined) pricing.highlightLabel = highlightLabel;
+    const annual = label(table.annualDiscountLabel);
+    if (annual) pricing.annualDiscountLabel = annual;
+    if (typeof table.showToggle === "boolean") pricing.showToggle = table.showToggle;
   }
   return out;
 }

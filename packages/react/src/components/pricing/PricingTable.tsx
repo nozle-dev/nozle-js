@@ -521,9 +521,9 @@ export function PricingTable({
   locale: localeProp,
   appearance,
 }: PricingTableProps): React.ReactElement {
-  const { root, el, planCardLayout } = useAppearance(appearance);
+  const { root, el, planCardLayout } = useAppearance(appearance, 'PricingTable');
   // Options saved in the dashboard are the defaults; props win.
-  const saved = useSavedPricingTable();
+  const saved = useSavedPricingTable('PricingTable');
   const showToggle = showToggleProp ?? saved?.showToggle ?? true;
   const highlightStyle = highlightStyleProp ?? saved?.highlightStyle ?? 'outline';
   const highlightLabel = highlightLabelProp !== undefined ? highlightLabelProp : saved?.highlightLabel === '' ? null : saved?.highlightLabel;

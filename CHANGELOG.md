@@ -10,6 +10,7 @@
 - `PricingTable` takes `highlightStyle`, `highlightLabel` (an empty saved label means no badge), `annualDiscountLabel` and `showToggle` from the saved options when the props are unset; props win.
 - The SDK reads only a closed schema: a theme name (`light`, `dark`, `minimal`, `neobrutal`, `nozle`, `nozleDark`), colour variables as `#rgb` or `#rrggbb`, radius and width variables as `px`, `rem` or `em` lengths, `planCardLayout`, and the four pricing table options. Anything else is ignored, so a saved value never writes free CSS.
 - `PlanCard` takes `isUpgrade`, with the same button states as `PricingTable`.
+- Saved appearance for a single component. The dashboard can save a theme, variables, card layout and pricing table options for one component (`components.<Name>` in `meta.sdk_appearance`, for example `PricingTable` or `UsageMeter`). They apply to that component only, above the saved global appearance and below `appearance` on `BillingProvider` and on the component. A component rendered inside another (a `UsageMeter` in `UsageDashboard`, an `UpgradeModal` in `UpgradeButton`) uses its own saved settings.
 
 ### Changed
 

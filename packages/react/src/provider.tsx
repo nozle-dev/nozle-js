@@ -348,6 +348,7 @@ export function BillingProvider({
     React.createElement(AppearanceProvider, {
       saved: saved?.appearance,
       savedPricingTable: saved?.pricingTable,
+      savedComponents: saved?.components,
       appearance,
       children,
     }),

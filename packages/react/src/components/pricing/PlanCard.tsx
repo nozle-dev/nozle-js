@@ -45,7 +45,7 @@ export function PlanCard({
   onSelect,
   appearance,
 }: PlanCardProps): React.ReactElement {
-  const { root, el, planCardLayout } = useAppearance(appearance);
+  const { root, el, planCardLayout } = useAppearance(appearance, 'PlanCard');
   const { code: id, name, description } = plan;
   const price = formatPlanPrice(plan.amount_cents, plan.amount_currency);
   const interval = intervalLabel(plan.interval);
