@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## Node.js 0.13.1 — 2026-10-19
+
+### Fixed
+
+- `wrapOpenAI` and `wrapAnthropic` no longer change the client passed in. They return a new view of it whose `create` records usage for that wrapper's `customerId`, as the Go SDK returns a copy. Before, each wrap replaced `create` on the shared client, so after wrapping one client for several customers a single call recorded an event for every one of them. Calls on the original client now record nothing, wrapping an already wrapped client wraps its original, and `withResponse()`, `parse()`, `stream()` and streaming keep working and record once. Use the returned client: code that ignored the return value and kept calling the original client no longer records usage.
+
 ## React 0.13.0 — 2026-10-19
 
 ### Added
