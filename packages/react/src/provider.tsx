@@ -164,6 +164,19 @@ export type CreateCheckout = (
   input: CreateCheckoutInput,
 ) => Promise<CheckoutResult>;
 
+/** What your backend returns from `nozle.managePaymentMethod()`. */
+export interface ManagePaymentMethodResult {
+  url: string | null;
+  expires_at: string | null;
+  provider: "razorpay" | "stripe";
+  checkout?: RazorpayCheckoutResult;
+}
+
+export type CreateManagePaymentMethod = (input: {
+  returnUrl: string;
+  idempotencyKey?: string;
+}) => Promise<ManagePaymentMethodResult>;
+
 export interface NozleClient {
   publishableKey: string;
   baseUrl: string;
@@ -210,6 +223,8 @@ export interface BillingContextValue {
   createCheckout?: CreateCheckout;
   verifyCheckout?: VerifyCheckout;
   getCheckoutStatus?: GetCheckoutStatus;
+  /** Calls your backend, which calls `managePaymentMethod` with its secret key. */
+  createManagePaymentMethod?: CreateManagePaymentMethod;
   /** The query client the billing hooks use: the `queryClient` prop, or one the provider made. */
   queryClient: QueryClient;
   /** Reads a route of your billing endpoint; undefined when `billingEndpoint` is not set. */
@@ -263,6 +278,7 @@ export interface BillingProviderProps {
   createCheckout?: CreateCheckout;
   verifyCheckout?: VerifyCheckout;
   getCheckoutStatus?: GetCheckoutStatus;
+  createManagePaymentMethod?: CreateManagePaymentMethod;
   baseUrl?: string;
   /**
    * Path of your backend route that serves the customer hooks (`useSubscription`,
@@ -298,6 +314,7 @@ export function BillingProvider({
   createCheckout,
   verifyCheckout,
   getCheckoutStatus,
+  createManagePaymentMethod,
   baseUrl = "https://api.nozle.app/engine",
   billingEndpoint,
   billingHeaders,
@@ -328,11 +345,12 @@ export function BillingProvider({
       createCheckout,
       verifyCheckout,
       getCheckoutStatus,
+      createManagePaymentMethod,
       queryClient: activeQueryClient,
       billingFetch,
       billingEndpoint,
     }),
-    [client, createCheckout, verifyCheckout, getCheckoutStatus, activeQueryClient, billingFetch, billingEndpoint],
+    [client, createCheckout, verifyCheckout, getCheckoutStatus, createManagePaymentMethod, activeQueryClient, billingFetch, billingEndpoint],
   );
 
   // Same cache entry as PricingTable and usePlans, so one request. A failure leaves it unset.

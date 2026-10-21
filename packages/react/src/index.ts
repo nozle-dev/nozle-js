@@ -52,6 +52,8 @@ export type {
   CheckoutSubscriptionResult,
   CreateCheckout,
   CreateCheckoutInput,
+  CreateManagePaymentMethod,
+  ManagePaymentMethodResult,
   NozleClient,
   ScheduledCheckoutResult,
 } from "./provider.js";
@@ -78,6 +80,8 @@ export type {
 } from "./hooks/use-billing.js";
 export type { Plan as CatalogPlan } from "./hooks/use-plans.js";
 
+export { useManagePaymentMethod } from "./hooks/use-manage-payment-method.js";
+export type { UseManagePaymentMethodResult } from "./hooks/use-manage-payment-method.js";
 export { useCheckout as useCheckoutSession } from "./hooks/use-checkout.js";
 export type { UseCheckoutResult as UseCheckoutSessionResult } from "./hooks/use-checkout.js";
 
@@ -123,6 +127,8 @@ export type {
 export { comparisonRows, sortPlansByPrice } from "./components/pricing/plan-features.js";
 export type { ComparisonRow } from "./components/pricing/plan-features.js";
 
+export { ManagePaymentMethodButton } from "./components/billing/ManagePaymentMethodButton.js";
+export type { ManagePaymentMethodButtonProps } from "./components/billing/ManagePaymentMethodButton.js";
 export { CheckoutButton } from "./components/billing/CheckoutButton.js";
 export type { CheckoutButtonProps } from "./components/billing/CheckoutButton.js";
 
