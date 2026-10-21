@@ -133,6 +133,14 @@ export interface HostedCheckoutResult {
   plan_upgrade_intent_id?: string;
 }
 
+/** Stripe: redirect to `url`. Razorpay: `url` is null; open Razorpay Checkout from `checkout`. */
+export interface ManagePaymentMethodResult {
+  url: string | null;
+  expires_at: string | null;
+  provider: "razorpay" | "stripe";
+  checkout?: RazorpayCheckoutResult;
+}
+
 export interface CheckoutOptions {
   idempotencyKey?: string;
   registerMandate?: boolean;

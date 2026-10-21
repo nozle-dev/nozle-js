@@ -33,6 +33,7 @@ export type {
   Plan,
   CheckoutResult,
   CheckoutOptions,
+  ManagePaymentMethodResult,
   CheckoutStatus,
   SubscriptionCheckoutScope,
   SubscriptionPlan,
