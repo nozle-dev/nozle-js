@@ -25,7 +25,6 @@ function setup(
 }
 
 afterEach(() => {
-  delete window.Razorpay;
   navigate.mockReset();
 });
 
@@ -41,43 +40,21 @@ describe('useManagePaymentMethod', () => {
     expect(navigate).toHaveBeenCalledWith('https://billing.stripe.com/x');
   });
 
-  it('opens Razorpay Checkout from the checkout options when url is null', async () => {
-    let options: { key: string; order_id: string } | undefined;
-    window.Razorpay = class {
-      constructor(value: NonNullable<typeof options>) {
-        options = value;
-      }
-      open() {}
-      close() {}
-      on() {}
-    } as typeof window.Razorpay;
-    const { result } = setup(
-      {
-        url: null,
-        expires_at: '2026-10-22T10:00:00Z',
-        provider: 'razorpay',
-        checkout: {
-          type: 'razorpay',
-          checkout_id: 'c1',
-          key_id: 'rzp_test_public',
-          order_id: 'o1',
-          amount_cents: 100,
-          currency: 'INR',
-        },
-      },
-      { verifyCheckout: vi.fn() },
+  it('surfaces the razorpay_pays_by_link error without opening anything', async () => {
+    const createManagePaymentMethod = vi.fn().mockRejectedValue(new Error('razorpay_pays_by_link'));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <BillingProvider publishableKey="pk_browser" createManagePaymentMethod={createManagePaymentMethod}>
+        {children}
+      </BillingProvider>
     );
-    const onDismiss = vi.fn();
-    let pending: Promise<void> | undefined;
+    const { result } = renderHook(() => useManagePaymentMethod(), { wrapper });
+    let thrown: unknown;
     await act(async () => {
-      pending = result.current.managePaymentMethod(undefined, { onDismiss });
-      await vi.waitFor(() => expect(options).toBeDefined());
+      await result.current.managePaymentMethod().catch((cause: unknown) => (thrown = cause));
     });
-    expect(options).toMatchObject({ key: 'rzp_test_public', order_id: 'o1' });
+    expect((thrown as Error).message).toBe('razorpay_pays_by_link');
+    expect(result.current.error?.message).toBe('razorpay_pays_by_link');
     expect(navigate).not.toHaveBeenCalled();
-    (options as unknown as { modal: { ondismiss: () => void } }).modal.ondismiss();
-    await pending;
-    expect(onDismiss).toHaveBeenCalled();
   });
 
   it('fails clearly without the callback or a usable result', async () => {
@@ -85,9 +62,9 @@ describe('useManagePaymentMethod', () => {
     await expect(act(async () => missing.result.current.managePaymentMethod())).rejects.toThrow(
       'createManagePaymentMethod callback is required',
     );
-    const empty = setup({ url: null, expires_at: null, provider: 'stripe' });
+    const empty = setup({ url: '', expires_at: null, provider: 'stripe' });
     await expect(act(async () => empty.result.current.managePaymentMethod())).rejects.toThrow(
-      'did not include a URL or checkout',
+      'did not include a URL',
     );
   });
 });

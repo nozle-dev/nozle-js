@@ -4,11 +4,11 @@ import React from "react";
 import { useAppearance } from "../../appearance/context.js";
 import { T, buttonStyle, text, type Appearance } from "../../appearance/tokens.js";
 import { useManagePaymentMethod } from "../../hooks/use-manage-payment-method.js";
-import type { RazorpayActions } from "./razorpay-checkout.js";
 
-export interface ManagePaymentMethodButtonProps
-  extends Pick<RazorpayActions, "onSuccess" | "onProcessing" | "onDismiss" | "onError"> {
+export interface ManagePaymentMethodButtonProps {
   returnUrl?: string;
+  /** Called when the request fails, for example `razorpay_pays_by_link` for a Razorpay customer. */
+  onError?: (error: Error) => void;
   label?: string;
   className?: string;
   appearance?: Appearance;
@@ -21,9 +21,6 @@ export function ManagePaymentMethodButton({
   className,
   style,
   appearance,
-  onSuccess,
-  onProcessing,
-  onDismiss,
   onError,
 }: ManagePaymentMethodButtonProps): React.ReactElement {
   const { root, vars } = useAppearance(appearance, "CheckoutButton");
@@ -33,9 +30,7 @@ export function ManagePaymentMethodButton({
       <button
         type="button"
         onClick={() =>
-          void managePaymentMethod(returnUrl, { onSuccess, onProcessing, onDismiss }).catch(
-            (cause: Error) => onError?.(cause),
-          )
+          void managePaymentMethod(returnUrl).catch((cause: Error) => onError?.(cause))
         }
         disabled={isLoading}
         {...root("checkoutButton", { ...buttonStyle("primary", isLoading), ...style }, className)}

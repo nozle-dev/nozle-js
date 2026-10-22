@@ -133,12 +133,14 @@ export interface HostedCheckoutResult {
   plan_upgrade_intent_id?: string;
 }
 
-/** Stripe: redirect to `url`. Razorpay: `url` is null; open Razorpay Checkout from `checkout`. */
+/**
+ * Stripe only: redirect the customer to `url`. A Razorpay customer pays each invoice by payment link,
+ * so the call throws `NozleApiError` (status 422) where `hasCode("razorpay_pays_by_link")` is true.
+ */
 export interface ManagePaymentMethodResult {
-  url: string | null;
+  url: string;
   expires_at: string | null;
-  provider: "razorpay" | "stripe";
-  checkout?: RazorpayCheckoutResult;
+  provider: "stripe";
 }
 
 export interface CheckoutOptions {

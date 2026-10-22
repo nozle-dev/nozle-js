@@ -164,12 +164,11 @@ export type CreateCheckout = (
   input: CreateCheckoutInput,
 ) => Promise<CheckoutResult>;
 
-/** What your backend returns from `nozle.managePaymentMethod()`. */
+/** What your backend returns from `nozle.managePaymentMethod()`. Stripe only; Razorpay customers pay each invoice by payment link. */
 export interface ManagePaymentMethodResult {
-  url: string | null;
+  url: string;
   expires_at: string | null;
-  provider: "razorpay" | "stripe";
-  checkout?: RazorpayCheckoutResult;
+  provider: "stripe";
 }
 
 export type CreateManagePaymentMethod = (input: {
