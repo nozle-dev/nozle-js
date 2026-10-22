@@ -24,6 +24,7 @@ import type {
   Plan,
   CheckoutResult,
   CheckoutOptions,
+  ManagePaymentMethodResult,
   CheckoutStatus,
   SubscriptionCheckoutScope,
   SubscriptionOptions,
@@ -177,6 +178,35 @@ export class Nozle {
     );
     this.subCache.clear(); // an invoice carries no customer id here, so drop every entry
     return result;
+  }
+
+  async managePaymentMethod(
+    customerId: string,
+    returnUrl?: string,
+    options: Pick<CheckoutOptions, "idempotencyKey"> = {},
+  ): Promise<ManagePaymentMethodResult> {
+    if (!this.apiKey.startsWith("sk_"))
+      throw new Error("managePaymentMethod requires a secret key");
+    if (!customerId.trim())
+      throw new Error("managePaymentMethod requires customerId");
+    const { idempotencyKey } = options;
+    if (idempotencyKey !== undefined && (!idempotencyKey.trim() || idempotencyKey.length > 255))
+      throw new Error("managePaymentMethod requires a valid idempotencyKey");
+    const res = await request(
+      this.policy,
+      `${this.baseUrl}/api/v1/customers/${encodeURIComponent(customerId)}/payment-method/manage`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+          ...(idempotencyKey && { "Idempotency-Key": idempotencyKey }),
+        },
+        ...(returnUrl && { body: JSON.stringify({ return_url: returnUrl }) }),
+      },
+    );
+    if (!res.ok) throw await apiError("managePaymentMethod", res);
+    return (await res.json()).manage_payment_method;
   }
 
   async verifyCheckout(

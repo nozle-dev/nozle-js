@@ -216,3 +216,42 @@ describe("checkout results and errors", () => {
     },
   );
 });
+
+describe("managePaymentMethod", () => {
+  const stripe = { url: "https://billing.stripe.com/x", expires_at: null, provider: "stripe" };
+  it("posts to the customer route and unwraps the result", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ manage_payment_method: stripe }) });
+    vi.stubGlobal("fetch", fetch);
+    const client = new Nozle({ apiKey: "sk_test", baseUrl: "https://engine.example/" });
+    expect(
+      await client.managePaymentMethod("cust/1", "https://app.example/back", { idempotencyKey: "k1" }),
+    ).toEqual(stripe);
+    expect(fetch.mock.calls[0][0]).toBe("https://engine.example/api/v1/customers/cust%2F1/payment-method/manage");
+    expect(fetch.mock.calls[0][1].method).toBe("POST");
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ return_url: "https://app.example/back" });
+    expect(fetch.mock.calls[0][1].headers["Idempotency-Key"]).toBe("k1");
+    await client.managePaymentMethod("cust");
+    expect(fetch.mock.calls[1][1].body).toBeUndefined();
+  });
+  it("is server-only and validates input", async () => {
+    await expect(new Nozle({ apiKey: "pk_browser" }).managePaymentMethod("c")).rejects.toThrow("secret key");
+    await expect(new Nozle({ apiKey: "sk_test" }).managePaymentMethod(" ")).rejects.toThrow("customerId");
+  });
+  it("raises the API error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false, status: 422, headers: new Headers(), text: async () => '{"error":"no_linked_payment_provider"}',
+      json: async () => ({ error: "no_linked_payment_provider" }),
+    }));
+    await expect(new Nozle({ apiKey: "sk_test", maxRetries: 0 }).managePaymentMethod("c")).rejects.toBeInstanceOf(NozleApiError);
+  });
+  it("raises razorpay_pays_by_link for a Razorpay customer", async () => {
+    const body = { status: 422, error: "Unprocessable Entity", code: "validation_errors", error_details: { base: ["razorpay_pays_by_link"] } };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false, status: 422, statusText: "Unprocessable Entity", headers: new Headers(), json: async () => body,
+    }));
+    const error = await new Nozle({ apiKey: "sk_test", maxRetries: 0 }).managePaymentMethod("c").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(NozleApiError);
+    expect((error as NozleApiError).status).toBe(422);
+    expect((error as NozleApiError).hasCode("razorpay_pays_by_link")).toBe(true);
+  });
+});
