@@ -33,6 +33,7 @@ import type {
   RazorpayVerification,
   SubscribeResult,
   CancellationPolicy,
+  CancelSubscriptionOptions,
   CancelSubscriptionResult,
   SubscriptionTransitionParams,
   SubscriptionTransitionPreview,
@@ -330,7 +331,7 @@ export class Nozle {
   async cancelSubscription(
     customerId: string,
     subscriptionId: string,
-    policy: CancellationPolicy = "end_of_period",
+    policyOrOptions: CancellationPolicy | CancelSubscriptionOptions = {},
   ): Promise<CancelSubscriptionResult> {
     if (!this.apiKey.startsWith("sk_")) {
       throw new Error("cancelSubscription requires a secret key");
@@ -338,13 +339,20 @@ export class Nozle {
     if (!customerId.trim() || !subscriptionId.trim()) {
       throw new Error("cancelSubscription requires customerId and subscriptionId");
     }
-    if (policy !== "end_of_period" && policy !== "immediate") {
+    const options = typeof policyOrOptions === "string" ? { policy: policyOrOptions } : policyOrOptions;
+    if (options.policy !== undefined && options.policy !== "end_of_period" && options.policy !== "immediate") {
       throw new Error("cancelSubscription policy must be end_of_period or immediate");
     }
-    const query = new URLSearchParams({
-      customer_id: customerId,
-      cancellation_policy: policy,
-    });
+    // Options left out are not sent, so the organization's cancellation settings apply to them.
+    const query = new URLSearchParams({ customer_id: customerId });
+    for (const [param, value] of Object.entries({
+      cancellation_policy: options.policy,
+      credit_action: options.creditAction,
+      refund_mode: options.refundMode,
+      final_invoice_action: options.finalInvoiceAction,
+    })) {
+      if (value) query.set(param, value);
+    }
     const res = await request(this.policy, 
       `${this.baseUrl}/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}?${query}`,
       {

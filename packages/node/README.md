@@ -462,20 +462,26 @@ See the [Stripe](https://docs.nozle.dev/integrations/stripe) and [Razorpay](http
 
 ### Cancel a subscription
 
-Cancellation is server-only and requires an `sk_` key. The SDK defaults to
-end-of-period cancellation, so access remains active until Nozle's authoritative
-billing boundary:
+Cancellation is server-only and requires an `sk_` key. Without a timing, the
+organization's cancellation timing applies (set in the dashboard; Nozle's default is
+immediate). Pass the timing to choose it per call:
 
 ```ts
-const result = await nozle.cancelSubscription("cust_123", "sub_123");
+const result = await nozle.cancelSubscription("cust_123", "sub_123", "end_of_period");
 // result.subscription.status === "active"
 // result.subscription.ending_at === "2026-08-15T00:00:00Z"
 ```
 
-Immediate termination must be requested explicitly:
+Pass an options object to also choose how the cancellation is settled. Each option left
+out follows the subscription, then the organization's cancellation settings:
 
 ```ts
-await nozle.cancelSubscription("cust_123", "sub_123", "immediate");
+await nozle.cancelSubscription("cust_123", "sub_123", {
+  policy: "immediate",
+  creditAction: "refund", // credit, refund, offset or none
+  refundMode: "prorated", // prorated or full
+  finalInvoiceAction: "generate", // generate or skip
+});
 ```
 
 ## TypeScript
