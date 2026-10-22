@@ -108,6 +108,27 @@ describe("Nozle", () => {
       expect(transactionId[14]).toBe("7");
     });
 
+    it("puts the generated transactionId on the error and a retry with it sends the same id", async () => {
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse({ error: "Bad Gateway" }, 502))
+        .mockRejectedValueOnce(new TypeError("fetch failed"))
+        .mockResolvedValueOnce(jsonResponse({}));
+      const client = new Nozle({ apiKey: "sk_test" });
+
+      const first = await client.track("cust_1", "api_call", {}, { subscriptionId: "sub_1" }).catch((e: unknown) => e);
+      expect(first).toBeInstanceOf(NozleApiError);
+      const transactionId = (first as NozleApiError).transactionId;
+      expect(transactionId).toBe(JSON.parse(fetchMock.mock.calls[0][1].body).event.transaction_id);
+
+      const second = await client.track("cust_1", "api_call", {}, { subscriptionId: "sub_1", transactionId }).catch((e: unknown) => e);
+      expect(second).toBeInstanceOf(TypeError);
+      expect((second as { transactionId?: string }).transactionId).toBe(transactionId);
+
+      await expect(client.track("cust_1", "api_call", {}, { subscriptionId: "sub_1", transactionId })).resolves.toBe(transactionId);
+      const sent = fetchMock.mock.calls.map(([, opts]) => JSON.parse(opts.body).event.transaction_id);
+      expect(sent).toEqual([transactionId, transactionId, transactionId]);
+    });
+
     it("sends explicit ISO event timestamps as Unix seconds to Engine", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({}));
       const client = new Nozle({ apiKey: "sk_test" });

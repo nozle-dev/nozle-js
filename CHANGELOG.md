@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## Node.js 0.13.2 — 2026-10-22
+
+### Fixed
+
+- `track()` puts its transaction ID on the error it throws (`error.transactionId`, typed on `NozleApiError`), for an error response and for a network error or timeout, including the ID it generated when none was passed. Pass it back as `transactionId` when you retry, with the same event and `timestamp`: Engine records an event once per transaction ID, so the retry no longer bills the event twice. Before, a generated ID was lost when the call threw, and a retry sent a new one.
+
 ## Node.js 0.13.1 — 2026-10-19
 
 ### Fixed
