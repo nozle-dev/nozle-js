@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createBillingHandler } from "../billing-handler";
 import { NozleApiError } from "../errors";
 
-function fakeNozle(subscriptions: Array<{ external_id: string }> = [{ external_id: "sub_1" }], overdue = 0) {
+function fakeNozle(subscriptions: Array<{ external_id: string; plan_version?: number }> = [{ external_id: "sub_1" }], overdue = 0) {
   return {
     invoices: {
       list: vi.fn(async () => ({ invoices: [], meta: { total_count: overdue } })),
@@ -28,7 +28,7 @@ describe("createBillingHandler", () => {
     const handler = createBillingHandler(nozle as any, { getCustomerId: () => "cust_session" });
 
     expect(await (await handler(get("/api/nozle/subscription?customer_id=other"))).json()).toEqual({
-      subscription: { external_id: "sub_1" },
+      subscription: { external_id: "sub_1", plan_version: null },
       pending_change: null,
       past_due: false,
     });
@@ -42,6 +42,11 @@ describe("createBillingHandler", () => {
     expect(nozle.pastUsage).toHaveBeenCalledWith("cust_session", { subscriptionId: "sub_1", periods: 3 });
     await handler(get("/api/nozle/preview?plan=pro"));
     expect(nozle.previewSubscriptionChange).toHaveBeenCalledWith("cust_session", "sub_1", "pro");
+  });
+
+  it("says which plan version the subscription is billed on", async () => {
+    const handler = createBillingHandler(fakeNozle([{ external_id: "sub_1", plan_version: 1 }]) as any, { getCustomerId: () => "cust" });
+    expect(await (await handler(get("/x/subscription"))).json()).toMatchObject({ subscription: { external_id: "sub_1", plan_version: 1 } });
   });
 
   it("answers 401 without a session, 404 for unknown routes, 405 for writes and 400 for missing input", async () => {

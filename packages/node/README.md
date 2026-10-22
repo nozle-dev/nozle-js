@@ -380,6 +380,26 @@ const checkout = await nozle.checkout(
 const { subscription_id, status } = await nozle.subscribe("cust_123", "pro");
 ```
 
+### Plan versions
+
+Changing the price of a plan that customers pay for saves it as the plan's next version: new customers get the new version, and existing subscribers keep the price they bought until you move them. `plans()` returns current versions only; each plan has `version` and `is_current`.
+
+```ts
+// Keep selling the older price to one customer.
+await nozle.subscribe("cust_123", "pro", { planVersion: 1 });
+
+const versions = await nozle.planVersions.list("pro"); // every version, its price and active subscriptions
+const older = await nozle.planVersions.get("pro", 1);
+
+// Move version 1's subscribers to the current version, each at the end of its billing period.
+const preview = await nozle.planVersions.previewMigration("pro", { fromVersion: 1 });
+const migration = await nozle.planVersions.createMigration("pro", { fromVersion: 1 });
+const detail = await nozle.planVersions.getMigration("pro", migration.nozle_id); // per-subscription items
+await nozle.planVersions.cancelMigration("pro", migration.nozle_id); // unschedules moves not started
+```
+
+A migration invoices, credits and refunds nothing when it runs: each subscription is billed the new version from its next period. Subscriptions it cannot move (custom pricing, a trial the new version would change, a pending plan change, an open checkout, and so on) are skipped with a `skip_reason`. Sending the same plan code again for an existing subscription keeps its version; another `planVersion` for it is refused. `planVersions` needs a secret key. See [Plan versioning](https://docs.nozle.dev/guides/billing/plan-versions).
+
 ### Payment providers: Stripe and Razorpay
 
 Nozle collects through the payment provider connected to your organization and assigned to the customer. `checkout()` and `checkoutInvoice()` return a result whose `type` tells you what to do next. Branch on `type`; a browser callback alone never proves payment.

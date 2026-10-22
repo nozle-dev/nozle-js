@@ -67,10 +67,14 @@ function day(value: string, locale: string): string {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString(locale, { dateStyle: "medium" });
 }
 
-/** Meters from the plan's metered limits joined with this period's units, by feature code. */
+/**
+ * Meters from the plan's metered limits joined with this period's units, by feature code. With `withLimits`
+ * false the meters show usage only: the entitlements come from another version of the plan than the customer's.
+ */
 export function currentPlanMeters(
   entitlements: { feature_type: string; code: string; name: string; usage_limit?: number | null }[] | undefined,
   usage: CustomerUsageData | null | undefined,
+  withLimits = true,
 ): UsageDashboardFeature[] {
   const units = new Map<string, number>();
   for (const charge of usage?.charges_usage ?? []) {
@@ -82,7 +86,7 @@ export function currentPlanMeters(
       key: entitlement.code,
       label: entitlement.name,
       used: units.get(entitlement.code) ?? 0,
-      limit: entitlement.usage_limit ?? null,
+      limit: withLimits ? (entitlement.usage_limit ?? null) : null,
     }));
 }
 
@@ -95,9 +99,13 @@ function CurrentPlanFromBackend(props: CurrentPlanProps): React.ReactElement {
   const plans = usePlans();
   const usage = useUsage();
   const planCode = subscription.data?.subscription?.plan_code;
+  const catalogPlan = plans.plans.find((plan) => plan.code === planCode);
+  // NOTE: The catalog lists the current version of each code. A customer on an older version has that version's
+  //       limits, which the catalog does not have: show their usage without another version's limits.
+  const subscribedVersion = subscription.data?.subscription?.plan_version;
+  const sameVersion = typeof subscribedVersion !== "number" || typeof catalogPlan?.version !== "number" || catalogPlan.version === subscribedVersion;
   const meters =
-    props.usage ??
-    currentPlanMeters(plans.plans.find((plan) => plan.code === planCode)?.entitlements, usage.data as CustomerUsageData | null);
+    props.usage ?? currentPlanMeters(catalogPlan?.entitlements, usage.data as CustomerUsageData | null, sameVersion);
   return (
     <CurrentPlanView
       {...props}

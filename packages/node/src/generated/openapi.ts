@@ -305,7 +305,7 @@ export interface paths {
         };
         /**
          * List usage
-         * @description Returns usages.
+         * @description Usage analytics is not available on Nozle. This endpoint answers `503` with `analytics_unavailable`.
          */
         get: operations["findAllUsages"];
         put?: never;
@@ -1207,6 +1207,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/customers/{customer_id}/payment-method/manage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manage a customer payment method
+         * @description Returns the Stripe Billing Portal `url` where a customer adds or changes their payment method. Stripe only. Razorpay customers pay each invoice by payment link and get 422 razorpay_pays_by_link. Nozle stores no card data. Secret key only, publishable keys are refused with 403.
+         */
+        post: operations["manageCustomerPaymentMethod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -1324,6 +1344,7 @@ export interface paths {
          * Send a detailed internal Cost Event
          * @description Publishes internal cost usage linked to a Feature Event, directly to a customer, or to both.
          *     This endpoint requires a secret key and returns only after Kafka acknowledges the message.
+         *     With API key permissions, the secret key needs `event:write`; without it the answer is `403` with `code: permission_denied`.
          *     Financial rating and analytics processing continue asynchronously.
          */
         post: operations["createCostEvent"];
@@ -1352,6 +1373,7 @@ export interface paths {
          *     customer-resolved Cost Event during the overlap between the allocation period and service period.
          *     Pools configured for active provisioned customers instead use subscriptions that overlap the period;
          *     free and paid plans are treated equally.
+         *     Requires a secret key. With API key permissions, the key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`.
          */
         post: operations["previewSharedCostAllocation"];
         delete?: never;
@@ -1376,6 +1398,8 @@ export interface paths {
          * Finalize a Shared Period Cost allocation
          * @description Freezes the eligible customer population for a closed allocation period and writes immutable
          *     customer allocation entries to the PostgreSQL cost ledger. Repeating the same request is idempotent.
+         *     Nozle also allocates every closed period automatically within about 15 minutes of its close, so this call is only needed to book a closed period sooner. A period that is already allocated, by hand or automatically, returns the finished allocation.
+         *     Requires a secret key. With API key permissions, the key needs `analytic:write`; without it the answer is `403` with `code: permission_denied`.
          */
         post: operations["createSharedCostAllocation"];
         delete?: never;
@@ -1398,6 +1422,7 @@ export interface paths {
          *     identifier-conflict sources.
          *     This endpoint returns cost data only. The dashboard combines it with finalized billing invoice
          *     and fee revenue without adding estimated event revenue.
+         *     Requires a secret key. With API key permissions, the key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`.
          */
         get: operations["getCostIntelligenceReport"];
         put?: never;
@@ -1421,6 +1446,7 @@ export interface paths {
          * Replay an uncosted source
          * @description Retries rating for an uncosted Feature Event or an uncosted or pending Cost Event.
          *     A source that already produced ledger entries is rejected so replay cannot duplicate money.
+         *     Operator only: accepts only Nozle's internal service token. Organization secret (`sk_`) and publishable (`pk_`) keys get `403` with `internal service authentication required`.
          */
         post: operations["replayCostIntelligenceSource"];
         delete?: never;
@@ -1440,7 +1466,7 @@ export interface paths {
         put?: never;
         /**
          * Requeue a cost-ledger projection
-         * @description Clears the delivery state for one existing PostgreSQL ledger entry so the outbox relay projects it to ClickHouse again.
+         * @description Clears the delivery state for one existing PostgreSQL ledger entry so the outbox relay projects it to ClickHouse again. Operator only; accepts only Nozle's internal service token. Organization secret (`sk_`) and publishable (`pk_`) keys get `403` with `internal service authentication required`.
          */
         post: operations["replayCostIntelligenceProjection"];
         delete?: never;
@@ -1687,7 +1713,7 @@ export interface paths {
         put?: never;
         /**
          * Generate a payment URL
-         * @description This endpoint generates a checkout link for a specific invoice.
+         * @description This endpoint generates a checkout link for a specific invoice. An invoice that is paid, voided, draft, closed, failed or has nothing due returns `422 validation_errors` with `error_details.base` `invalid_invoice_status_or_payment_status`.
          */
         post: operations["invoicePaymentUrl"];
         delete?: never;
@@ -1708,6 +1734,8 @@ export interface paths {
         /**
          * Create an invoice preview
          * @description This endpoint is used for generating invoice preview.
+         *
+         *     To preview a plan change of existing subscriptions, send `subscriptions.external_ids` and the target `subscriptions.plan_code`. Without an explicit `transition_policy` and `transition_direction`, the preview resolves the change as the real change does: the plan transition policy of the pair of plans, then the organization's downgrade defaults (so a downgrade at the end of the period previews with that date), and otherwise an immediate upgrade.
          */
         post: operations["invoicePreview"];
         delete?: never;
@@ -1836,7 +1864,9 @@ export interface paths {
         put?: never;
         /**
          * Create a payment request
-         * @description This endpoint is used to create a payment request to collect payments of overdue invoices of a given customer
+         * @description This endpoint is used to create a payment request to collect payments of overdue invoices of a given customer. `payment_method` is used when given.
+         *
+         *     For a customer who pays through Razorpay, the request reaches the customer only as a payment link sent by email. When the customer's billing entity has no email, the call returns `422` with `billing_entity: [billing_entity_email_missing]`, and without a recipient `email`, `email: [email_missing]`. Nothing is created in either case. Add an email to the billing entity first.
          */
         post: operations["createPaymentRequest"];
         delete?: never;
@@ -1932,7 +1962,8 @@ export interface paths {
          *
          *     - All top-level plans of the organization are returned, newest first. There is no listed or public flag. Plans with a trial (`trial_period`) and pay-in-arrears plans (`pay_in_advance: false`) are included. Plans pending deletion (`pending_deletion: true`) are included for a secret key only. Per-customer override plans (`parent_id` set) are not.
          *     - Items do not include `fixed_charges`; use `GET /plans/{code}` for those.
-         *     - The Engine host serves this list at `https://api.nozle.app/engine/api/v1/plans` with the same body. Engine ignores `page` and `per_page` and returns the first page (up to 100 plans). Use this Core endpoint to page through larger catalogs.
+         *     - The Engine host serves this list at `https://api.nozle.app/engine/api/v1/plans` with the same body. Engine forwards `page` and `per_page` to Core.
+         *     - A publishable key, or a secret key with `include_hidden=false`, does not receive the plans of plan families hidden from the pricing table, and `families[].features` leaves out hidden features. Hiding is a listing setting only: every plan carries all its entitlements and charges, including those of hidden features.
          *
          *     Because a publishable key ships in browsers, anything stored on a plan is readable by anyone who has the key. See [Public plan catalog](/api/list-plans).
          */
@@ -1940,7 +1971,7 @@ export interface paths {
         put?: never;
         /**
          * Create a plan
-         * @description This endpoint creates a plan with subscription and usage-based charges. It supports flexible billing cadence (in-advance or in-arrears) and allows for both recurring and metered charges.
+         * @description This endpoint creates a plan with subscription and usage-based charges. It supports flexible billing cadence (in-advance or in-arrears) and allows for both recurring and metered charges. Usage thresholds (`usage_thresholds`) need progressive billing, which comes with the Growth, Scale and Enterprise Nozle plans, so without it a non-empty list is refused with `422` with `feature_not_available` in `error_details.usage_thresholds`, and nothing is saved. An empty list is accepted and changes nothing.
          */
         post: operations["createPlan"];
         delete?: never;
@@ -1965,16 +1996,20 @@ export interface paths {
          *
          *     **Publishable keys.** A publishable `pk_` key may call this endpoint and `GET /plans`, and nothing else. It returns the same body as a secret key: the whole plan, including `charges`, `fixed_charges`, `taxes`, `minimum_commitment`, `usage_thresholds`, `entitlements`, `credit_grant_rules`, `credit_pool_policies` and `metadata`. Anyone who has the key can read all of it.
          *
-         *     This endpoint also returns a plan that is pending deletion (`pending_deletion: true`) and a plan with a trial or pay-in-arrears billing. An unknown code, or the code of a per-customer override plan, returns `404` with the code `plan_not_found`.
+         *     This endpoint also returns a plan with a trial or pay-in-arrears billing, and, to a secret key, a plan that is pending deletion (`pending_deletion: true`). An unknown code, the code of a per-customer override plan, or a plan pending deletion read with a publishable key returns `404` with the code `plan_not_found`.
          *
-         *     The Engine host does not serve this path. Call it on the Core host.
+         *     A publishable key receives a plan of a family hidden from the pricing table, or whose family was deleted, so the SDK can describe a subscriber's own plan. The plan carries all its entitlements and charges, including those of features hidden from the pricing table.
+         *
+         *     The Engine host also serves this path at `https://api.nozle.app/engine/api/v1/plans/{code}` and returns Core's body unchanged.
          *
          *     See [Public plan catalog](/api/list-plans).
          */
         get: operations["findPlan"];
         /**
          * Update a plan
-         * @description This endpoint updates a specific plan with subscription and usage-based charges. It supports flexible billing cadence (in-advance or in-arrears) and allows for both recurring and metered charges.
+         * @description This endpoint updates a specific plan with subscription and usage-based charges. It supports flexible billing cadence (in-advance or in-arrears) and allows for both recurring and metered charges. Usage thresholds (`usage_thresholds`) need progressive billing, which comes with the Growth, Scale and Enterprise Nozle plans, so without it a non-empty list is refused with `422` with `feature_not_available` in `error_details.usage_thresholds`, and nothing is saved. An empty list is accepted and changes nothing.
+         *
+         *     **Plan versioning.** When the plan has active subscriptions and the change alters what it bills or grants, Nozle saves the change as the plan's next version (same code) and returns that new, current version: the existing subscriptions stay on the version they are on until a version migration moves them, and new subscriptions get the new version. Name, description and invoice name are shared by every version and never create one. `disable_version: true` changes the current version in place instead. Only the current version can be edited: an edit of an older version (for example a form opened before another save) is refused with `409` and `plan_version_not_current`. See [Plan versioning](/guides/billing/plan-versions).
          */
         put: operations["updatePlan"];
         post?: never;
@@ -2006,7 +2041,7 @@ export interface paths {
         put?: never;
         /**
          * Create an entitlement
-         * @description This endpoint creates new entitlements by adding features to a plan. Note that all existing entitlements will be deleted and replaced by the ones provided. To add a new entitlement without removing the existing ones, use PATCH. The feature must exist and all privileges must be valid for the feature.
+         * @description This endpoint creates new entitlements by adding features to a plan. Note that all existing entitlements will be deleted and replaced by the ones provided. To add a new entitlement without removing the existing ones, use PATCH. The feature must exist and all privileges must be valid for the feature. In a plan family, features and privileges are written to every plan of the family, but `usage_limit` and `hard_limit` are set on the plan in the path only, so each billing interval keeps its own limits, because usage is counted per billing period. A plan of the family that gets a metered feature for the first time this way has no limit until one is set on it.
          */
         post: operations["createEntitlement"];
         delete?: never;
@@ -2014,7 +2049,7 @@ export interface paths {
         head?: never;
         /**
          * Partial update of an entitlement
-         * @description This accepts a list of entitlements to update. If the feature isn't part of the plan yet, it's added with all the privileges from the payload. If the feature is already part of the plan, the privilege and values are updated or added. All privileges must be valid for the feature. All features  and privileges not part of the payload are left untouched. To remove privileges or features, use the DELETE endpoints.
+         * @description This accepts a list of entitlements to update. If the feature isn't part of the plan yet, it's added with all the privileges from the payload. If the feature is already part of the plan, the privilege and values are updated or added. All privileges must be valid for the feature. All features  and privileges not part of the payload are left untouched. For a feature that is already part of the plan, the metered settings the payload leaves out (`usage_limit`, `hard_limit`, `min_margin_percent`, `margin_enforcement_mode`, `enforce_plan_margin`) keep their current values, so sending only `hard_limit` set to false keeps the usage limit, and sending only `usage_limit` keeps a soft limit soft. POST replaces the whole entitlement and applies the defaults. To remove privileges or features, use the DELETE endpoints. In a plan family, features and privileges are written to every plan of the family, but `usage_limit` and `hard_limit` are set on the plan in the path only, so each billing interval keeps its own limits, because usage is counted per billing period. A plan of the family that gets a metered feature for the first time this way has no limit until one is set on it.
          */
         patch: operations["updateEntitlement"];
         trace?: never;
@@ -2324,7 +2359,7 @@ export interface paths {
         put?: never;
         /**
          * Assign a plan to a customer
-         * @description This endpoint assigns a plan to a customer, creating or modifying a subscription. Ideal for initial subscriptions or plan changes (upgrades/downgrades).
+         * @description This endpoint assigns a plan to a customer, creating or modifying a subscription. Ideal for initial subscriptions or plan changes (upgrades/downgrades). `usage_thresholds` and `plan_overrides.usage_thresholds` need progressive billing (Growth, Scale and Enterprise Nozle plans); without it a non-empty list answers `422` with `feature_not_available` in `error_details.usage_thresholds`, and nothing is saved. A plan that is pending deletion (`pending_deletion: true`) cannot start a subscription or receive a plan change; the call returns `422` with `plan_code: [plan_pending_deletion]`. Posting the plan the subscription is already on still works.
          */
         post: operations["createSubscription"];
         delete?: never;
@@ -2376,12 +2411,12 @@ export interface paths {
         };
         /**
          * Retrieve subscription lifetime usage
-         * @description This endpoint enables the retrieval of the lifetime usage of a subscription.
+         * @description This endpoint enables the retrieval of the lifetime usage of a subscription. It answers `403` with `feature_not_available` when the organization's Nozle plan includes neither lifetime usage nor progressive billing (Growth, Scale and Enterprise include them).
          */
         get: operations["getSubscriptionLifetimeUsage"];
         /**
          * Update a subscription lifetime usage
-         * @description This endpoint allows you to update the lifetime usage of a subscription.
+         * @description This endpoint allows you to update the lifetime usage of a subscription. It answers `403` with `feature_not_available` when the organization's Nozle plan includes neither lifetime usage nor progressive billing.
          */
         put: operations["updateSubscriptionLifetimeUsage"];
         post?: never;
@@ -2477,7 +2512,7 @@ export interface paths {
         head?: never;
         /**
          * Update subscription entitlements
-         * @description This accepts a list of entitlements to update. If the feature isn't part of the subscription yet, it's added with all the privileges from the payload. If the feature is already part of the subscription (via plan or via override), the privilege and values are updated or added. All privileges must be valid for the feature. All features  and privileges not part of the payload are left untouched. To remove privileges or features, use the DELETE endpoints.
+         * @description This accepts a list of entitlements to update. If the feature isn't part of the subscription yet, it's added with all the privileges from the payload. If the feature is already part of the subscription (via plan or via override), the privilege and values are updated or added. All privileges must be valid for the feature. All features  and privileges not part of the payload are left untouched. The metered settings the payload leaves out keep the subscription's override, or the plan's value when the subscription has no override. To remove privileges or features, use the DELETE endpoints.
          */
         patch: operations["updateSubscriptionEntitlements"];
         trace?: never;
@@ -2605,7 +2640,6 @@ export interface paths {
          * @description This endpoint creates or updates a charge override for a specific subscription.
          *     If the subscription does not have a plan override yet, one will be created automatically.
          *     The charge override allows customizing specific charge properties (invoice_display_name, min_amount_cents, properties, filters, taxes, applied_pricing_unit) without affecting the original plan charge.
-         *     This is a premium feature.
          */
         put: operations["overrideSubscriptionCharge"];
         post?: never;
@@ -2702,7 +2736,6 @@ export interface paths {
          * @description This endpoint creates or updates a fixed charge override for a subscription, without affecting the original plan fixed charge.
          *     When the body contains only `units` (and optionally `apply_units_immediately`), the change is recorded as a per-subscription unit override. When the body also sets `invoice_display_name`, `properties`, or `tax_codes`, it is applied as a full plan override for the subscription instead.
          *     With `apply_units_immediately: true` on a pay-in-advance fixed charge the change is billed mid-period; otherwise it takes effect at the next billing period.
-         *     This is a premium feature.
          */
         put: operations["overrideSubscriptionFixedCharge"];
         post?: never;
@@ -2741,7 +2774,7 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Until January 19, 2027, an old `lago_eu_<rest>` code resolves to the `nozle_eu_<rest>` tax (a tax you created yourself with a `lago_eu_*` code keeps it). */
                 code: string;
             };
             cookie?: never;
@@ -3139,7 +3172,7 @@ export interface paths {
         };
         /**
          * Get plan-change options
-         * @description Returns the selected active subscription, its pending scheduled change, the plans it may change to under the configured transition policies, and the latest upgrade checkout. Engine checks the inputs and the customer scope, then forwards to Core `GET /subscription_transitions/options` with `external_customer_id` and `external_subscription_id`. Requires `subscription:read`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
+         * @description Returns the selected active subscription, its pending scheduled change, the plans it may change to under the configured transition policies, and the latest upgrade checkout. Engine checks the inputs and the customer scope, then forwards to Core `GET /subscription_transitions/options` with `external_customer_id` and `external_subscription_id`. A subscription on an override plan (for example one created from a quote) gets the eligible plans of the catalog plan it was made from, under that plan's transition policies. Requires `subscription:read`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
          */
         get: operations["engineGetSubscriptionOptions"];
         put?: never;
@@ -3201,7 +3234,7 @@ export interface paths {
         put?: never;
         /**
          * Create a checkout
-         * @description Creates a payment-gated plan checkout, an invoice checkout (`invoice_id`), or an Entity checkout (`external_entity_id`). Requires `payment:write`. Engine validates the body and the `return_url` origin, then forwards to Core `POST /checkout_sessions` (renaming `subscription_id` to `external_subscription_id`). Core decides the result type from the plan, the current subscription and its transition policy: a provider checkout when money is due, `completed` when nothing external is due, `scheduled` for an end-of-period change. A customer without a subscription choosing a plan that needs no up-front payment gets `422 checkout_not_required`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
+         * @description Creates a payment-gated plan checkout, an invoice checkout (`invoice_id`), or an Entity checkout (`external_entity_id`). Requires `payment:write`. Engine validates the body and the `return_url` origin, then forwards to Core `POST /checkout_sessions` (renaming `subscription_id` to `external_subscription_id`). Core decides the result type from the plan, the current subscription and its transition policy: a provider checkout when money is due, `completed` when nothing external is due, `scheduled` for an end-of-period change. An unpaid plan or single Entity checkout expires after 23 hours (the Stripe Checkout Session and Razorpay order too): the subscription is canceled with `cancelation_reason: timeout` and a `subscription.canceled` webhook, the invoice is closed, and the coupons, credit-note credits and wallet credits it used are returned. They are also returned when the checkout payment fails. Checking out the same plan again reopens an abandoned checkout; another plan replaces it. With Stripe, an invoice has at most one payable Checkout Session: checking out the same invoice again returns the open session (same `client_secret`), and while a payment of the last session is processing or has succeeded the call answers `422` with `base: [payment_already_processing]`. A second successful payment for an invoice that is already paid is refunded in full and reported with the `invoice.payment_failure` webhook (`duplicate_payment_refunded`). A customer without a subscription choosing a plan that needs no up-front payment gets `422 checkout_not_required`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
          */
         post: operations["engineCreateCheckout"];
         delete?: never;
@@ -3261,7 +3294,7 @@ export interface paths {
         put?: never;
         /**
          * Change plan without checkout
-         * @description Changes the plan of the customer's active subscription without checkout, from a trusted backend. Requires a secret key with `subscription:write`. Engine loads the target plan, the customer's most recent active subscription and its plan. When the target plan's yearly amount is above zero and at least the current plan's yearly amount, Engine returns `422` with `code: payment_checkout_required` and changes nothing. Otherwise it calls Core `POST /subscriptions` with the subscription's external ID and the new plan code, and returns Core's status and body unchanged.
+         * @description Changes the plan of the customer's active subscription without checkout, from a trusted backend. Requires a secret key with `subscription:write`. Engine loads the target plan, the customer's current subscription and its plan. With several current subscriptions it uses the customer's own (not Entity-owned) subscription when there is exactly one, and otherwise answers `409` with `code: subscription_required`. When the target plan's yearly amount is above zero and at least the current plan's yearly amount, Engine returns `422` with `code: payment_checkout_required` and changes nothing. Otherwise it calls Core `POST /subscriptions` with the subscription's external ID and the new plan code, and returns Core's status and body unchanged.
          */
         post: operations["engineUpgradeSubscription"];
         delete?: never;
@@ -3344,6 +3377,114 @@ export interface paths {
          * @description Withdraws one pending scheduled change; the active subscription stays in place. Engine rejects unknown fields, requires `customer_id`, `subscription_id`, a UUID `pending_subscription_id` and an Idempotency-Key, then forwards to Core `POST /subscription_transitions/withdraw` (as `external_customer_id`, `external_subscription_id`). Engine does not check subscription ownership itself; Core scopes the lookup to the customer. Requires `subscription:write`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
          */
         post: operations["engineWithdrawSubscriptionTransition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/{code}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the versions of a plan
+         * @description Lists every version of the plan code, oldest first, with its price and the number of active subscriptions billed on it. Secret keys only; a publishable key gets `403` with `secret_key_required`. See [Plan versioning](/guides/billing/plan-versions).
+         */
+        get: operations["listPlanVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/{code}/version-migrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the version migrations of a plan
+         * @description Lists the migrations of the plan code, newest first, without their items. Secret keys only.
+         */
+        get: operations["listPlanVersionMigrations"];
+        put?: never;
+        /**
+         * Start a version migration
+         * @description Moves the active subscriptions on `from_version` of the plan code to `to_version` (the current version by default). Each subscription moves at the end of its current billing period, the way a scheduled downgrade is applied: nothing is invoiced, credited or refunded when the migration runs, and the subscription is billed the new version from its next period.
+         *
+         *     The migration runs in the background in chunks and records one item per subscription, so the response has `status: running`; read it again with `GET /plans/{code}/version-migrations/{id}`. Subscriptions are skipped, with a `skip_reason`, when they are on custom pricing, billed by another system, not started, canceling at the end of their period, in a trial the new version would change, already on the target version, waiting on another plan change, have an open checkout, or when the two versions bill on another interval, currency or billing time. Running it again is safe: moved subscriptions are not moved twice and failed ones are retried.
+         *
+         *     One migration of a plan code runs at a time: another one returns `409` with `plan_version_migration_running`. `422` with `to_version: same_version` when both versions are the same, or `to_version: plan_pending_deletion` when the target is being deleted. Secret keys only.
+         */
+        post: operations["createPlanVersionMigration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/{code}/version-migrations/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a version migration
+         * @description Says what a migration would do to each active subscription on `from_version`, without writing anything. Each item is `move` with the day the subscription would start on the new version and its current and new plan amounts, or `skip` with the reason. Secret keys only.
+         */
+        post: operations["previewPlanVersionMigration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/{code}/version-migrations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retrieve a version migration
+         * @description Returns the migration with one item per subscription it handled. Secret keys only.
+         */
+        get: operations["findPlanVersionMigration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/{code}/version-migrations/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a version migration
+         * @description Stops a running migration and unschedules every move that has not started. Those subscriptions stay on their version; subscriptions already on the new version stay there. Secret keys only.
+         */
+        post: operations["cancelPlanVersionMigration"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3461,7 +3602,7 @@ export interface paths {
         put?: never;
         /**
          * Start an Entity subscription checkout
-         * @description Starts or resumes checkout of a plan for one Entity. Same Core action and result types as plan checkout (`POST /checkout_sessions`), scoped to the Entity's subscription identity, which is created when missing. Retrying an incomplete checkout for the same plan reuses its subscription and invoice. A plan with no up-front payment completes with `payment_source: none`. Requires a secret key (`403 secret_key_required` otherwise) with `subscription` permission (`payment` for checkout routes).
+         * @description Starts or resumes checkout of a plan for one Entity. Same Core action and result types as plan checkout (`POST /checkout_sessions`), scoped to the Entity's subscription identity, which is created when missing. Retrying an incomplete checkout for the same plan reuses its subscription and invoice; another plan replaces the abandoned checkout. An unpaid checkout expires after 23 hours: the subscription is canceled with `cancelation_reason: timeout`, the invoice is closed and the coupons, credit-note credits and wallet credits it used are returned. A plan with no up-front payment completes with `payment_source: none`. Requires a secret key (`403 secret_key_required` otherwise) with `subscription` permission (`payment` for checkout routes).
          */
         post: operations["coreCreateEntitySubscriptionCheckout"];
         delete?: never;
@@ -3559,7 +3700,7 @@ export interface paths {
         };
         /**
          * List invoices
-         * @description Lists the customer's invoices from Engine's billing database, newest first, at most 50, excluding drafts. Requires `invoice:read`. There is no pagination.
+         * @description Lists the customer's invoices from Engine's billing database, newest first, at most 50: the statuses Core's API shows other than draft (`finalized`, `voided`, `failed`, `pending`), for the live customer with this external ID only. Requires `invoice:read`. There is no pagination.
          */
         get: operations["engineListInvoices"];
         put?: never;
@@ -3599,7 +3740,7 @@ export interface paths {
         };
         /**
          * List customer credit balances
-         * @description Lists the customer's balance in every active Credit System of the organization, with active and scheduled sources. A system where the customer has no credit has `available: "0"` and no sources. Items are ordered by `credit_system` code. Requires an organization secret key, or trusted internal authentication. When the organization has API permissions enabled, a secret key needs `credit_system:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
+         * @description Lists the customer's balance in every active Credit System of the organization, with active and scheduled sources. A system where the customer has no credit has `available: "0"` and no sources. Items are ordered by `credit_system` code. Requires an organization secret key, or trusted internal authentication. A secret key needs `credit_system:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
          */
         get: operations["engineListCustomerCreditBalances"];
         put?: never;
@@ -3619,7 +3760,7 @@ export interface paths {
         };
         /**
          * Get customer credit balance
-         * @description Returns the customer's balance in one Credit System of any status. Requires an organization secret key, or trusted internal authentication. When the organization has API permissions enabled, a secret key needs `credit_system:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
+         * @description Returns the customer's balance in one Credit System of any status. Requires an organization secret key, or trusted internal authentication. A secret key needs `credit_system:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
          */
         get: operations["engineGetCustomerCreditBalance"];
         put?: never;
@@ -3639,7 +3780,7 @@ export interface paths {
         };
         /**
          * List customer credit operations
-         * @description Pages through the customer's immutable credit operations (grants, consumes, denials, adjustments and others), with exact amounts, metric and rate snapshots and source allocations. A denied consume has no allocations. Requires an organization secret key, or trusted internal authentication. When the organization has API permissions enabled, a secret key needs `credit_system:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
+         * @description Pages through the customer's immutable credit operations (grants, consumes, denials, adjustments and others), with exact amounts, metric and rate snapshots and source allocations. A denied consume has no allocations. Requires an organization secret key, or trusted internal authentication. A secret key needs `credit_system:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
          */
         get: operations["engineListCustomerCreditOperations"];
         put?: never;
@@ -3659,7 +3800,7 @@ export interface paths {
         };
         /**
          * List Entity credit balances
-         * @description Lists an Entity's balances with separate `entity_available`, `shared_available` and `effective_available` views. Requires an organization secret key, or trusted internal authentication. When the organization has API permissions enabled, a secret key needs `entity:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
+         * @description Lists an Entity's balances with separate `entity_available`, `shared_available` and `effective_available` views. Requires an organization secret key, or trusted internal authentication. A secret key needs `entity:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
          */
         get: operations["engineListEntityCreditBalances"];
         put?: never;
@@ -3679,7 +3820,7 @@ export interface paths {
         };
         /**
          * Get Entity credit balance
-         * @description Returns an Entity's balance in one Credit System. `effective_available` applies the current plan pool policy and is `0` when the Entity is inactive or no unambiguous policy exists. Requires an organization secret key, or trusted internal authentication. When the organization has API permissions enabled, a secret key needs `entity:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
+         * @description Returns an Entity's balance in one Credit System. `effective_available` applies the current plan pool policy and is `0` when the Entity is inactive or no unambiguous policy exists. Requires an organization secret key, or trusted internal authentication. A secret key needs `entity:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
          */
         get: operations["engineGetEntityCreditBalance"];
         put?: never;
@@ -3699,7 +3840,7 @@ export interface paths {
         };
         /**
          * List Entity credit operations
-         * @description Pages through credit operations attributed to the Entity's durable UUID: grants, transfers, consumes, denials, expiry, revocation, refunds and adjustments. Requires an organization secret key, or trusted internal authentication. When the organization has API permissions enabled, a secret key needs `entity:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
+         * @description Pages through credit operations attributed to the Entity's durable UUID: grants, transfers, consumes, denials, expiry, revocation, refunds and adjustments. Requires an organization secret key, or trusted internal authentication. A secret key needs `entity:read`. Publishable keys are rejected. Decimal amounts are strings without trailing zeros.
          */
         get: operations["engineListEntityCreditOperations"];
         put?: never;
@@ -3719,7 +3860,7 @@ export interface paths {
         };
         /**
          * List customer Entities
-         * @description Lists the customer's Entities, optionally filtered by status. Requires an organization secret key, or trusted internal authentication. When the organization has API permissions enabled, a secret key needs `entity:read`. Publishable keys are rejected.
+         * @description Lists the customer's Entities, optionally filtered by status. Requires an organization secret key, or trusted internal authentication. A secret key needs `entity:read`. Publishable keys are rejected.
          */
         get: operations["engineListCustomerEntities"];
         put?: never;
@@ -3739,18 +3880,18 @@ export interface paths {
         };
         /**
          * Get a customer Entity
-         * @description Returns one Entity of the customer. Requires an organization secret key, or trusted internal authentication. When the organization has API permissions enabled, a secret key needs `entity:read`. Publishable keys are rejected.
+         * @description Returns one Entity of the customer. Requires an organization secret key, or trusted internal authentication. A secret key needs `entity:read`. Publishable keys are rejected.
          */
         get: operations["engineGetCustomerEntity"];
         /**
          * Create or update a customer Entity
-         * @description Creates the Entity or replaces its name, status and metadata. The body is a complete snapshot. Entity lifecycle changes never create billing events. When the Entity becomes active (created, activated or reactivated), its credit grants are scheduled. The body is at most 128 KiB. Requires an organization secret key, or trusted internal authentication. When the organization has API permissions enabled, a secret key needs `entity:write`. Publishable keys are rejected.
+         * @description Creates the Entity or replaces its name, status and metadata. The body is a complete snapshot. Entity lifecycle changes never create billing events. When the Entity becomes active (created, activated or reactivated), its credit grants are scheduled. The body is at most 128 KiB. Requires an organization secret key, or trusted internal authentication. A secret key needs `entity:write`. Publishable keys are rejected.
          */
         put: operations["engineUpsertCustomerEntity"];
         post?: never;
         /**
          * Delete a customer Entity
-         * @description Moves the Entity to `deleted`. Deletion is not a financial cascade: sources, allocations, operations and audit rows are kept. Requires an organization secret key, or trusted internal authentication. When the organization has API permissions enabled, a secret key needs `entity:write`. Publishable keys are rejected.
+         * @description Moves the Entity to `deleted`. Deletion is not a financial cascade: sources, allocations, operations and audit rows are kept. Requires an organization secret key, or trusted internal authentication. A secret key needs `entity:write`. Publishable keys are rejected.
          */
         delete: operations["engineDeleteCustomerEntity"];
         options?: never;
@@ -3769,7 +3910,7 @@ export interface paths {
         put?: never;
         /**
          * Bulk upsert customer Entities
-         * @description Creates or updates 1 to 500 Entities with unique `external_id` values in one request. Each item is a complete snapshot. The body is at most 2 MiB. Requires an organization secret key, or trusted internal authentication. When the organization has API permissions enabled, a secret key needs `entity:write`. Publishable keys are rejected.
+         * @description Creates or updates 1 to 500 Entities with unique `external_id` values in one request. Each item is a complete snapshot. The body is at most 2 MiB. Requires an organization secret key, or trusted internal authentication. A secret key needs `entity:write`. Publishable keys are rejected.
          */
         post: operations["engineBulkUpsertCustomerEntities"];
         delete?: never;
@@ -3789,7 +3930,7 @@ export interface paths {
         put?: never;
         /**
          * Allocate credits to an Entity
-         * @description Moves value from the customer's active paid top-up sources into `allocated_top_up` sources of the Entity, keeping parent source, payment provenance, priority and expiry. The body is at most 64 KiB and unknown fields are rejected. Requires an organization secret key, or trusted internal authentication; when API permissions are enabled a secret key needs `entity:write`.
+         * @description Moves value from the customer's active paid top-up sources into `allocated_top_up` sources of the Entity, keeping parent source, payment provenance, priority and expiry. The body is at most 64 KiB and unknown fields are rejected. Requires an organization secret key, or trusted internal authentication; a secret key needs `entity:write`.
          */
         post: operations["engineAllocateEntityCredits"];
         delete?: never;
@@ -3809,7 +3950,7 @@ export interface paths {
         put?: never;
         /**
          * Return Entity credits to the customer pool
-         * @description Returns unused allocated top-up value from the Entity to each exact parent source. The body is at most 64 KiB and unknown fields are rejected. Requires an organization secret key, or trusted internal authentication; when API permissions are enabled a secret key needs `entity:write`.
+         * @description Returns unused allocated top-up value from the Entity to each exact parent source. The body is at most 64 KiB and unknown fields are rejected. Requires an organization secret key, or trusted internal authentication; a secret key needs `entity:write`.
          */
         post: operations["engineDeallocateEntityCredits"];
         delete?: never;
@@ -3829,7 +3970,7 @@ export interface paths {
         put?: never;
         /**
          * Import an opening credit balance
-         * @description Records the current spendable balance of an externally billed subscription that was imported through the Core billing-state import, without an invoice or a usage event. It marks the current plan grant as represented so the scheduler does not grant it again. Set `dry_run` to validate without writing. The body is at most 64 KiB and unknown fields are rejected. Requires an organization secret key, or trusted internal authentication; when API permissions are enabled a secret key needs `credit_system:write`.
+         * @description Records the current spendable balance of an externally billed subscription that was imported through the Core billing-state import, without an invoice or a usage event. It marks the current plan grant as represented so the scheduler does not grant it again. Set `dry_run` to validate without writing. The body is at most 64 KiB and unknown fields are rejected. Requires an organization secret key, or trusted internal authentication; a secret key needs `credit_system:write`.
          */
         post: operations["engineCreateCreditBalanceImport"];
         delete?: never;
@@ -3849,7 +3990,7 @@ export interface paths {
         put?: never;
         /**
          * Create a credit top-up purchase
-         * @description Starts checkout for a fixed top-up package. The Engine forwards the request to Nozle Core and returns Core's status and body unchanged. Creating checkout does not grant credits; credits are added only after a confirmed successful payment. The body is at most 64 KiB and unknown fields are rejected. Requires an organization secret key, or trusted internal authentication; when API permissions are enabled a secret key needs `credit_system:write`.
+         * @description Starts checkout for a fixed top-up package. The Engine forwards the request to Nozle Core and returns Core's status and body unchanged. Creating checkout does not grant credits; credits are added once the top-up invoice is fully paid, by a provider payment, a manual payment for the full amount, a payment request or marking the invoice paid. A partial payment grants nothing. The body is at most 64 KiB and unknown fields are rejected. Requires an organization secret key, or trusted internal authentication; a secret key needs `credit_system:write`.
          */
         post: operations["engineCreateCreditTopUpPurchase"];
         delete?: never;
@@ -3867,7 +4008,7 @@ export interface paths {
         };
         /**
          * Get legacy wallet balance
-         * @description Returns the customer's newest active legacy invoice wallet. This is not a product Credit System balance; use `GET /customers/{customer_id}/credit-systems` for those. Requires an organization secret key, or trusted internal authentication; when API permissions are enabled a secret key needs `credit_system:read`.
+         * @description Returns the customer's newest active legacy invoice wallet. This is not a product Credit System balance; use `GET /customers/{customer_id}/credit-systems` for those. Requires an organization secret key, or trusted internal authentication; a secret key needs `credit_system:read`.
          */
         get: operations["engineGetLegacyWalletBalance"];
         put?: never;
@@ -3887,7 +4028,7 @@ export interface paths {
         };
         /**
          * List legacy wallet transactions
-         * @description Returns the 50 newest transactions of the customer's legacy invoice wallets, newest first. No paging. Requires an organization secret key, or trusted internal authentication; when API permissions are enabled a secret key needs `credit_system:read`.
+         * @description Returns the 50 newest transactions of the customer's legacy invoice wallets, newest first. No paging. Requires an organization secret key, or trusted internal authentication; a secret key needs `credit_system:read`.
          */
         get: operations["engineListLegacyWalletTransactions"];
         put?: never;
@@ -3909,7 +4050,7 @@ export interface paths {
         put?: never;
         /**
          * Check credit usage
-         * @description Calculates an advisory credit decision without changing any source or ledger row. Projected deductions follow the same ordering as an authoritative consume, but another request can spend credits first, so this is not authorization for irreversible work. Requires an organization secret key or trusted internal authentication; publishable keys are rejected. API permissions are not checked on this route.
+         * @description Calculates an advisory credit decision without changing any source or ledger row. Projected deductions follow the same ordering as an authoritative consume, but another request can spend credits first, so this is not authorization for irreversible work. Requires an organization secret key or trusted internal authentication; publishable keys are rejected. With API key permissions, a secret key needs `credit_system:read`. The paying subscription is chosen as on `POST /usage/track`.
          */
         post: operations["engineCheckCreditUsage"];
         delete?: never;
@@ -3929,7 +4070,7 @@ export interface paths {
         put?: never;
         /**
          * Track and consume credits
-         * @description Atomically consumes credits and queues the matching billing event in one transaction. Insufficient credits return `200` with `allowed: false` and nothing consumed. A replay with the same key and body returns the original result, including a denial. Requires an organization secret key or trusted internal authentication; publishable keys are rejected. API permissions are not checked on this route.
+         * @description Atomically consumes credits and queues the matching billing event in one transaction. Insufficient credits return `200` with `allowed: false` and nothing consumed. A replay with the same key and body returns the original result, including a denial. Requires an organization secret key or trusted internal authentication; publishable keys are rejected. With API key permissions, a secret key needs `credit_system:write`. The paying subscription is `subscription_id` when sent; with `entity_id`, the Entity's own active subscription, else the customer's own; otherwise the customer's one active subscription. A customer with no active subscription still spends credits that do not need one (paid top-ups, opening balances, plan credits left after a cancellation), and that usage sends no billing event.
          */
         post: operations["engineTrackCreditUsage"];
         delete?: never;
@@ -3950,7 +4091,7 @@ export interface paths {
         /**
          * Check and deduct legacy wallet credits
          * @deprecated
-         * @description Deprecated legacy wallet adapter; use `POST /usage/track`. Locks the customer's newest active wallet, and when its `credits_balance` covers `credits`, deducts them and records an outbound wallet transaction, in one database transaction. It does not apply Feature conversion rates or the product-credit source ledger, and it does not update the wallet's `balance_cents`. An insufficient balance returns `200` with `allowed: false`. Requires an organization secret key or trusted internal authentication; API permissions are not checked.
+         * @description Deprecated legacy wallet adapter; use `POST /usage/track`. Locks the customer's newest active wallet against concurrent check-and-deduct calls, and when its `credits_balance` covers `credits`, spends them through Core's `POST /wallet_transactions` (`voided_credits`), which records a voided outbound wallet transaction, sends `wallet.updated` and `wallet_transaction.created` and runs wallet alerts. Not idempotent: an `Idempotency-Key` header is ignored and a retry deducts again; use `POST /usage/track` for retries. The money amount is `credits` × the wallet's rate, rounded to the wallet currency: `balance_cents` and the ongoing balance drop by it, the consumed credits and amount grow, and the wallet transaction records that amount. It does not apply Feature conversion rates or the product-credit source ledger. An insufficient balance returns `200` with `allowed: false`. Requires an organization secret key or trusted internal authentication; With API key permissions, the secret key needs `credit_system:write`, as on `POST /usage/track`, and `wallet_transaction:write`; without either the answer is `403` with `code: permission_denied` before any deduction.
          */
         post: operations["engineCheckAndDeductCredits"];
         delete?: never;
@@ -3968,7 +4109,7 @@ export interface paths {
         };
         /**
          * Get margin summary
-         * @description Returns revenue, cost and margin totals, in integer cents, over all margin events of the organization in the range. `margin_percent` is `total_margin_cents / total_revenue_cents * 100`, and `0` when total revenue is not positive. A range with no events returns zeros. The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable.
+         * @description Returns revenue, cost and margin totals, in integer cents, over all margin events of the organization in the range. `margin_percent` is `total_margin_cents / total_revenue_cents * 100`, and `0` when total revenue is not positive. A range with no events returns zeros. The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. With API key permissions, the secret key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable, or, with `code: analytics_unavailable`, that the analytics store could not be reached or a query failed.
          */
         get: operations["engineGetMarginSummary"];
         put?: never;
@@ -3988,7 +4129,7 @@ export interface paths {
         };
         /**
          * Get margin by customer
-         * @description Returns one row per customer with margin events in the range, ordered by `margin_cents` ascending (least profitable first). `customer_name` comes from the Engine's in-memory customer cache (the customer's name, else its external ID, else its ID); a customer missing from the cache gets its `customer_id` as the name. When no events fall in the range the list is `null`, not an empty array; treat `null` as empty. The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable.
+         * @description Returns one row per customer with margin events in the range, ordered by `margin_cents` ascending (least profitable first). `customer_name` comes from the Engine's in-memory customer cache (the customer's name, else its external ID, else its ID); a customer missing from the cache gets its `customer_id` as the name. When no events fall in the range the list is empty (`[]`). The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. With API key permissions, the secret key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable, or, with `code: analytics_unavailable`, that the analytics store could not be reached or a query failed.
          */
         get: operations["engineListMarginByCustomer"];
         put?: never;
@@ -4008,7 +4149,7 @@ export interface paths {
         };
         /**
          * Get margin by metric
-         * @description Returns one row per `metric_code` with margin events in the range, ordered by `margin_cents` ascending. When no events fall in the range the list is `null`, not an empty array; treat `null` as empty. The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable.
+         * @description Returns one row per `metric_code` with margin events in the range, ordered by `margin_cents` ascending. When no events fall in the range the list is empty (`[]`). The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. With API key permissions, the secret key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable, or, with `code: analytics_unavailable`, that the analytics store could not be reached or a query failed.
          */
         get: operations["engineListMarginByMetric"];
         put?: never;
@@ -4028,7 +4169,7 @@ export interface paths {
         };
         /**
          * Get margin by plan
-         * @description Returns one row per `plan_id` recorded on the margin events in the range, ordered by `margin_cents` ascending. Events recorded without a plan are grouped under an empty `plan_id`. The plan is identified by ID only; no name or code is returned. When no events fall in the range the list is `null`, not an empty array; treat `null` as empty. The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable.
+         * @description Returns one row per `plan_id` recorded on the margin events in the range, ordered by `margin_cents` ascending. Events recorded without a plan are grouped under an empty `plan_id`. The plan is identified by ID only; no name or code is returned. When no events fall in the range the list is empty (`[]`). The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. With API key permissions, the secret key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable, or, with `code: analytics_unavailable`, that the analytics store could not be reached or a query failed.
          */
         get: operations["engineListMarginByPlan"];
         put?: never;
@@ -4048,7 +4189,7 @@ export interface paths {
         };
         /**
          * Get margin by model
-         * @description Returns one row per `model` value in the margin events' `properties` (the `model` property of the event), ordered by `cost_cents` descending. Events whose `model` property is missing or empty are left out. When no events fall in the range the list is `null`, not an empty array; treat `null` as empty. The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable.
+         * @description Returns one row per `model` value in the margin events' `properties` (the `model` property of the event), ordered by `cost_cents` descending. Events whose `model` property is missing or empty are left out. When no events fall in the range the list is empty (`[]`). The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. With API key permissions, the secret key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable, or, with `code: analytics_unavailable`, that the analytics store could not be reached or a query failed.
          */
         get: operations["engineListMarginByModel"];
         put?: never;
@@ -4068,7 +4209,7 @@ export interface paths {
         };
         /**
          * Get margin trend
-         * @description Returns revenue, cost and margin per time bucket in the range, ordered by `period` ascending. Only buckets that contain events are returned; empty buckets are not filled in. Weeks start on Sunday (ClickHouse `toStartOfWeek` default mode). `margin_percent` is `0` for a bucket with no positive revenue. When no events fall in the range the list is `null`, not an empty array; treat `null` as empty. The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable.
+         * @description Returns revenue, cost and margin per time bucket in the range, ordered by `period` ascending. Only buckets that contain events are returned; empty buckets are not filled in. Weeks start on Sunday (ClickHouse `toStartOfWeek` default mode). `margin_percent` is `0` for a bucket with no positive revenue. When no events fall in the range the list is empty (`[]`). The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. With API key permissions, the secret key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable, or, with `code: analytics_unavailable`, that the analytics store could not be reached or a query failed.
          */
         get: operations["engineGetMarginTrend"];
         put?: never;
@@ -4088,7 +4229,7 @@ export interface paths {
         };
         /**
          * Get margin forecast
-         * @description Projects daily revenue, cost and margin for the next 30 days. The handler reads no query parameters: it always uses the daily margin trend of the last 30 days (from now minus 30 days to now, UTC) and fits a least-squares line to revenue and to cost, using the position of each returned day bucket as x (days without events are skipped, not counted as zero). Each point is dated now + 1 to now + 30 days (UTC, `YYYY-MM-DD`). Projected revenue and cost are clamped at 0 and truncated to integer cents; `projected_margin` is their difference and can be negative. `confidence` is `low` with fewer than 7 day buckets, `medium` with 7 to 19 and `high` with 20 or more. With fewer than 2 day buckets the response is `{"points": [], "confidence": "low"}`; `points` is never `null`. `from`, `to` and every other query parameter are ignored, so this operation never returns `invalid_date_range`. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable.
+         * @description Projects daily revenue, cost and margin for the 30 days after the range. It uses the daily margin trend of the range (by default the last month up to now) and fits a least-squares line to revenue and to cost, using the position of each returned day bucket as x (days without events are skipped, not counted as zero). Points are 30 consecutive UTC days (`YYYY-MM-DD`) starting on the first day the range does not reach: the end's own day when the end is a UTC midnight (a plain-date `to` such as `2026-10-15` ends at `2026-10-16T00:00:00Z`, so the first point is `2026-10-16`), otherwise the day after the end (the default range ends now, so it starts tomorrow). Projected revenue and cost are clamped at 0 and truncated to integer cents; `projected_margin` is their difference and can be negative. `confidence` is `low` with fewer than 7 day buckets, `medium` with 7 to 19 and `high` with 20 or more. With fewer than 2 day buckets the response is `{"points": [], "confidence": "low"}`; `points` is never `null`. The range is read by the Engine's shared range parser, with the same `from`, `to`, `from_date` and `to_date` rules as the other margin operations; a value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. Other query parameters are ignored. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. With API key permissions, the secret key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable, or, with `code: analytics_unavailable`, that the analytics store could not be reached or a query failed.
          */
         get: operations["engineGetMarginForecast"];
         put?: never;
@@ -4110,7 +4251,7 @@ export interface paths {
         put?: never;
         /**
          * Simulate margin at a new price
-         * @description Replays one metric's recorded usage in the range at a new unit price and keeps the recorded cost. `new_revenue_cents` is the sum of the metric's recorded `quantity` times `new_price_dollars` times 100, truncated toward zero to whole cents. `new_cost_cents` equals `current_cost_cents`. `revenue_delta_cents` and `margin_delta_cents` are new minus current. A metric with no events in the range returns zeros with `event_count` `0`. The body is decoded before the range is checked, so a body error is reported first. The range comes from the query string, not the body. The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable.
+         * @description Replays one metric's recorded usage in the range at a new unit price and keeps the recorded cost. `new_revenue_cents` is the sum of the metric's recorded `quantity` times `new_price_dollars` times 100, truncated toward zero to whole cents. `new_cost_cents` equals `current_cost_cents`. `revenue_delta_cents` and `margin_delta_cents` are new minus current. A metric with no events in the range returns zeros with `event_count` `0`. The body is decoded before the range is checked, so a body error is reported first. The range comes from the query string, not the body. The range is read by the Engine's shared range parser. `from` and `to` take an RFC3339 timestamp or a plain date (`YYYY-MM-DD`); `from_date` and `to_date` are aliases, and when both a name and its alias are sent, `from`/`to` win. A plain `from` starts at 00:00 UTC of that day; a plain `to` includes that whole day (the range ends at 00:00 UTC of the next day); an RFC3339 `to` is an exclusive instant. Events match when `from <= timestamp < to`. With neither end the range is the last month up to now; with only `to` it is the month before `to`; with only `from` it runs to now, or to one month after `from` when `from` is not in the past. A value that cannot be parsed, or an end that is not after the start, returns `400` with code `invalid_date_range`. No other query parameter is read: filters such as a customer, metric or plan identifier, and paging parameters, are ignored without an error. Requires an organization secret key (`sk_`) or the trusted internal credential; a publishable key gets `403`. With API key permissions, the secret key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`. `401` covers a missing header, a non-Bearer header or an unknown key; `503` means API key verification is unavailable, or, with `code: analytics_unavailable`, that the analytics store could not be reached or a query failed.
          */
         post: operations["engineSimulateMargin"];
         delete?: never;
@@ -4130,19 +4271,24 @@ export interface paths {
          * Check an entitlement
          * @description Checks whether a customer may use a feature under its current subscription. Call it before running a metered or limited operation.
          *
-         *     **Keys.** A secret `sk_` key or the trusted internal credential. When the organization has API permissions enabled, the secret key needs `customer_usage:read`. A publishable `pk_` key returns `403`.
+         *     **Keys.** A secret `sk_` key or the trusted internal credential. The secret key needs `customer_usage:read`. A publishable `pk_` key returns `403`.
          *
          *     **Decision.** A denial is a `200` response with `allowed: false` and a `reason` code:
          *
          *     | `reason` | Meaning |
          *     |---|---|
          *     | `feature_not_found` | No feature with this code exists in the organization. |
-         *     | `no_subscription` | The customer has no current subscription, or the customer does not exist. |
+         *     | `no_subscription` | The customer has no current subscription, or the customer does not exist. Also an unknown or ended `subscription_id` or `entity_id`. |
+         *     | `subscription_required` | The customer has several current subscriptions and not exactly one of them is the customer's own (not Entity-owned). Send `subscription_id` or `entity_id`. |
          *     | `no_entitlement` | The plan neither grants the feature (entitlement) nor, for a metered feature, prices it (charge). |
          *     | `usage_limit_exceeded` | Usage reached a hard limit. A soft limit never denies; it sets `overage: true`. |
          *     | `economic_policy_denied` | A margin policy decided `deny`. The `policy` object has the detail. |
          *
-         *     Subscription access is read from the database on every call, so a cancellation applies at once. For a metered feature with an entitlement, `used` is read from the usage counter for the current billing period. If that read fails, the response is `503` with `code: usage_unavailable` and a `Retry-After` header; the failure is never treated as zero usage.
+         *     A subscription on an override plan (a plan made from a catalog plan for one customer, for example a negotiated price or a subscription created from a quote) gets the entitlements and usage limits of the catalog plan it was made from. Its usage is still priced with the override plan's own charges.
+         *
+         *     **Subscription.** Plan, entitlements, limits and usage come from one subscription that is current now (started, not ended). With `subscription_id`, that subscription is evaluated. With `entity_id`, the Entity's own subscription is evaluated, else the customer's own (not Entity-owned) one. Without either, the customer's only current subscription is evaluated; with several, the customer's own one when there is exactly one, otherwise the answer is `subscription_required`. The newest subscription is never picked.
+         *
+         *     Subscription access is read from the database on every call, so a cancellation applies at once. For a metered feature, `used` is read from the usage counter of the selected subscription for the current billing period: the period Nozle invoices the usage in, for every plan interval and in the customer's time zone. A recurring feature (seats, storage) keeps one running total across periods. A metered feature priced only by a charge, without an entitlement, reports its real `used` with `limit` and `remaining` null. If that read fails, the response is `503` with `code: usage_unavailable` and a `Retry-After` header; the failure is never treated as zero usage.
          *
          *     For an allowed metered feature the response adds `economics`, a point-in-time estimate from the published Cost Sheet, and `policy` when a margin policy applies. The estimate does not record usage or write a ledger entry. Monetary values are decimal strings in `economics.currency`, not cents.
          *
@@ -4179,30 +4325,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/centrifugo-token": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get a WebSocket token
-         * @description Returns an HS256 JWT for connecting to Centrifugo to receive real-time entitlement updates. The token's `sub` is the organization ID, it expires 24 hours after issue, and its `channels` claim is `["customer:<organization_id>"]`.
-         *
-         *     **Keys.** A secret `sk_` key or the trusted internal credential. A publishable `pk_` key returns `403`.
-         *
-         *     Returns `404` when Centrifugo is not configured on the Engine.
-         */
-        get: operations["engineGetCentrifugoToken"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/plans": {
         parameters: {
             query?: never;
@@ -4212,9 +4334,11 @@ export interface paths {
         };
         /**
          * List the public plan catalog (Engine)
-         * @description Engine proxy for Core's `GET /plans`. Engine calls Core `GET /api/v1/plans` with no query parameters and copies Core's status code and body unchanged, so a `200` body is the same `PlansPaginated` object Core returns. Engine ignores `page` and `per_page` and always returns Core's first page (up to 100 plans); page through larger catalogs with Core's `GET /plans`.
+         * @description Engine proxy for Core's `GET /plans`. Engine calls Core `GET /api/v1/plans` with the caller's query string (`page`, `per_page`) and copies Core's status code and body unchanged, so a `200` body is the same `PlansPaginated` object Core returns. Engine also serves `GET /api/v1/plans/{code}` the same way, as a proxy for Core's `GET /plans/{code}`.
          *
-         *     **Keys.** This is the only Engine route that accepts a publishable `pk_` key. It also accepts a secret `sk_` key and the trusted internal credential. Engine forwards a `pk_` or `sk_` key to Core as the caller's own credential. The internal credential works only for the organization Engine is configured to act for; any other organization returns `403`.
+         *     **Keys.** These two plan routes are the only Engine routes that accept a publishable `pk_` key. They also accept a secret `sk_` key and the trusted internal credential. Engine forwards a `pk_` or `sk_` key to Core as the caller's own credential. The internal credential works only for the organization Engine is configured to act for; any other organization returns `403`.
+         *
+         *     **CORS.** These two plan routes and their preflight answer any origin with `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET, OPTIONS` and `Access-Control-Allow-Headers: Authorization, Content-Type`, and never send `Access-Control-Allow-Credentials`. Every other Engine route keeps its origin allow-list.
          *
          *     Any error status Core returns is passed through with Core's error body. Engine returns `502` when it cannot reach Core within 10 seconds.
          *
@@ -4243,9 +4367,11 @@ export interface paths {
          * Proxy a GET request to OpenAI
          * @description Forwards the request to `https://api.openai.com/{providerPath}` with the same method, query string, headers and body, and streams the provider response back unchanged. Every HTTP method is forwarded; POST and GET are listed here.
          *
-         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. `Authorization` carries the customer's own OpenAI key and is forwarded to OpenAI. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
+         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. `Authorization` carries the customer's own OpenAI key and is forwarded to OpenAI. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Subscription`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
          *
-         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
+         *     **Subscription.** Engine resolves the subscription to bill before the provider is called. Without `X-Nozle-Subscription` the customer must have exactly one active subscription; with it, that subscription must be an active subscription of the customer in the caller's organization. Otherwise the response is `422` (`active_subscription_not_found` or `active_subscription_ambiguous`), or `503 unavailable` when the lookup fails, and the provider is not called.
+         *
+         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, `external_subscription_id` of the resolved subscription, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
          *
          *     Example: `POST /proxy/openai/v1/chat/completions` is sent to `https://api.openai.com/v1/chat/completions`.
          */
@@ -4255,9 +4381,11 @@ export interface paths {
          * Proxy a request to OpenAI
          * @description Forwards the request to `https://api.openai.com/{providerPath}` with the same method, query string, headers and body, and streams the provider response back unchanged. Every HTTP method is forwarded; POST and GET are listed here.
          *
-         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. `Authorization` carries the customer's own OpenAI key and is forwarded to OpenAI. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
+         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. `Authorization` carries the customer's own OpenAI key and is forwarded to OpenAI. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Subscription`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
          *
-         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
+         *     **Subscription.** Engine resolves the subscription to bill before the provider is called. Without `X-Nozle-Subscription` the customer must have exactly one active subscription; with it, that subscription must be an active subscription of the customer in the caller's organization. Otherwise the response is `422` (`active_subscription_not_found` or `active_subscription_ambiguous`), or `503 unavailable` when the lookup fails, and the provider is not called.
+         *
+         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, `external_subscription_id` of the resolved subscription, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
          *
          *     Example: `POST /proxy/openai/v1/chat/completions` is sent to `https://api.openai.com/v1/chat/completions`.
          */
@@ -4282,9 +4410,11 @@ export interface paths {
          * Proxy a GET request to Anthropic
          * @description Forwards the request to `https://api.anthropic.com/{providerPath}` with the same method, query string, headers and body, and streams the provider response back unchanged. Every HTTP method is forwarded; POST and GET are listed here.
          *
-         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. The customer's Anthropic credentials (`x-api-key`, `anthropic-version` and any other provider headers) are forwarded unchanged. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
+         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. The customer's Anthropic credentials (`x-api-key`, `anthropic-version` and any other provider headers) are forwarded unchanged. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Subscription`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
          *
-         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
+         *     **Subscription.** Engine resolves the subscription to bill before the provider is called. Without `X-Nozle-Subscription` the customer must have exactly one active subscription; with it, that subscription must be an active subscription of the customer in the caller's organization. Otherwise the response is `422` (`active_subscription_not_found` or `active_subscription_ambiguous`), or `503 unavailable` when the lookup fails, and the provider is not called.
+         *
+         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, `external_subscription_id` of the resolved subscription, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
          *
          *     Example: `POST /proxy/anthropic/v1/messages` is sent to `https://api.anthropic.com/v1/messages`.
          */
@@ -4294,9 +4424,11 @@ export interface paths {
          * Proxy a request to Anthropic
          * @description Forwards the request to `https://api.anthropic.com/{providerPath}` with the same method, query string, headers and body, and streams the provider response back unchanged. Every HTTP method is forwarded; POST and GET are listed here.
          *
-         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. The customer's Anthropic credentials (`x-api-key`, `anthropic-version` and any other provider headers) are forwarded unchanged. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
+         *     **Auth.** Nozle authentication is the `X-Nozle-Key` header, not `Authorization`. The customer's Anthropic credentials (`x-api-key`, `anthropic-version` and any other provider headers) are forwarded unchanged. Only a secret key is accepted; a publishable `pk_` key returns `403`, and a key without `event:write` permission returns `403 permission_denied` before the provider is called. Engine removes `X-Nozle-Key`, `X-Nozle-Customer-Id`, `X-Nozle-Subscription`, `X-Nozle-Feature` and `X-Nozle-Feature-Code` before forwarding, and sets `Accept-Encoding: identity`.
          *
-         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
+         *     **Subscription.** Engine resolves the subscription to bill before the provider is called. Without `X-Nozle-Subscription` the customer must have exactly one active subscription; with it, that subscription must be an active subscription of the customer in the caller's organization. Otherwise the response is `422` (`active_subscription_not_found` or `active_subscription_ambiguous`), or `503 unavailable` when the lookup fails, and the provider is not called.
+         *
+         *     **Tracking.** Usage is recorded in the caller's own organization: Engine sends the usage event to Core signed with the caller's `X-Nozle-Key`. Usage is recognised by the shape of the response (chat completions, the Responses API, Anthropic messages, including cached input and cache writes), for JSON responses and `text/event-stream` responses read as they pass. A chat completion stream is sent with `stream_options.include_usage: true`. For a successful response with more than zero tokens, Engine sends the event in the background with code `X-Nozle-Feature-Code` (default `llm_tokens`), `transaction_id` `llm-<format>-<response id>`, `external_customer_id` from `X-Nozle-Customer-Id`, `external_subscription_id` of the resolved subscription, and properties `provider`, `provider_host`, `model`, `input_tokens`, `output_tokens`, `latency_ms` and, when sent, `feature`. A recording failure is logged and does not change the response.
          *
          *     Example: `POST /proxy/anthropic/v1/messages` is sent to `https://api.anthropic.com/v1/messages`.
          */
@@ -4318,7 +4450,7 @@ export interface paths {
          * List cost models (legacy)
          * @description Lists the organization's legacy cost models, newest first, including archived ones. Versioned Cost Sheets are not returned.
          *
-         *     **Keys.** A secret `sk_` key or the trusted internal credential. A publishable `pk_` key returns `403`.
+         *     **Keys.** A secret `sk_` key or the trusted internal credential. A publishable `pk_` key returns `403`. With API key permissions, the secret key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`.
          *
          *     Without `page` and `per_page` every model is returned and there is no `meta`; with no models `cost_models` is `null`. With either parameter the list is paged (default `page` 1, `per_page` 20, maximum 100) and `meta` is added. An invalid value returns `400` `invalid pagination`.
          */
@@ -4328,7 +4460,7 @@ export interface paths {
          * Create a cost model (legacy)
          * @description Creates a legacy cost model for margin calculations. This endpoint is kept as a rollback surface; new integrations use versioned Cost Sheets in Cost Intelligence.
          *
-         *     **Keys.** A secret `sk_` key or the trusted internal credential. A publishable `pk_` key returns `403`.
+         *     **Keys.** A secret `sk_` key or the trusted internal credential. A publishable `pk_` key returns `403`. With API key permissions, the secret key needs `analytic:write`; without it the answer is `403` with `code: permission_denied`.
          *
          *     The body is validated by `cost_type`:
          *
@@ -4359,7 +4491,7 @@ export interface paths {
          * Retrieve a cost model (legacy)
          * @description Returns one legacy cost model of the organization, active or archived. Any read failure, including an unknown ID, returns `404`.
          *
-         *     **Keys.** A secret `sk_` key or the trusted internal credential. A publishable `pk_` key returns `403`.
+         *     **Keys.** A secret `sk_` key or the trusted internal credential. A publishable `pk_` key returns `403`. With API key permissions, the secret key needs `analytic:read`; without it the answer is `403` with `code: permission_denied`.
          */
         get: operations["engineGetCostModel"];
         put?: never;
@@ -4368,7 +4500,7 @@ export interface paths {
          * Archive a cost model (legacy)
          * @description Archives a legacy cost model: its `status` becomes `archived` and it stops being used for margin calculations. The row is kept and still appears in the list and by ID. Archiving an already archived model returns `200` again. An unknown ID returns `404`.
          *
-         *     **Keys.** A secret `sk_` key or the trusted internal credential. A publishable `pk_` key returns `403`.
+         *     **Keys.** A secret `sk_` key or the trusted internal credential. A publishable `pk_` key returns `403`. With API key permissions, the secret key needs `analytic:write`; without it the answer is `403` with `code: permission_denied`.
          */
         delete: operations["engineDeleteCostModel"];
         options?: never;
@@ -4538,46 +4670,6 @@ export interface webhooks {
         patch?: never;
         trace?: never;
     };
-    customer_crm_provider_created: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * A customer has been created in the CRM provider
-         * @description A customer has been created in the CRM provider
-         */
-        post: operations["customerCrmProviderCreated"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    customer_crm_provider_error: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * An error was encountered while syncing a customer to a CRM provider
-         * @description An error was encountered while syncing a customer to a CRM provider
-         */
-        post: operations["customerCrmProviderError"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     customer_payment_provider_created: {
         parameters: {
             query?: never;
@@ -4729,7 +4821,7 @@ export interface webhooks {
         put?: never;
         /**
          * The refund of a credit note has failed on a payment provider
-         * @description The refund of a credit note has failed on a payment provider
+         * @description The refund of a credit note has failed on a payment provider. Sent as `credit_note.refund_failure`, the name to use in an endpoint's `event_types` filter. The former name `credit_note.provider_refund_failure` is still accepted in `event_types` and saved as `credit_note.refund_failure`.
          */
         post: operations["creditNoteProviderRefundFailure"];
         delete?: never;
@@ -5059,26 +5151,6 @@ export interface webhooks {
         patch?: never;
         trace?: never;
     };
-    invoice_resynced: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * An invoice has been resynced with salesforce
-         * @description An invoice has been resynced with salesforce
-         */
-        post: operations["invoiceResynced"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     integration_provider_error: {
         parameters: {
             query?: never;
@@ -5253,6 +5325,26 @@ export interface webhooks {
          * @description A plan has been updated
          */
         post: operations["planUpdated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    plan_version_created: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A plan version has been created
+         * @description A pricing change of a plan that customers pay for saved its next version. `plan` is the new, current version; subscriptions stay on the version they are on until a version migration moves them.
+         */
+        post: operations["planVersionCreated"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6881,7 +6973,7 @@ export interface components {
                  * @description Array of string, required only when value_type is `select`.
                  * @example [
                  *       "google",
-                 *       "okta"
+                 *       "microsoft"
                  *     ]
                  */
                 select_options?: string[];
@@ -6943,7 +7035,7 @@ export interface components {
              *         "config": {
              *           "select_options": [
              *             "google",
-             *             "okta"
+             *             "microsoft"
              *           ]
              *         }
              *       }
@@ -7034,7 +7126,7 @@ export interface components {
              *         "config": {
              *           "select_options": [
              *             "google",
-             *             "okta"
+             *             "microsoft"
              *           ]
              *         }
              *       }
@@ -7062,7 +7154,7 @@ export interface components {
                      * @description Array of string, required only when value_type is `select`.
                      * @example [
                      *       "google",
-                     *       "okta"
+                     *       "microsoft"
                      *     ]
                      */
                     select_options?: string[];
@@ -8705,14 +8797,14 @@ export interface components {
             nozle_id: string;
             /**
              * @description The integration type used for accounting and tax syncs.
-             *     Accepted values: `netsuite, anrok`.
-             * @example netsuite
+             *     Accepted values: `anrok`.
+             * @example anrok
              * @enum {string}
              */
-            type: "netsuite" | "anrok" | "xero" | "hubspot" | "salesforce";
+            type: "anrok";
             /**
              * @description Unique code used to identify an integration connection.
-             * @example netsuite-eu-1
+             * @example anrok1
              */
             integration_code: string;
             /**
@@ -8725,21 +8817,6 @@ export interface components {
              * @example true
              */
             sync_with_provider?: boolean | null;
-            /**
-             * @description This optional field is needed only when working with `netsuite` connection.
-             * @example 2
-             */
-            subsidiary_id?: string;
-            /**
-             * @description This optional field is present only when working with `hubspot` connection.
-             * @example contacts
-             */
-            targeted_object?: string | null;
-            /**
-             * @description This optional field is present only when working with `hubspot` connection.
-             * @example dinesh@piedpiper.test
-             */
-            email?: string | null;
         };
         CustomerObject: components["schemas"]["CustomerBaseObject"] & {
             integration_customers?: components["schemas"]["IntegrationCustomer"][];
@@ -8917,14 +8994,14 @@ export interface components {
                     id?: string;
                     /**
                      * @description The integration type used for accounting and tax syncs.
-                     *     Accepted values: `netsuite, anrok, xero`.
-                     * @example netsuite
+                     *     Accepted values: `anrok`.
+                     * @example anrok
                      * @enum {string}
                      */
-                    integration_type?: "netsuite" | "anrok" | "xero";
+                    integration_type?: "anrok";
                     /**
                      * @description Unique code used to identify an integration connection.
-                     * @example netsuite-eu-1
+                     * @example anrok1
                      */
                     integration_code?: string;
                     /**
@@ -8937,11 +9014,6 @@ export interface components {
                      * @example true
                      */
                     sync_with_provider?: boolean;
-                    /**
-                     * @description This optional field is needed only when working with `netsuite` connection.
-                     * @example 2
-                     */
-                    subsidiary_id?: string;
                 }[];
                 /** @description Set of key-value pairs that you can attach to a customer. This can be useful for storing additional information about the customer in a structured format */
                 metadata?: {
@@ -9585,6 +9657,27 @@ export interface components {
              */
             plan_code: string;
             /**
+             * @description The version of the plan code the subscription is billed on. A subscription stays on its version when the plan's pricing changes, until a version migration moves it.
+             * @example 1
+             */
+            plan_version?: number | null;
+            /**
+             * @description The version of the subscription this one replaced, when it replaced one (for example after a version migration).
+             * @example null
+             */
+            previous_plan_version?: number | null;
+            /**
+             * @description The version the subscription moves to at the end of its period, when a change or a version migration is scheduled.
+             * @example 2
+             */
+            next_plan_version?: number | null;
+            /**
+             * Format: uuid
+             * @description The version migration that started this subscription, when one did.
+             * @example null
+             */
+            plan_version_migration_id?: string | null;
+            /**
              * @description The base cost of the related plan, excluding any applicable taxes, that is billed on a recurring basis.
              * @example 10000
              */
@@ -10153,7 +10246,7 @@ export interface components {
                      */
                     granted_credits?: string | null;
                     /**
-                     * @description Applies only to `target` rules. When `true`, the recurring top-up grants free credits to reach the target ongoing balance instead of creating a paid top-up (and bypasses the paid top-up minimum). When `false`, the gap is filled with a paid top-up. `null` for `fixed` rules. Defaults to `false` for target rules when omitted.
+                     * @description Applies only to `target` rules. When `true`, the recurring top-up grants free credits up to the target ongoing balance exactly instead of creating a paid top-up, and the paid top-up minimum does not apply. When `false`, the gap is filled with a paid top-up. Accepted values are `true`, `false`, `"true"`, `"false"` and `null`. `true` on a rule whose `method` is not `target` returns `422 invalid_recurring_rule`; send `method: target` with it. A new target rule defaults to `false`; on update, leaving it out keeps the stored value, and changing a rule to `fixed` clears it. Accepted by `POST /wallets`, `PUT /wallets/{id}` and the customer-scoped wallet endpoints, and returned on every rule.
                      * @example false
                      */
                     grants_target_top_up?: boolean | null;
@@ -10319,7 +10412,7 @@ export interface components {
                      */
                     granted_credits?: string | null;
                     /**
-                     * @description Applies only to `target` rules. When `true`, the recurring top-up grants free credits to reach the target ongoing balance instead of creating a paid top-up (and bypasses the paid top-up minimum). When `false`, the gap is filled with a paid top-up. `null` for `fixed` rules. Defaults to `false` for target rules when omitted.
+                     * @description Applies only to `target` rules. When `true`, the recurring top-up grants free credits up to the target ongoing balance exactly instead of creating a paid top-up, and the paid top-up minimum does not apply. When `false`, the gap is filled with a paid top-up. Accepted values are `true`, `false`, `"true"`, `"false"` and `null`. `true` on a rule whose `method` is not `target` returns `422 invalid_recurring_rule`; send `method: target` with it. A new target rule defaults to `false`; on update, leaving it out keeps the stored value, and changing a rule to `fixed` clears it. Accepted by `POST /wallets`, `PUT /wallets/{id}` and the customer-scoped wallet endpoints, and returned on every rule.
                      * @example false
                      */
                     grants_target_top_up?: boolean | null;
@@ -11161,7 +11254,7 @@ export interface components {
              */
             transaction_id?: string;
             /**
-             * @description External ID of the subscription the event is billed to. Ingestion does not check that it is present, but it is the only field that links the event to a customer, so always send it. The SDKs look it up when you pass only a customer.
+             * @description External ID of the subscription the event is billed to. Send it or `external_customer_id`; with neither the response is `422 validation_errors` with `external_subscription_id: [value_is_mandatory]`. When it is given, `external_customer_id` is ignored.
              * @example sub_1234567890
              */
             external_subscription_id?: string;
@@ -11192,8 +11285,8 @@ export interface components {
                 [key: string]: string | number;
             } | null;
             /**
-             * @deprecated
-             * @description Accepted and ignored: ingestion stores no customer ID. The SDKs send it and use it only to look up the subscription before sending the event.
+             * @description Used only when `external_subscription_id` is blank. The event is billed to this customer's single active subscription and stored with its `external_subscription_id`. An unknown customer or one with no active subscription returns `422 active_subscription_not_found`, and several active subscriptions return `422 active_subscription_ambiguous`, with `error_details` `{"external_customer_id": [code]}`.
+             * @example cust_123
              */
             external_customer_id?: string;
         };
@@ -11997,20 +12090,6 @@ export interface components {
                  */
                 frequency_duration?: number | null;
             }[];
-            subscriptions?: {
-                external_ids: string[];
-                /**
-                 * @description The code of the plan. It serves as a unique identifier associated with the new plan to which the customer is upgrading or downgrading.
-                 * @example new_code
-                 */
-                plan_code?: string;
-                /**
-                 * Format: date-time
-                 * @description The date and time when the subscription is terminated. It should defined in the future.
-                 * @example 2022-08-08T00:00:00Z
-                 */
-                terminated_at?: string;
-            };
             /**
              * @description The code of the billing entity to which will be associated a customer if the external_id is not provided. If billing_entity_code is not provided, default billing_entity of organization will be used.
              * @example acme_corp
@@ -12156,6 +12235,18 @@ export interface components {
                  * @example false
                  */
                 finalize_zero_amount_invoice?: boolean;
+                /**
+                 * @description HTTPS origins your checkout `return_url` and `success_url` may point to, in addition to Nozle's own apps. Up to 20; each is a scheme and host only (no path, query or user info) and is stored lowercase without a trailing slash. An invalid origin answers `422` with `value_is_invalid` in `checkout_return_origins`. Another organization's origin is never accepted for your checkouts. Requires the `developers:manage` permission.
+                 * @example [
+                 *       "https://app.acme.com"
+                 *     ]
+                 */
+                checkout_return_origins?: string[];
+                /**
+                 * @description HTTPS URL on one of the allowed origins where the customer returns when a checkout gives no `return_url`. When it is `null`, the customer returns to the first of `checkout_return_origins`, else to the payment provider's success URL. A URL off the allowed origins answers `422` with `invalid_or_untrusted` in `checkout_default_return_url`.
+                 * @example https://app.acme.com/billing/done
+                 */
+                checkout_default_return_url?: string | null;
             };
         };
         OrganizationObject: {
@@ -12274,6 +12365,18 @@ export interface components {
             billing_configuration: components["schemas"]["OrganizationBillingConfiguration"];
             /** @description List of default organization taxes */
             taxes?: components["schemas"]["TaxObject"][];
+            /**
+             * @description HTTPS origins your checkout return URLs may point to, in addition to Nozle's own apps. Set with `PUT /organizations`.
+             * @example [
+             *       "https://app.acme.com"
+             *     ]
+             */
+            checkout_return_origins?: string[];
+            /**
+             * @description Where the customer returns when a checkout gives no `return_url`. When it is `null`, the first of `checkout_return_origins`, else the payment provider's success URL.
+             * @example https://app.acme.com/billing/done
+             */
+            checkout_default_return_url?: string | null;
             /**
              * @description Indicates whether invoices with a zero total amount should be finalized. If set to true, zero amount invoices will be finalized. If set to false, zero amount invoices will not be finalized.
              * @example false
@@ -12948,7 +13051,7 @@ export interface components {
              *         "config": {
              *           "select_options": [
              *             "google",
-             *             "okta"
+             *             "microsoft"
              *           ]
              *         }
              *       }
@@ -12994,6 +13097,16 @@ export interface components {
              * @example startup
              */
             code: string;
+            /**
+             * @description The version of the plan code this plan is. A plan is version 1 until its pricing is changed while customers pay for it; that change saves version 2, and so on. Every version keeps the code. See [Plan versioning](/guides/billing/plan-versions).
+             * @example 2
+             */
+            version?: number;
+            /**
+             * @description Whether new subscriptions to the code get this version. `GET /plans` and `GET /plans/{code}` return the current version unless a secret key asks for another one with `version`.
+             * @example true
+             */
+            is_current?: boolean;
             /**
              * @description The interval used for recurring billing. It represents the frequency at which subscription billing occurs. The interval can be one of the following values: `yearly`, `semiannual`, `quarterly`, `monthly` or `weekly`.
              * @example monthly
@@ -13041,6 +13154,11 @@ export interface components {
              * @example null
              */
             parent_id: string | null;
+            /**
+             * @description Code of the plan family the plan belongs to. A plan family groups the billing intervals of one offer (for example "Pro" monthly and yearly). `null` for a per-customer override plan, which has no family.
+             * @example startup
+             */
+            plan_family_code?: string | null;
             /**
              * @description `true` when deletion of the plan was requested and is still being processed in the background. The plan is going away and should not be offered to new customers; `GET /plans` still lists it until the deletion finishes. Filter on `pending_deletion` when you build a pricing page.
              * @example false
@@ -13460,7 +13578,59 @@ export interface components {
         };
         PlansPaginated: {
             plans: components["schemas"]["PlanObject"][];
-            meta: components["schemas"]["PaginationMeta"];
+            /** @description The plan families of the returned plans, ordered by pricing position. A publishable key, or `include_hidden=false`, leaves out families and features hidden from the pricing table. */
+            families?: {
+                code?: string;
+                name?: string;
+                description?: string | null;
+                show_on_pricing?: boolean;
+                pricing_position?: number | null;
+                pricing_highlighted?: boolean;
+                badge_text?: string | null;
+                cta_text?: string | null;
+                /** @description Codes of the family's plans. A publishable key does not receive the codes of plans pending deletion. */
+                plan_codes?: string[];
+                features?: {
+                    code?: string;
+                    name?: string;
+                    description?: string | null;
+                    show_on_pricing?: boolean;
+                    show_description?: boolean;
+                    display_position?: number | null;
+                }[];
+            }[];
+            meta: components["schemas"]["PaginationMeta"] & {
+                /**
+                 * @description The appearance saved for the organization on the dashboard page Developers > Customize SDK, which the React SDK components apply automatically. `{}` when none is saved. Keys are `theme`, `variables`, `planCardLayout`, `pricingTable`, `hideBranding` and `components`, where `components` maps an SDK component name (such as `UsageMeter`) to its own `theme`, `variables`, `planCardLayout` and `pricingTable`. Returned for publishable and secret keys on this list endpoint only, not on `GET /plans/{code}`.
+                 * @example {
+                 *       "theme": "nozle",
+                 *       "variables": {
+                 *         "colorHighlight": "#16a34a"
+                 *       },
+                 *       "planCardLayout": "panel",
+                 *       "pricingTable": {
+                 *         "highlightStyle": "outline",
+                 *         "annualDiscountLabel": "Save 20%",
+                 *         "showToggle": true
+                 *       },
+                 *       "components": {
+                 *         "UsageMeter": {
+                 *           "variables": {
+                 *             "colorPrimary": "#e11d48"
+                 *           }
+                 *         }
+                 *       }
+                 *     }
+                 */
+                sdk_appearance?: {
+                    [key: string]: unknown;
+                };
+                /**
+                 * @description Whether the SDK components show "Powered by Nozle". `false` only when the organization's Nozle plan lets it remove the branding and `sdk_appearance.hideBranding` is `true`. Invoice, credit note and payment receipt PDFs always show it. Returned for publishable keys only.
+                 * @example true
+                 */
+                nozle_branding?: boolean;
+            };
         };
         /** @description Minimum commitment for this plan. */
         MinimumCommitmentInput: {
@@ -13543,6 +13713,16 @@ export interface components {
                  * @example Plan for early stage startups.
                  */
                 description?: string | null;
+                /**
+                 * @description Code of the plan family the plan belongs to, for example the monthly and yearly versions of one plan. Without it, or with a code that does not exist yet, the call creates a new family for the plan. A family holds at most one plan per `interval`, all in the same `amount_currency`; otherwise the call returns `422` with the error `plan_family_interval_already_exist` on `interval` or `plan_family_currency_mismatch` on `amount_currency`. A plan that joins a family that already has plans takes the family's features and privileges.
+                 * @example startup
+                 */
+                plan_family_code?: string | null;
+                /**
+                 * @description Whether a plan family that this call creates is shown on the pricing table and in the publishable-key catalog (`GET /plans`, `GET /plans/{code}`). Defaults to `true`; send `false` to create a plan that is not shown yet. A family that the plan joins keeps its own visibility. GraphQL `createPlan` and `updatePlan` take the same field as `showOnPricing`.
+                 * @default true
+                 */
+                show_on_pricing: boolean;
                 /**
                  * @description The base cost of the plan, excluding any applicable taxes, that is billed on a recurring basis. This value is defined at 0 if your plan is a pay-as-you-go plan.
                  * @example 10000
@@ -13906,6 +14086,16 @@ export interface components {
                  */
                 description?: string | null;
                 /**
+                 * @description Code of the plan family the plan belongs to, for example the monthly and yearly versions of one plan. Without it, or with a code that does not exist yet, the call creates a new family for the plan. A family holds at most one plan per `interval`, all in the same `amount_currency`; otherwise the call returns `422` with the error `plan_family_interval_already_exist` on `interval` or `plan_family_currency_mismatch` on `amount_currency`. A plan that joins a family that already has plans takes the family's features and privileges.
+                 * @example startup
+                 */
+                plan_family_code?: string | null;
+                /**
+                 * @description Whether a plan family that this call creates is shown on the pricing table and in the publishable-key catalog (`GET /plans`, `GET /plans/{code}`). Defaults to `true`; send `false` to create a plan that is not shown yet. A family that the plan joins keeps its own visibility. GraphQL `createPlan` and `updatePlan` take the same field as `showOnPricing`.
+                 * @default true
+                 */
+                show_on_pricing: boolean;
+                /**
                  * @description The base cost of the plan, excluding any applicable taxes, that is billed on a recurring basis. This value is defined at 0 if your plan is a pay-as-you-go plan.
                  * @example 10000
                  */
@@ -14258,6 +14448,16 @@ export interface components {
                  * @example true
                  */
                 cascade_updates?: boolean;
+                /**
+                 * @description Plan versioning. A change to what a plan bills or grants (prices, charges, fixed charges, credit grants, entitlements, trial and so on) while subscriptions are on it saves the plan's next version, and those subscriptions keep the version they are on. `true` changes this version in place instead, for every subscription on it from its next invoice. Cannot be combined with `force_version`. See [Plan versioning](/guides/billing/plan-versions).
+                 * @example false
+                 */
+                disable_version?: boolean;
+                /**
+                 * @description Plan versioning. Saves the change as the plan's next version even when it changes nothing the plan bills or grants. Cannot be combined with `disable_version` (`422`, `force_version: incompatible_with_disable_version`).
+                 * @example false
+                 */
+                force_version?: boolean;
                 metadata?: components["schemas"]["MetadataInput"];
             };
         };
@@ -14274,7 +14474,7 @@ export interface components {
              *         "root": false
              *       },
              *       "sso": {
-             *         "provider": "okta"
+             *         "provider": "microsoft"
              *       }
              *     }
              */
@@ -14759,6 +14959,13 @@ export interface components {
                  */
                 plan_code: string;
                 /**
+                 * @description Optional. The version of `plan_code` to sell, for example to keep selling an older price to a customer. Without it, a new subscription gets the current version.
+                 *
+                 *     Sending the `external_id` of an existing subscription with its own `plan_code` changes nothing and returns it, whatever the current version is. A `plan_version` other than the subscription's own is refused with `422` (`plan_version: plan_version_change_not_supported`): only a version migration moves a subscription between versions. An unknown version returns `404` with `plan_version_not_found`.
+                 * @example 1
+                 */
+                plan_version?: number;
+                /**
                  * @description The display name of the subscription on an invoice. This field allows for customization of the subscription's name for billing purposes, especially useful when a single customer has multiple subscriptions using the same plan.
                  * @example Repository A
                  */
@@ -15145,13 +15352,13 @@ export interface components {
              *         "code": "provider",
              *         "name": "SSO Provider",
              *         "value_type": "select",
-             *         "value": "okta",
+             *         "value": "microsoft",
              *         "plan_value": "google",
-             *         "override_value": "okta",
+             *         "override_value": "microsoft",
              *         "config": {
              *           "select_options": [
              *             "google",
-             *             "okta"
+             *             "microsoft"
              *           ]
              *         }
              *       }
@@ -15161,7 +15368,7 @@ export interface components {
             /**
              * @example {
              *       "max": 15,
-             *       "provider": "okta"
+             *       "provider": "microsoft"
              *     }
              */
             overrides: {
@@ -15675,10 +15882,10 @@ export interface components {
              * @example anrok
              * @enum {string}
              */
-            accounting_provider: "anrok" | "hubspot" | "netsuite" | "okta" | "salesforce" | "xero";
+            accounting_provider: "anrok";
             /**
              * @description Code of the accounting provider
-             * @example Netsuite Prod
+             * @example Anrok Prod
              */
             accounting_provider_code: string;
             provider_error: string | {
@@ -15729,7 +15936,7 @@ export interface components {
              * @example anrock
              * @enum {string}
              */
-            tax_provider: "anrock" | "hubspot" | "netsuite" | "okta" | "salesforce" | "xero";
+            tax_provider: "anrock";
             /**
              * @description Code of the tax provider
              * @example Stripe Prod
@@ -15909,7 +16116,12 @@ export interface components {
              * @example Stripe Prod
              */
             payment_provider_code?: string;
+            /** @description The provider's error. For a duplicate Stripe payment on an invoice that is already paid, an object with `message` and `error_code`: `duplicate_payment_refunded` (Nozle refunded the payment in full, refund reason `duplicate`), `duplicate_payment_refund_failed` (Stripe refused the refund; refund it by hand) or `duplicate_payment_requires_review` (the payment was still processing when the invoice was paid another way; not refunded automatically). */
             provider_error?: string | {
+                [key: string]: unknown;
+            };
+            /** @description Extra detail. For a duplicate payment, `provider_payment_id` is the Stripe payment intent. */
+            error_details?: {
                 [key: string]: unknown;
             };
         };
@@ -15922,12 +16134,12 @@ export interface components {
             integration_id: string;
             /**
              * @description The type of integration provider
-             * @example netsuite
+             * @example anrok
              */
             provider: string;
             /**
              * @description Unique code used to identify an integration connection.
-             * @example netsuite-eu-1
+             * @example anrok1
              */
             provider_code: string;
             provider_error: string | {
@@ -16098,7 +16310,7 @@ export interface components {
         };
         /** @description Either an Engine error (`{error, code?, request_id?}`) or a Core error forwarded unchanged (`{status, error, code, error_details?}`). */
         BillingEngineOrCoreError: components["schemas"]["EngineError"] | components["schemas"]["BillingCoreError"];
-        /** @description Most recently started active subscription of the customer. Built from Engine's billing database, not from Core's API. */
+        /** @description Most recently started active subscription of the customer. Built from Engine's billing database, not from Core's API. The usage fields (`events_used` to `plan_limits`) appear only in Nozle's status of your own workspace on its Nozle plan (shown under Settings > Billing settings > Plan and in GraphQL `nozlePlanStatus`); the status of your customers never includes them. */
         BillingStatusResponse: {
             /**
              * @description Plan code of the active subscription.
@@ -16106,8 +16318,8 @@ export interface components {
              */
             plan: string;
             /**
-             * @description Same value as `plan` (the plan code, not the display name). Kept for older clients.
-             * @example pro
+             * @description The plan's display name. Falls back to the plan code when the plan has no name.
+             * @example Pro
              */
             planName: string;
             /**
@@ -16116,10 +16328,10 @@ export interface components {
              */
             status: "active";
             /**
-             * @description Always `monthly`; the value is fixed in code and does not reflect the plan's interval.
+             * @description The plan's billing interval.
              * @enum {string}
              */
-            interval: "monthly";
+            interval: "weekly" | "monthly" | "yearly" | "quarterly" | "semiannual";
             /**
              * Format: int64
              * @description Plan base amount in the currency's minor unit.
@@ -16128,6 +16340,55 @@ export interface components {
             amount_cents: number;
             /** @example USD */
             currency: string;
+            /**
+             * Format: int64
+             * @description Workspace plan status only. Events reported in the current billing period, across a plan change in that period.
+             * @example 60000
+             */
+            events_used?: number;
+            /**
+             * Format: int64
+             * @description Workspace plan status only. Events included in the plan; null when the plan has none.
+             * @example 50000
+             */
+            events_included?: number | null;
+            /**
+             * @description Workspace plan status only. `events_used` / `events_included` in percent, one decimal; null without a limit.
+             * @example 120
+             */
+            events_used_percent?: number | null;
+            /**
+             * Format: int64
+             * @description Workspace plan status only. Tracked MRR of every currency, in USD cents at the latest ECB rates; null while a currency has no rate.
+             * @example 0
+             */
+            mrr_tracked_usd_cents?: number | null;
+            /**
+             * Format: int64
+             * @description Workspace plan status only. The plan's MRR limit in USD cents; null when the plan has none.
+             * @example 500000
+             */
+            mrr_limit_usd_cents?: number | null;
+            /**
+             * @description Workspace plan status only. `mrr_tracked_usd_cents` / `mrr_limit_usd_cents` in percent, one decimal; null without a limit or a rate.
+             * @example 0
+             */
+            mrr_used_percent?: number | null;
+            /** @description Workspace plan status only. The plan's limits. */
+            plan_limits?: {
+                /**
+                 * Format: int64
+                 * @description Included events.
+                 * @example 50000
+                 */
+                events?: number | null;
+                /**
+                 * Format: int64
+                 * @description MRR limit in USD cents.
+                 * @example 500000
+                 */
+                mrr_cents?: number | null;
+            };
         };
         BillingInvoiceSummary: {
             /** Format: uuid */
@@ -16135,14 +16396,20 @@ export interface components {
             /** @example ACME-202610-001 */
             number: string;
             /**
-             * @description Draft invoices are never returned.
+             * @description Only the statuses Core's API shows, other than draft. Drafts and invoices still being generated are never returned. Whether the invoice is paid is in `payment_status`.
              * @enum {string}
              */
-            status: "finalized" | "voided" | "pending" | "failed" | "unknown";
-            /** @enum {string} */
+            status: "finalized" | "voided" | "failed" | "pending";
+            /**
+             * @description `succeeded` means the invoice is paid.
+             * @enum {string}
+             */
             payment_status: "pending" | "succeeded" | "failed" | "unknown";
-            /** @enum {string} */
-            invoice_type: "subscription" | "add_on" | "credit" | "one_off" | "other";
+            /**
+             * @description `other` is a type Engine does not know.
+             * @enum {string}
+             */
+            invoice_type: "subscription" | "add_on" | "credit" | "one_off" | "advance_charges" | "progressive_billing" | "other";
             /**
              * Format: int64
              * @description Invoice total in the currency's minor unit.
@@ -16189,6 +16456,11 @@ export interface components {
             customer_id: string;
             /** @example pro */
             plan_code: string;
+            /**
+             * @description Optional. The version of `plan_code` to subscribe to. Without it, the customer gets the current version. Core's rules apply (see `plan_version` on `POST /subscriptions`).
+             * @example 1
+             */
+            plan_version?: number;
         };
         /** @description Core's subscription response with two fields added by Engine. */
         BillingSubscribeResponse: components["schemas"]["Subscription"] & {
@@ -16625,6 +16897,114 @@ export interface components {
         };
         BillingPlanTransitionPolicyResponse: {
             plan_transition_policy: components["schemas"]["BillingPlanTransitionPolicy"];
+        };
+        /** @description One version of a plan code. */
+        PlanVersion: {
+            /**
+             * Format: uuid
+             * @description The id of the plan row of this version.
+             */
+            nozle_id: string;
+            version: number;
+            /** @description Whether new subscriptions get this version. */
+            is_current: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** @description The base price of this version. */
+            amount_cents: number;
+            /** @example USD */
+            amount_currency: string;
+            /** @description Active subscriptions billed on this version. */
+            active_subscriptions_count: number;
+        };
+        PlanVersionList: {
+            versions: components["schemas"]["PlanVersion"][];
+        };
+        PlanVersionMigrationInput: {
+            /** @description The version whose active subscriptions move. */
+            from_version: number;
+            /** @description The version they move to. Defaults to the current version. */
+            to_version?: number;
+        };
+        /** @description The outcome of a migration for one subscription. */
+        PlanVersionMigrationItem: {
+            external_subscription_id: string;
+            /**
+             * @description `succeeded`: the move is scheduled for the end of the period (or has happened). `canceled`: the migration was canceled before the move started.
+             * @enum {string}
+             */
+            status: "succeeded" | "skipped" | "failed" | "canceled";
+            /** @enum {string|null} */
+            skip_reason?: "already_on_version" | "canceling" | "custom_pricing" | "different_billing" | "external_billing" | "in_trial" | "not_active" | "open_checkout" | "pending_plan_change" | null;
+            /** @description Why the move failed. A rerun retries it. */
+            error?: string | null;
+            /**
+             * Format: date-time
+             * @description When the subscription starts on the new version.
+             */
+            effective_at?: string | null;
+            /**
+             * @description For a scheduled move (`status: succeeded`): `pending` until the subscription starts on the new version, `moved` once it has, `canceled` when the move was undone because the subscription ended first. `null` for other items.
+             * @enum {string|null}
+             */
+            move_status?: "pending" | "moved" | "canceled" | null;
+        };
+        PlanVersionMigration: {
+            /** Format: uuid */
+            nozle_id: string;
+            plan_code: string;
+            from_version: number;
+            to_version: number;
+            /**
+             * @description `succeeded` once every subscription was handled: each move is then scheduled for the end of its period.
+             * @enum {string}
+             */
+            status: "running" | "succeeded" | "completed_with_errors" | "failed" | "canceled";
+            /** @description Active subscriptions on `from_version` when the migration started. */
+            matched_count: number;
+            succeeded_count: number;
+            skipped_count: number;
+            failed_count: number;
+            /** Format: date-time */
+            started_at?: string | null;
+            /** Format: date-time */
+            finished_at?: string | null;
+            /** Format: date-time */
+            canceled_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** @description One per subscription. Only in `GET /plans/{code}/version-migrations/{id}`. */
+            items?: components["schemas"]["PlanVersionMigrationItem"][];
+        };
+        PlanVersionMigrationResponse: {
+            plan_version_migration: components["schemas"]["PlanVersionMigration"];
+        };
+        PlanVersionMigrationList: {
+            plan_version_migrations: components["schemas"]["PlanVersionMigration"][];
+        };
+        PlanVersionMigrationPreviewItem: {
+            external_subscription_id: string;
+            external_customer_id?: string;
+            /** @enum {string} */
+            outcome: "move" | "skip";
+            /** @description Why the subscription would stay, when `outcome` is `skip` (see `PlanVersionMigrationItem.skip_reason`). */
+            skip_reason?: string | null;
+            /**
+             * Format: date
+             * @description The day the subscription would start on the new version.
+             */
+            effective_on?: string | null;
+            current_amount_cents?: number;
+            new_amount_cents?: number;
+        };
+        PlanVersionMigrationPreview: {
+            plan_code: string;
+            from_version: number;
+            to_version: number;
+            items: components["schemas"]["PlanVersionMigrationPreviewItem"][];
+        };
+        PlanVersionMigrationPreviewResponse: {
+            plan_version_migration_preview: components["schemas"]["PlanVersionMigrationPreview"];
         };
         BillingPlanTransitionPolicyList: {
             plan_transition_policies: components["schemas"]["BillingPlanTransitionPolicy"][];
@@ -17114,14 +17494,16 @@ export interface components {
             status: "succeeded" | "denied" | "reversed";
             /** @description Metric amount snapshot as a decimal string. */
             metric_amount: string | null;
-            /** @description Credit amount of the operation. */
+            /** @description Credit amount of the operation. On a `revoke`, what was actually revoked. */
             credit_amount: string;
+            /** @description On a `revoke` operation, the credits that were asked to be taken back. `credit_amount` is what was actually revoked; the difference had already been spent. `null` for other operation types. */
+            requested_credit_amount?: string | null;
             rate_id: string | null;
             /** @description Rate snapshot: metric side, decimal string. */
             rate_metric_amount: string | null;
             /** @description Rate snapshot: credit side, decimal string. */
             rate_credit_amount: string | null;
-            /** @description Reason code, for example on a denied consume. */
+            /** @description Reason code, for example on a denied consume. A `revoke` of a paid top-up's credits has `top_up_credit_note` (a credit note on the top-up invoice) or `top_up_dispute_lost` (a lost payment dispute). */
             reason: string | null;
             /** Format: date-time */
             occurred_at: string;
@@ -17423,7 +17805,7 @@ export interface components {
          * @example {
          *       "wallet_id": "09b4f6d3-f463-4f4f-ac75-27e36bc2a296",
          *       "name": "Prepaid wallet",
-         *       "balance_cents": 2000,
+         *       "balance_cents": 1600,
          *       "currency": "USD",
          *       "credits_balance": "16.00000",
          *       "status": "active"
@@ -17435,7 +17817,7 @@ export interface components {
             name: string;
             /**
              * Format: int64
-             * @description Money balance as last recorded by Core. `POST /check-and-deduct` does not update it.
+             * @description Money balance in the smallest unit of the currency. `POST /check-and-deduct` lowers it with the credits it deducts.
              */
             balance_cents: number;
             currency: string;
@@ -17453,9 +17835,9 @@ export interface components {
             type: "inbound" | "outbound" | "unknown";
             /** @enum {string} */
             status: "pending" | "settled" | "unknown";
-            /** @description Decimal text. */
+            /** @description Money amount in the wallet currency, as decimal text. For a check-and-deduct transaction it is the credits × the wallet rate. */
             amount: string;
-            /** @description Decimal text. */
+            /** @description Credits, as decimal text. */
             credit_amount: string;
             /** @description UTC time formatted `YYYY-MM-DDTHH:MM:SSZ`, or `null`. */
             settled_at: string | null;
@@ -17476,6 +17858,8 @@ export interface components {
             customer_id: string;
             /** @description External Entity ID to attribute and pool the usage. Omit for customer-level usage. */
             entity_id?: string;
+            /** @description External ID of the active subscription of the customer that pays for the usage. Optional. Without it, with `entity_id` the Entity's own active subscription pays, else the customer's own (not Entity-owned) one; without either, the customer's one active subscription pays. With `entity_id`, it must not be another Entity's subscription. An unknown or inactive subscription returns `404 active_subscription_not_found`. */
+            subscription_id?: string;
             /** @description Code of a consumable Feature. */
             feature_code: string;
             /** @description Credit System to use. Omit when only one effective rate applies; two or more give `422 credit_usage_configuration_invalid`. */
@@ -17493,6 +17877,8 @@ export interface components {
             customer_id: string;
             /** @description External Entity ID to attribute and pool the usage. Omit for customer-level usage. */
             entity_id?: string;
+            /** @description External ID of the active subscription of the customer that pays for the usage. Optional. Without it, with `entity_id` the Entity's own active subscription pays, else the customer's own (not Entity-owned) one; without either, the customer's one active subscription pays. With `entity_id`, it must not be another Entity's subscription. An unknown or inactive subscription returns `404 active_subscription_not_found`. */
+            subscription_id?: string;
             /** @description Code of a consumable Feature. */
             feature_code: string;
             /** @description Credit System to use. Omit when only one effective rate applies; two or more give `422 credit_usage_configuration_invalid`. */
@@ -17831,17 +18217,16 @@ export interface components {
              */
             confidence: "low" | "medium" | "high";
         };
-        /** @description Unknown fields are ignored. */
+        /** @description An unknown field returns 400 `invalid_request`. */
         MarginSimulateRequest: {
             /**
-             * @description Code of the metric to simulate. Missing or empty returns 400 `metric_code required`.
+             * @description Code of the metric to simulate. Missing or empty returns 400 `invalid_request` with `metric_code required`.
              * @example agent_execution
              */
             metric_code: string;
             /**
              * Format: double
-             * @description New price per unit of usage, in dollars, as a JSON number. Not enforced by the server: when omitted it is 0 and the simulation has no revenue. A string returns 400.
-             * @default 0
+             * @description New price per unit of usage, in dollars, as a JSON number of 0 or more. A missing, negative or string value returns 400 `invalid_request`.
              * @example 1
              */
             new_price_dollars: number;
@@ -17903,7 +18288,7 @@ export interface components {
              * @description Denial code. Present only when `allowed` is `false`.
              * @enum {string}
              */
-            reason?: "feature_not_found" | "no_subscription" | "no_entitlement" | "usage_limit_exceeded" | "economic_policy_denied";
+            reason?: "feature_not_found" | "no_subscription" | "subscription_required" | "no_entitlement" | "usage_limit_exceeded" | "economic_policy_denied";
             /** @description Feature type, such as `boolean`, `config` or `metered`. Absent when the feature or subscription is missing, and when a metered feature has neither an entitlement nor a charge. */
             feature_type?: string;
             /** @description Configuration values granted by the plan for a non-metered feature. Absent when there are none. */
@@ -17912,12 +18297,12 @@ export interface components {
             };
             /**
              * Format: int64
-             * @description Units used in the current billing period, as a whole number (fractional usage is truncated). `0` for non-metered features and for denials decided before usage is read.
+             * @description Units used in the current billing period (the running total for a recurring feature), as a whole number (fractional usage is truncated). Also the real usage of a metered feature priced only by a charge. `0` for non-metered features and for denials decided before usage is read.
              */
             used: number;
             /**
              * Format: int64
-             * @description Usage limit from the entitlement. `null` when there is no cap or the feature is not metered.
+             * @description Usage limit from the entitlement. `null` when there is no cap, the feature is not metered, or a metered feature has no entitlement.
              */
             limit: number | null;
             /**
@@ -17930,7 +18315,7 @@ export interface components {
             economics?: components["schemas"]["PlatformCanEconomics"];
             policy?: components["schemas"]["PlatformCanPolicy"];
         };
-        /** @description Point-in-time estimate for one more unit of an allowed metered feature. Monetary values are exact decimal strings in `currency`, not cents. */
+        /** @description Point-in-time estimate for the proposed call of an allowed metered feature. Monetary values are exact decimal strings in `currency`, not cents. */
         PlatformCanEconomics: {
             /** @enum {string} */
             status: "estimated" | "not_configured" | "unavailable" | "stale";
@@ -17938,7 +18323,7 @@ export interface components {
             currency?: string;
             /** @description Present when `status` is `estimated`. */
             estimated_incremental_cost?: string;
-            /** @description Revenue from the plan's standard charge for the feature, `0` when there is no charge. */
+            /** @description Revenue of the proposed call: the standard charge's unit price × the call's units, `0` when there is no charge. A count feature adds 1 unit; a sum feature adds the value of its `field_name` in `metadata`. Without that value, and for max, latest, unique count, weighted sum and custom aggregations, `status` is `unavailable` and `excludes` has `revenue_quantity_missing` or `non_additive_revenue_aggregation`. */
             estimated_incremental_revenue?: string;
             /** @description Revenue minus cost. Present when the cost is estimated. */
             estimated_incremental_margin?: string;
@@ -17948,7 +18333,7 @@ export interface components {
             rule_version_ids?: string[];
             /** @description What was calculated, such as `feature_event_cost`. */
             includes?: string[];
-            /** @description Costs that are not in the estimate, such as `shared_period_costs`, `finalized_invoice_adjustments`, `non_standard_revenue_pricing` or `foreign_exchange_conversion`. */
+            /** @description Costs that are not in the estimate, such as `shared_period_costs`, `finalized_invoice_adjustments`, `non_standard_revenue_pricing`, `revenue_quantity_missing`, `non_additive_revenue_aggregation` or `foreign_exchange_conversion`. */
             excludes?: string[];
             /** @description Machine code explaining a status other than `estimated`, such as `cost_estimator_unavailable`, `cost_estimate_failed`, `no_matching_cost_rule`, `estimated_revenue_unavailable`, `revenue_currency_mismatch` or `snapshot_too_old`. */
             reason?: string;
@@ -17968,7 +18353,7 @@ export interface components {
              */
             mode: "allow" | "warn" | "deny";
             /**
-             * @description Decision used when economics are not `estimated` or cannot be compared.
+             * @description Decision used when economics are not `estimated` (for example `unavailable` because the call's revenue cannot be estimated) or cannot be compared.
              * @enum {string}
              */
             on_unavailable: "allow" | "warn" | "deny";
@@ -17993,10 +18378,6 @@ export interface components {
             ok: boolean;
             /** @enum {string} */
             engine: "ok" | "error";
-        };
-        PlatformCentrifugoToken: {
-            /** @description HS256 JWT for Centrifugo. Claims `sub` (organization ID), `iat`, `exp` (24 hours later) and `channels` (`["customer:<organization_id>"]`). */
-            token: string;
         };
         /** @description A request or response body of the LLM provider, passed through unchanged. Its shape is defined by the provider. */
         PlatformProviderPayload: {
@@ -18234,6 +18615,10 @@ export interface components {
         };
     };
     parameters: {
+        /** @description The plan code. Every version of a plan keeps its code. */
+        plan_version_code: string;
+        /** @description The `nozle_id` of the migration. */
+        plan_version_migration_id: string;
         /** @description Page number. */
         page: number;
         /** @description Number of records per page. */
@@ -18852,6 +19237,13 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            /** @description Usage analytics is not available. The body is `{"status": 503, "error": "analytics_unavailable", ...}`. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     findAllAppliedCoupons: {
@@ -20702,6 +21094,73 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    manageCustomerPaymentMethod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The customer external unique identifier (provided by your own application). */
+                customer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uri
+                     * @description HTTPS URL on an allowlisted origin that Stripe returns to. Defaults to the organization return URL.
+                     */
+                    return_url?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stripe Billing Portal page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        manage_payment_method: {
+                            /** @description Stripe Billing Portal URL. */
+                            url: string;
+                            /** @enum {string} */
+                            provider: "stripe";
+                            /** Format: date-time */
+                            expires_at?: string | null;
+                        };
+                    };
+                };
+            };
+            /** @description invalid_return_url, or the body is not valid JSON. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description A publishable key was used, or the caller lacks payment:write. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description One of no_linked_payment_provider, razorpay_pays_by_link (Razorpay customers pay each invoice by payment link), provider_not_supported, missing_payment_provider_customer. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorUnprocessableEntity"];
+                };
+            };
+        };
+    };
     findAllEvents: {
         parameters: {
             query?: {
@@ -20766,7 +21225,36 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description Standard (PostgreSQL) event store only. The `transaction_id` is already used in the organization by an event with a different payload (feature code, subscription, `properties`, `precise_total_amount_cents`, or `timestamp` when sent). Nothing is stored; the first event keeps the ID. The same payload returns `200` with the stored event. Organizations on the high-volume (ClickHouse) event store get `200` for any repeat: billing removes repeats when usage is read. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": 409,
+                     *       "error": "Conflict",
+                     *       "code": "transaction_id_conflict",
+                     *       "error_details": {
+                     *         "transaction_id": [
+                     *           "value_already_exist"
+                     *         ]
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ApiErrorUnprocessableEntity"];
+                };
+            };
+            /** @description The event was not stored. `validation_errors` for an invalid field, including `external_subscription_id: [value_is_mandatory]` when neither `external_subscription_id` nor `external_customer_id` is sent. `active_subscription_not_found` or `active_subscription_ambiguous` when only `external_customer_id` is sent and the customer has no active subscription (or is unknown) or several. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorUnprocessableEntity"];
+                };
+            };
         };
     };
     createBatchEvents: {
@@ -20795,7 +21283,29 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The batch was not stored. `code` is `validation_errors` and `error_details` is keyed by the position of each failing event, with the same field errors as a single event, for example `{"0": {"external_customer_id": ["active_subscription_not_found"]}}`. An empty batch returns `events: [no_events]`, more than 100 events `events: [too_many_events]`. On the standard (PostgreSQL) event store, the same `transaction_id` twice in the batch, or one already used by an event with a different payload, fails that event with `transaction_id: [value_already_exist]`; the high-volume (ClickHouse) event store accepts repeats. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": 422,
+                     *       "error": "Unprocessable Entity",
+                     *       "code": "validation_errors",
+                     *       "error_details": {
+                     *         "0": {
+                     *           "external_customer_id": [
+                     *             "active_subscription_not_found"
+                     *           ]
+                     *         }
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ApiErrorUnprocessableEntity"];
+                };
+            };
         };
     };
     eventEstimateFees: {
@@ -20949,6 +21459,13 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            /** @description A publishable key, or `code: permission_denied` when API key permissions are enabled and the secret key lacks `analytic:read`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];
         };
@@ -20979,6 +21496,13 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            /** @description A publishable key, or `code: permission_denied` when API key permissions are enabled and the secret key lacks `analytic:write`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             404: components["responses"]["NotFound"];
             /** @description The allocation period is still open */
             409: {
@@ -21016,6 +21540,13 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            /** @description A publishable key, or `code: permission_denied` when API key permissions are enabled and the secret key lacks `analytic:read`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description A report data source could not be queried */
             500: {
                 headers: {
@@ -21049,6 +21580,13 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description Not the internal service token. Organization secret and publishable keys are refused with `{"error": "internal service authentication required"}`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description The source is not eligible for replay */
             409: {
                 headers: {
@@ -21082,6 +21620,13 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description Not the internal service token. Organization secret and publishable keys are refused with `{"error": "internal service authentication required"}`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             404: components["responses"]["NotFound"];
         };
     };
@@ -21128,7 +21673,7 @@ export interface operations {
                 currency?: components["schemas"]["Currency"] & unknown;
                 /** @description The fee type. Possible values are `add-on`, `charge`, `credit`, `subscription` or "commitment". */
                 fee_type?: "charge" | "add_on" | "subscription" | "credit" | "commitment";
-                /** @description Filter results by the `code` of the feature attached to the fee. Only applies to `charge` types. */
+                /** @description Filter results by the `code` of the feature attached to the fee. Only applies to `charge` types. Fees of a deleted feature are included. */
                 feature_code?: string;
                 /** @description Indicates the payment status of the fee. It represents the current status of the payment associated with the fee. The possible values for this field are `pending`, `succeeded`, `failed` and refunded`. */
                 payment_status?: "pending" | "succeeded" | "failed" | "refunded";
@@ -21890,6 +22435,8 @@ export interface operations {
                 page?: components["parameters"]["page"];
                 /** @description Number of records per page. */
                 per_page?: components["parameters"]["per_page"];
+                /** @description Secret keys only. Send `false` to get the pricing table view that a publishable key always gets, without the plans of plan families hidden from the pricing table and without hidden features in `families[].features`. Any other value, or no value, returns everything. A publishable key ignores it. */
+                include_hidden?: boolean;
             };
             header?: never;
             path?: never;
@@ -21940,7 +22487,10 @@ export interface operations {
     };
     findPlan: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Secret keys only. The version of the code to return (see [Plan versioning](/guides/billing/plan-versions)). Without it, or with a publishable key, the current version is returned. An unknown version returns `404` with `plan_not_found`. */
+                version?: number;
+            };
             header?: never;
             path: {
                 /** @description The code of the plan. It serves as a unique identifier associated with a particular plan. The code is typically used for internal or system-level identification purposes, like assigning a subscription, for instance. */
@@ -23792,7 +24342,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Until January 19, 2027, an old `lago_eu_<rest>` code resolves to the `nozle_eu_<rest>` tax (a tax you created yourself with a `lago_eu_*` code keeps it). */
                 code: string;
             };
             cookie?: never;
@@ -23817,7 +24367,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Until January 19, 2027, an old `lago_eu_<rest>` code resolves to the `nozle_eu_<rest>` tax (a tax you created yourself with a `lago_eu_*` code keeps it). */
                 code: string;
             };
             cookie?: never;
@@ -23849,7 +24399,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Until January 19, 2027, an old `lago_eu_<rest>` code resolves to the `nozle_eu_<rest>` tax (a tax you created yourself with a `lago_eu_*` code keeps it). */
                 code: string;
             };
             cookie?: never;
@@ -24886,7 +25436,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description Core: `subscription_selection_required`, `plan_upgrade_checkout_in_progress`, `entity_subscription_checkout_in_progress`, `billing_anchor_checkout_in_progress`, `idempotency_key_reused` (quoted checkout), `plan_change_quote_changed`, `subscription_change_pending`. */
+            /** @description Core: `subscription_selection_required`, `plan_upgrade_checkout_in_progress` (another upgrade checkout is open, or its time ran out while the provider reports a payment in progress or cannot be reached), `subscription_checkout_in_progress` or `entity_subscription_checkout_in_progress` (a payment for the abandoned new-subscription checkout on another plan is still processing, or it was paid; an abandoned checkout is otherwise replaced), `billing_anchor_checkout_in_progress`, `idempotency_key_reused` (quoted checkout), `plan_change_quote_changed`, `subscription_change_pending` (a paid upgrade while the subscription has a scheduled cancellation or plan change, or an upgrade payment in progress). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24895,7 +25445,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description Core: `checkout_not_required`, `payment_provider_required`, `stripe_customer_required`, `plan_already_active`, `subscription_and_idempotency_key_required`, `third_party_error`, `provider_error`, or `validation_errors` with `error_details` (for example `return_url: [invalid_or_untrusted]`). Refused in the current state: Core refused the plan change. `code` names the reason (for example `plan_transition_policy_required`, `plan_already_active`, `target_plan_is_not_a_downgrade`, `subscription_not_active`, `externally_billed_subscription`). */
+            /** @description Core: `checkout_not_required`, `payment_provider_required`, `stripe_customer_required`, `plan_already_active` (also right after a late upgrade payment for this plan was applied), `subscription_and_idempotency_key_required`, `third_party_error`, `provider_error`, or `validation_errors` with `error_details` (for example `return_url: [invalid_or_untrusted]`, or `base: [invalid_invoice_status_or_payment_status]` for an invoice checkout of an invoice that is paid, voided, draft, closed, failed or has nothing due, or `base: [payment_already_processing]` while a Stripe payment of the invoice's last Checkout Session is processing or has succeeded). Refused in the current state: Core refused the plan change. `code` names the reason (for example `plan_transition_policy_required`, `plan_already_active`, `target_plan_is_not_a_downgrade`, `subscription_not_active`, `externally_billed_subscription`). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25175,6 +25725,21 @@ export interface operations {
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
+            /** @description Engine: `subscription_required`. The customer has several current subscriptions and not exactly one of them is the customer's own. Nothing changes. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": "subscription_required",
+                     *       "code": "subscription_required"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BillingEngineOrCoreError"];
+                };
+            };
             /** @description Engine: the change needs payment. Core validation errors are also forwarded. */
             422: {
                 headers: {
@@ -25337,7 +25902,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
-            /** @description Core `validation_errors`, for example `credit_action: [not_supported_for_pay_in_arrears]`, `expected_effective_at: [only_for_end_of_period_cancellation]`, `idempotency_key: [idempotency_key_reused]`. Refused in the current state: Core refused the transition, for example `externally_billed_subscription`, `target_plan_is_not_a_downgrade`, `subscription_is_not_canceling`, `subscription_cancellation_already_effective`, `plan_transition_policy_required`. */
+            /** @description Core `validation_errors`, for example `credit_action: [not_supported_for_pay_in_arrears]`, `expected_effective_at: [only_for_end_of_period_cancellation]`, `idempotency_key: [idempotency_key_reused]`. Refused in the current state: Core refused the transition, for example `externally_billed_subscription`, `target_plan_is_not_a_downgrade`, `subscription_is_not_canceling`, `subscription_cancellation_already_effective`, `plan_transition_policy_required`, `plan_code: [plan_pending_deletion]` (the target plan is being deleted). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25449,7 +26014,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description Core `validation_errors`, for example `credit_action: [not_supported_for_pay_in_arrears]`, `expected_effective_at: [only_for_end_of_period_cancellation]`, `idempotency_key: [idempotency_key_reused]`. Refused in the current state: Core refused the transition, for example `externally_billed_subscription`, `target_plan_is_not_a_downgrade`, `subscription_is_not_canceling`, `subscription_cancellation_already_effective`, `plan_transition_policy_required`. */
+            /** @description Core `validation_errors`, for example `credit_action: [not_supported_for_pay_in_arrears]`, `expected_effective_at: [only_for_end_of_period_cancellation]`, `idempotency_key: [idempotency_key_reused]`. Refused in the current state: Core refused the transition, for example `externally_billed_subscription`, `target_plan_is_not_a_downgrade`, `subscription_is_not_canceling`, `subscription_cancellation_already_effective`, `plan_transition_policy_required`, `plan_code: [plan_pending_deletion]` (the target plan is being deleted), `payment_required` (an immediate downgrade leaves an amount due; the customer pays it first through `POST /checkout`). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25593,6 +26158,250 @@ export interface operations {
                 };
             };
             503: components["responses"]["EngineUnavailable"];
+        };
+    };
+    listPlanVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The plan code. Every version of a plan keeps its code. */
+                code: components["parameters"]["plan_version_code"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The versions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "versions": [
+                     *         {
+                     *           "nozle_id": "1a901a90-1a90-1a90-1a90-1a901a901a91",
+                     *           "version": 1,
+                     *           "is_current": false,
+                     *           "created_at": "2026-10-01T09:00:00Z",
+                     *           "amount_cents": 4900,
+                     *           "amount_currency": "USD",
+                     *           "active_subscriptions_count": 42
+                     *         },
+                     *         {
+                     *           "nozle_id": "1a901a90-1a90-1a90-1a90-1a901a901a92",
+                     *           "version": 2,
+                     *           "is_current": true,
+                     *           "created_at": "2026-10-15T09:00:00Z",
+                     *           "amount_cents": 5900,
+                     *           "amount_currency": "USD",
+                     *           "active_subscriptions_count": 7
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PlanVersionList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPlanVersionMigrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The plan code. Every version of a plan keeps its code. */
+                code: components["parameters"]["plan_version_code"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The migrations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionMigrationList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createPlanVersionMigration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The plan code. Every version of a plan keeps its code. */
+                code: components["parameters"]["plan_version_code"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "from_version": 1
+                 *     }
+                 */
+                "application/json": components["schemas"]["PlanVersionMigrationInput"];
+            };
+        };
+        responses: {
+            /** @description The migration, started. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionMigrationResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description `plan_version_migration_running`: another migration of this plan code is running. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": 409,
+                     *       "error": "Conflict",
+                     *       "code": "plan_version_migration_running"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ApiErrorUnprocessableEntity"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    previewPlanVersionMigration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The plan code. Every version of a plan keeps its code. */
+                code: components["parameters"]["plan_version_code"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanVersionMigrationInput"];
+            };
+        };
+        responses: {
+            /** @description What the migration would do. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "plan_version_migration_preview": {
+                     *         "plan_code": "pro",
+                     *         "from_version": 1,
+                     *         "to_version": 2,
+                     *         "items": [
+                     *           {
+                     *             "external_subscription_id": "sub_1",
+                     *             "external_customer_id": "cus_1",
+                     *             "outcome": "move",
+                     *             "skip_reason": null,
+                     *             "effective_on": "2026-11-01",
+                     *             "current_amount_cents": 4900,
+                     *             "new_amount_cents": 5900
+                     *           },
+                     *           {
+                     *             "external_subscription_id": "sub_2",
+                     *             "external_customer_id": "cus_2",
+                     *             "outcome": "skip",
+                     *             "skip_reason": "custom_pricing",
+                     *             "effective_on": null,
+                     *             "current_amount_cents": 3900,
+                     *             "new_amount_cents": 5900
+                     *           }
+                     *         ]
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PlanVersionMigrationPreviewResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    findPlanVersionMigration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The plan code. Every version of a plan keeps its code. */
+                code: components["parameters"]["plan_version_code"];
+                /** @description The `nozle_id` of the migration. */
+                id: components["parameters"]["plan_version_migration_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The migration and its items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionMigrationResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    cancelPlanVersionMigration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The plan code. Every version of a plan keeps its code. */
+                code: components["parameters"]["plan_version_code"];
+                /** @description The `nozle_id` of the migration. */
+                id: components["parameters"]["plan_version_migration_id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The migration, canceled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionMigrationResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     coreListPlanTransitionPolicies: {
@@ -26153,7 +26962,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description `entity_subscription_checkout_in_progress`, `billing_anchor_checkout_in_progress`, `plan_upgrade_checkout_in_progress`, `idempotency_key_reused`, `plan_change_quote_changed`, `subscription_change_pending`. */
+            /** @description `entity_subscription_checkout_in_progress` (a payment for the abandoned checkout on another plan is still processing, or it was paid; an abandoned checkout is otherwise replaced), `billing_anchor_checkout_in_progress`, `plan_upgrade_checkout_in_progress`, `idempotency_key_reused`, `plan_change_quote_changed`, `subscription_change_pending` (a scheduled cancellation or plan change, or an upgrade payment in progress). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26702,7 +27511,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `credit_system:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `credit_system:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
             403: components["responses"]["EngineForbidden"];
             /** @description Not found. `code` is one of `customer_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -26793,7 +27602,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `credit_system:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `credit_system:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
             403: components["responses"]["EngineForbidden"];
             /** @description Not found. `code` is one of `customer_not_found`, `credit_system_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -26827,7 +27636,7 @@ export interface operations {
                  * @example ai_credits
                  */
                 credit_system_code?: string;
-                /** @description Page size from 1 to 100. Omitted, empty or `0` uses 50. A non-integer, a negative value or a value above 100 returns `400 invalid_request`. */
+                /** @description Page size from 1 to 100. Omitted or empty uses 50. `0`, a negative value, a value above 100 or a non-integer returns `400 invalid_request`. */
                 limit?: number;
                 /** @description Opaque cursor from a previous `next_cursor`, at most 512 bytes. Pass it unchanged; an invalid cursor returns `400 invalid_cursor`. */
                 cursor?: string;
@@ -26893,7 +27702,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `credit_system:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `credit_system:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
             403: components["responses"]["EngineForbidden"];
             /** @description Not found. `code` is one of `customer_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -26998,7 +27807,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `entity:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `entity:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
             403: components["responses"]["EngineForbidden"];
             /** @description Not found. `code` is one of `customer_not_found`, `entity_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -27100,7 +27909,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `entity:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `entity:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
             403: components["responses"]["EngineForbidden"];
             /** @description Not found. `code` is one of `customer_not_found`, `entity_not_found`, `credit_system_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -27134,7 +27943,7 @@ export interface operations {
                  * @example ai_credits
                  */
                 credit_system_code?: string;
-                /** @description Page size from 1 to 100. Omitted, empty or `0` uses 50. A non-integer, a negative value or a value above 100 returns `400 invalid_request`. */
+                /** @description Page size from 1 to 100. Omitted or empty uses 50. `0`, a negative value, a value above 100 or a non-integer returns `400 invalid_request`. */
                 limit?: number;
                 /** @description Opaque cursor from a previous `next_cursor`, at most 512 bytes. Pass it unchanged; an invalid cursor returns `400 invalid_cursor`. */
                 cursor?: string;
@@ -27206,7 +28015,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `entity:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `entity:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the customer in the request, the body is `{"code": "customer_scope_mismatch", ...}`. */
             403: components["responses"]["EngineForbidden"];
             /** @description Not found. `code` is one of `customer_not_found`, `entity_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -27288,7 +28097,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `entity:read`. The body has `error` only (no `code`). */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `entity:read`. The body has `error` only (no `code`). */
             403: components["responses"]["EngineForbidden"];
             /** @description Not found. `code` is one of `customer_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -27364,7 +28173,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `entity:read`. The body has `error` only (no `code`). */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `entity:read`. The body has `error` only (no `code`). */
             403: components["responses"]["EngineForbidden"];
             /** @description Not found. `code` is one of `customer_not_found`, `entity_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -27467,7 +28276,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `entity:write`. The body has `error` only (no `code`). */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `entity:write`. The body has `error` only (no `code`). */
             403: components["responses"]["EngineForbidden"];
             /** @description Not found. `code` is one of `customer_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -27552,7 +28361,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `entity:write`. The body has `error` only (no `code`). */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `entity:write`. The body has `error` only (no `code`). */
             403: components["responses"]["EngineForbidden"];
             /** @description Not found. `code` is one of `customer_not_found`, `entity_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -27635,7 +28444,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `entity:write`. The body has `error` only (no `code`). */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `entity:write`. The body has `error` only (no `code`). */
             403: components["responses"]["EngineForbidden"];
             /** @description Not found. `code` is one of `customer_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -27902,7 +28711,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `credit_system:write`. The body has `error` only (no `code`). */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `credit_system:write`. The body has `error` only (no `code`). */
             403: components["responses"]["EngineForbidden"];
             /** @description `code` is `customer_not_found`, `subscription_not_found`, `entity_not_found` or `credit_system_not_found`. */
             404: components["responses"]["EngineNotFound"];
@@ -27991,7 +28800,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorNotFound"];
                 };
             };
-            /** @description Core validation error, for example `customer_currency_mismatch` in `error_details.currency`, `razorpay_requires_inr`, `no_linked_payment_provider`, `top_up_package_archived` or `idempotency_key_reused`. */
+            /** @description Core validation error, for example `customer_currency_mismatch` in `error_details.currency`, `razorpay_requires_inr`, `no_linked_payment_provider`, `invalid_payment_provider`, `missing_payment_provider`, `missing_payment_provider_customer`, `top_up_package_archived` or `idempotency_key_reused`. Provider errors are returned before anything is created, so no invoice, purchase or webhook is left behind. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -28054,7 +28863,7 @@ export interface operations {
             };
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `credit_system:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the path, the body is `{"error": "customer_scope_mismatch"}` (the value is in `error`; there is no `code`). */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `credit_system:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the path, the body is `{"error": "customer_scope_mismatch"}` (the value is in `error`; there is no `code`). */
             403: components["responses"]["EngineForbidden"];
             /** @description No active wallet, or any database error while reading it. */
             404: {
@@ -28101,7 +28910,7 @@ export interface operations {
             };
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; when the organization has API permissions enabled, a secret key needs `credit_system:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the path, the body is `{"error": "customer_scope_mismatch"}` (the value is in `error`; there is no `code`). */
+            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `credit_system:read`. The body has `error` only (no `code`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the path, the body is `{"error": "customer_scope_mismatch"}` (the value is in `error`; there is no `code`). */
             403: components["responses"]["EngineForbidden"];
             /** @description The transactions could not be read. */
             500: {
@@ -28130,6 +28939,7 @@ export interface operations {
                  *       "customer_id": "customer_123",
                  *       "feature_code": "agent_execution",
                  *       "credit_system_code": "ai_credits",
+                 *       "subscription_id": "sub_pro_123",
                  *       "properties": {},
                  *       "occurred_at": "2026-07-20T12:00:00.750Z"
                  *     }
@@ -28151,11 +28961,11 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description A publishable key (body has `error` only), or `code: customer_scope_mismatch` when internal authentication is scoped to another customer. */
+            /** @description A publishable key, `code: permission_denied` when API key permissions are enabled and the secret key lacks `credit_system:{mode}` (`read` for check, `write` for track), or `code: customer_scope_mismatch` when internal authentication is scoped to another customer. */
             403: components["responses"]["EngineForbidden"];
-            /** @description `code` is `customer_not_found`, `active_subscription_not_found`, `feature_not_found` or `entity_not_found`. */
+            /** @description `code` is `customer_not_found`, `active_subscription_not_found` (`subscription_id` is not an active subscription of the customer, or belongs to another Entity), `feature_not_found` or `entity_not_found`. */
             404: components["responses"]["EngineNotFound"];
-            /** @description `code` is `active_subscription_ambiguous` (more than one active subscription), `feature_not_consumable`, `entity_inactive`, `credit_pool_policy_not_configured` (Entity usage with no explicit pool policy), or `credit_usage_configuration_invalid` (unsupported aggregation or expression, missing or invalid metric value, amount precision, inexact credit amount, no effective credit rate at that time, or ambiguous Credit System); `error` then holds the detail. */
+            /** @description `code` is `active_subscription_ambiguous` (several active subscriptions could pay and neither `subscription_id` nor `entity_id` picks one; the message names both), `feature_not_consumable` (a boolean or config Feature, which has no usage to consume), `entity_inactive`, `credit_pool_policy_not_configured` (Entity usage with no explicit pool policy), or `credit_usage_configuration_invalid` (unsupported aggregation or expression, missing or invalid metric value, amount precision, no effective credit rate at that time, or ambiguous Credit System); `error` then holds the detail. */
             422: components["responses"]["EngineUnprocessable"];
             /** @description Unexpected server error. The body has `code: internal_error`. */
             500: {
@@ -28196,6 +29006,7 @@ export interface operations {
                  *       "customer_id": "customer_123",
                  *       "feature_code": "agent_execution",
                  *       "credit_system_code": "ai_credits",
+                 *       "subscription_id": "sub_pro_123",
                  *       "properties": {},
                  *       "timestamp": "2026-07-20T12:00:00.750Z"
                  *     }
@@ -28217,13 +29028,13 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description A publishable key (body has `error` only), or `code: customer_scope_mismatch` when internal authentication is scoped to another customer. */
+            /** @description A publishable key, `code: permission_denied` when API key permissions are enabled and the secret key lacks `credit_system:{mode}` (`read` for check, `write` for track), or `code: customer_scope_mismatch` when internal authentication is scoped to another customer. */
             403: components["responses"]["EngineForbidden"];
-            /** @description `code` is `customer_not_found`, `active_subscription_not_found`, `feature_not_found` or `entity_not_found`. */
+            /** @description `code` is `customer_not_found`, `active_subscription_not_found` (`subscription_id` is not an active subscription of the customer, or belongs to another Entity), `feature_not_found` or `entity_not_found`. */
             404: components["responses"]["EngineNotFound"];
             /** @description `code: idempotency_key_reused`: the key was used with a different body. */
             409: components["responses"]["EngineConflict"];
-            /** @description `code` is `active_subscription_ambiguous` (more than one active subscription), `feature_not_consumable`, `entity_inactive`, `credit_pool_policy_not_configured` (Entity usage with no explicit pool policy), or `credit_usage_configuration_invalid` (unsupported aggregation or expression, missing or invalid metric value, amount precision, inexact credit amount, no effective credit rate at that time, or ambiguous Credit System); `error` then holds the detail. */
+            /** @description `code` is `active_subscription_ambiguous` (several active subscriptions could pay and neither `subscription_id` nor `entity_id` picks one; the message names both), `feature_not_consumable` (a boolean or config Feature, which has no usage to consume), `entity_inactive`, `credit_pool_policy_not_configured` (Entity usage with no explicit pool policy), or `credit_usage_configuration_invalid` (unsupported aggregation or expression, missing or invalid metric value, amount precision, no effective credit rate at that time, or ambiguous Credit System); `error` then holds the detail. */
             422: components["responses"]["EngineUnprocessable"];
             /** @description Unexpected server error. The body has `code: internal_error`. */
             500: {
@@ -28234,7 +29045,7 @@ export interface operations {
                     "application/json": components["schemas"]["EngineError"];
                 };
             };
-            /** @description Service unavailable. Retry with the same `Idempotency-Key` and the same body, including the same `timestamp`. `credit_usage_contention`: the balance stayed locked through every attempt. `credit_usage_publication_backlog`: the organization's usage-event outbox is over its safe limit or has a dead-lettered event, so new consumes are refused. API key verification failures return `{"error": "API key verification is unavailable"}` with no `code` and no `Retry-After`. */
+            /** @description Service unavailable. Retry with the same `Idempotency-Key` and the same body, including the same `timestamp`. `credit_usage_contention`: the balance stayed locked through every attempt. `credit_usage_publication_backlog`: the organization's usage-event outbox has 1,000 or more events still being retried, or its oldest one is older than 5 minutes, so new consumes are refused; it clears by itself once the events are accepted again. A dead-lettered event does not count. API key verification failures return `{"error": "API key verification is unavailable"}` with no `code` and no `Retry-After`. */
             503: {
                 headers: {
                     /** @description Seconds to wait before retrying. Sent with every coded 503 listed here; values are `1` for `credit_usage_contention`, `30` for `credit_usage_publication_backlog`, `1` for `credit_usage_temporarily_unavailable`. */
@@ -28269,13 +29080,17 @@ export interface operations {
             /** @description Deduction result. Check `allowed`. */
             200: {
                 headers: {
+                    /** @description Always `true`. Sent on every response of this endpoint after authentication. */
+                    Deprecation?: string;
+                    /** @description The successor endpoint. */
+                    Link?: string;
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["CreditsCheckAndDeductResponse"];
                 };
             };
-            /** @description Body has `error` only. */
+            /** @description The body has `code` `bad_request`. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28286,7 +29101,7 @@ export interface operations {
             };
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
-            /** @description A publishable key. Body `{"error": "this endpoint requires a secret key (sk_)"}`. */
+            /** @description A publishable key (body `{"error": "this endpoint requires a secret key (sk_)"}`), or `code: permission_denied` when API key permissions are enabled and the secret key lacks `credit_system:write` or `wallet_transaction:write`. */
             403: components["responses"]["EngineForbidden"];
             /** @description The customer does not exist or has no active wallet. */
             404: {
@@ -28297,7 +29112,7 @@ export interface operations {
                     "application/json": components["schemas"]["EngineError"];
                 };
             };
-            /** @description The deduction failed. */
+            /** @description The deduction failed, for example Core refused the wallet transaction. Nothing was deducted. */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -28354,7 +29169,7 @@ export interface operations {
             };
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
-            /** @description The analytics store query failed. The body is `{"error": "<store error text>"}` with no `code`. */
+            /** @description An unexpected failure. The body is `{"code": "internal_error", "error": "...", "request_id": "..."}`. When the analytics store cannot be reached or a query fails, the answer is `503` with code `analytics_unavailable` instead (Engine 1.4.0 and later), and when the analytics schema is missing, `503` with code `analytics_schema_missing`. */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -28410,7 +29225,7 @@ export interface operations {
             };
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
-            /** @description The analytics store query failed. The body is `{"error": "<store error text>"}` with no `code`. */
+            /** @description An unexpected failure. The body is `{"code": "internal_error", "error": "...", "request_id": "..."}`. When the analytics store cannot be reached or a query fails, the answer is `503` with code `analytics_unavailable` instead (Engine 1.4.0 and later), and when the analytics schema is missing, `503` with code `analytics_schema_missing`. */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -28466,7 +29281,7 @@ export interface operations {
             };
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
-            /** @description The analytics store query failed. The body is `{"error": "<store error text>"}` with no `code`. */
+            /** @description An unexpected failure. The body is `{"code": "internal_error", "error": "...", "request_id": "..."}`. When the analytics store cannot be reached or a query fails, the answer is `503` with code `analytics_unavailable` instead (Engine 1.4.0 and later), and when the analytics schema is missing, `503` with code `analytics_schema_missing`. */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -28522,7 +29337,7 @@ export interface operations {
             };
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
-            /** @description The analytics store query failed. The body is `{"error": "<store error text>"}` with no `code`. */
+            /** @description An unexpected failure. The body is `{"code": "internal_error", "error": "...", "request_id": "..."}`. When the analytics store cannot be reached or a query fails, the answer is `503` with code `analytics_unavailable` instead (Engine 1.4.0 and later), and when the analytics schema is missing, `503` with code `analytics_schema_missing`. */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -28578,7 +29393,7 @@ export interface operations {
             };
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
-            /** @description The analytics store query failed. The body is `{"error": "<store error text>"}` with no `code`. */
+            /** @description An unexpected failure. The body is `{"code": "internal_error", "error": "...", "request_id": "..."}`. When the analytics store cannot be reached or a query fails, the answer is `503` with code `analytics_unavailable` instead (Engine 1.4.0 and later), and when the analytics schema is missing, `503` with code `analytics_schema_missing`. */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -28607,7 +29422,7 @@ export interface operations {
                 from_date?: string;
                 /** @description Alias of `to`, sent by the Python and Go SDKs. Ignored when `to` is also sent. */
                 to_date?: string;
-                /** @description Bucket size. `hour`, `day`, `week` and `month` are bucketed as named; `day` is the default when the parameter is missing or empty. The value is not validated: any other value returns `200`, is bucketed by day, and is echoed unchanged in the response `granularity`. Send only the four listed values. */
+                /** @description Bucket size. `hour`, `day`, `week` and `month` are bucketed as named; `day` is the default when the parameter is missing or empty. Any other value returns `400` with `code` `invalid_granularity`. */
                 granularity?: string;
             };
             header?: never;
@@ -28636,7 +29451,7 @@ export interface operations {
             };
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
-            /** @description The analytics store query failed. The body is `{"error": "<store error text>"}` with no `code`. */
+            /** @description An unexpected failure. The body is `{"code": "internal_error", "error": "...", "request_id": "..."}`. When the analytics store cannot be reached or a query fails, the answer is `503` with code `analytics_unavailable` instead (Engine 1.4.0 and later), and when the analytics schema is missing, `503` with code `analytics_schema_missing`. */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -28650,14 +29465,29 @@ export interface operations {
     };
     engineGetMarginForecast: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description Start of the range, inclusive: a date (`YYYY-MM-DD`, starting at 00:00 UTC that day) or an RFC3339 timestamp such as `2026-07-01T09:30:00Z`. Defaults as described in the operation description.
+                 * @example 2026-07-01
+                 */
+                from?: string;
+                /**
+                 * @description End of the range: a date (`YYYY-MM-DD`) includes that whole day; an RFC3339 timestamp is used as given and is exclusive. Defaults as described in the operation description.
+                 * @example 2026-07-31
+                 */
+                to?: string;
+                /** @description Alias of `from`, sent by the Python and Go SDKs. Ignored when `from` is also sent. */
+                from_date?: string;
+                /** @description Alias of `to`, sent by the Python and Go SDKs. Ignored when `to` is also sent. */
+                to_date?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Forecast for the next 30 days. */
+            /** @description Forecast for the 30 days after the range. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -28669,7 +29499,7 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
-            /** @description The analytics store query failed. The body is `{"error": "<store error text>"}` with no `code`. */
+            /** @description An unexpected failure. The body is `{"code": "internal_error", "error": "...", "request_id": "..."}`. When the analytics store cannot be reached or a query fails, the answer is `503` with code `analytics_unavailable` instead (Engine 1.4.0 and later), and when the analytics schema is missing, `503` with code `analytics_schema_missing`. */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -28739,7 +29569,7 @@ export interface operations {
                     "application/json": components["schemas"]["MarginSimulationResult"];
                 };
             };
-            /** @description Bad request. The body has `code: invalid_date_range` when `from`/`to` (or their aliases) cannot be parsed or the end is not after the start; `error` then names the problem. Body errors carry only `error`: `metric_code required` when `metric_code` is missing or empty, or the JSON decoder's message when the body is not valid JSON or a field has the wrong type (for example `new_price_dollars` sent as a string). The authentication middleware also answers `400` without a `code` when trusted internal authentication is used without the `X-Nozle-Org-Id` header. */
+            /** @description Bad request. The body has `code: invalid_date_range` when `from`/`to` (or their aliases) cannot be parsed or the end is not after the start; `error` then names the problem. Body errors have `code: invalid_request`: `metric_code required` when `metric_code` is missing or empty, `new_price_dollars must be a number of 0 or more` when `new_price_dollars` is missing or negative, or the JSON decoder's message when the body is not valid JSON, has an unknown field, or a field has the wrong type (for example `new_price_dollars` sent as a string). The authentication middleware also answers `400` when trusted internal authentication is used without the `X-Nozle-Org-Id` header. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28750,7 +29580,7 @@ export interface operations {
             };
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
-            /** @description The analytics store query failed. The body is `{"error": "<store error text>"}` with no `code`. */
+            /** @description An unexpected failure. The body is `{"code": "internal_error", "error": "...", "request_id": "..."}`. When the analytics store cannot be reached or a query fails, the answer is `503` with code `analytics_unavailable` instead (Engine 1.4.0 and later), and when the analytics schema is missing, `503` with code `analytics_schema_missing`. */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -28775,8 +29605,12 @@ export interface operations {
                  * @example ai_messages
                  */
                 feature: string;
+                /** @description External ID of one current subscription of the customer. That subscription is evaluated. An unknown or ended one answers `no_subscription`. */
+                subscription_id?: string;
+                /** @description External ID of an Entity. The Entity's own subscription is evaluated, else the customer's own subscription. With `subscription_id` too, the subscription must belong to that Entity. */
+                entity_id?: string;
                 /**
-                 * @description URL-encoded JSON object of event properties. The cost estimate uses it to evaluate Cost Sheet conditions and quantities. A value that is not a JSON object returns `400`.
+                 * @description URL-encoded JSON object of event properties. The cost estimate uses it to evaluate Cost Sheet conditions and quantities. For a sum Feature, the revenue estimate reads the call's units from the Feature's `field_name` in it. It does not filter usage, so `used`, `limit` and `remaining` cover all of the feature's usage. A value that is not a JSON object returns `400`.
                  * @example {"model":"gpt-4o","input_tokens":1200}
                  */
                 metadata?: string;
@@ -28836,53 +29670,14 @@ export interface operations {
             503: components["responses"]["EngineUnavailable"];
         };
     };
-    engineGetCentrifugoToken: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Signed token. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJvcmdfMTIzIn0.signature"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["PlatformCentrifugoToken"];
-                };
-            };
-            400: components["responses"]["EngineBadRequest"];
-            401: components["responses"]["EngineUnauthorized"];
-            403: components["responses"]["EngineForbidden"];
-            404: components["responses"]["EngineNotFound"];
-            /** @description The token could not be signed. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "error": "failed to sign token"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["EngineError"];
-                };
-            };
-            503: components["responses"]["EngineUnavailable"];
-        };
-    };
     engineListPlans: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Page number. */
+                page?: components["parameters"]["page"];
+                /** @description Number of records per page. */
+                per_page?: components["parameters"]["per_page"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -28909,6 +29704,7 @@ export interface operations {
                 content: {
                     /**
                      * @example {
+                     *       "code": "billing_unavailable",
                      *       "error": "failed to reach billing service"
                      *     }
                      */
@@ -28924,7 +29720,7 @@ export interface operations {
             header: {
                 /**
                  * @description Nozle secret key (`sk_`). A `pk_` key returns `403`.
-                 * @example sk_live_your_nozle_key
+                 * @example sk_nozle_your_secret_key
                  */
                 "X-Nozle-Key": string;
                 /**
@@ -28932,6 +29728,11 @@ export interface operations {
                  * @example cust_123
                  */
                 "X-Nozle-Customer-Id": string;
+                /**
+                 * @description External ID of the subscription to bill. It must be an active subscription of the customer, or the response is `422 active_subscription_not_found`. Required when the customer has several active subscriptions. Not forwarded to the provider.
+                 * @example sub_123
+                 */
+                "X-Nozle-Subscription"?: string;
                 /** @description Stored as the `feature` property of the usage event. */
                 "X-Nozle-Feature"?: string;
                 /** @description Code of the usage event. Default `llm_tokens`. It bills only when a metered Feature has this code. */
@@ -28950,6 +29751,21 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
+            /** @description No subscription to bill. `active_subscription_not_found` when the customer is unknown, has no active subscription, or `X-Nozle-Subscription` names no active subscription of the customer; `active_subscription_ambiguous` when the customer has several active subscriptions and no `X-Nozle-Subscription`. The provider is not called. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "active_subscription_ambiguous",
+                     *       "error": "customer has multiple active subscriptions; set X-Nozle-Subscription"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["EngineError"];
+                };
+            };
             /** @description Engine could not reach the provider or read its response. The body is empty. */
             502: {
                 headers: {
@@ -28976,7 +29792,7 @@ export interface operations {
             header: {
                 /**
                  * @description Nozle secret key (`sk_`). A `pk_` key returns `403`.
-                 * @example sk_live_your_nozle_key
+                 * @example sk_nozle_your_secret_key
                  */
                 "X-Nozle-Key": string;
                 /**
@@ -28984,6 +29800,11 @@ export interface operations {
                  * @example cust_123
                  */
                 "X-Nozle-Customer-Id": string;
+                /**
+                 * @description External ID of the subscription to bill. It must be an active subscription of the customer, or the response is `422 active_subscription_not_found`. Required when the customer has several active subscriptions. Not forwarded to the provider.
+                 * @example sub_123
+                 */
+                "X-Nozle-Subscription"?: string;
                 /** @description Stored as the `feature` property of the usage event. */
                 "X-Nozle-Feature"?: string;
                 /** @description Code of the usage event. Default `llm_tokens`. It bills only when a metered Feature has this code. */
@@ -29018,6 +29839,21 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
+            /** @description No subscription to bill. `active_subscription_not_found` when the customer is unknown, has no active subscription, or `X-Nozle-Subscription` names no active subscription of the customer; `active_subscription_ambiguous` when the customer has several active subscriptions and no `X-Nozle-Subscription`. The provider is not called. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "active_subscription_ambiguous",
+                     *       "error": "customer has multiple active subscriptions; set X-Nozle-Subscription"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["EngineError"];
+                };
+            };
             /** @description Engine could not reach the provider or read its response. The body is empty. */
             502: {
                 headers: {
@@ -29044,7 +29880,7 @@ export interface operations {
             header: {
                 /**
                  * @description Nozle secret key (`sk_`). A `pk_` key returns `403`.
-                 * @example sk_live_your_nozle_key
+                 * @example sk_nozle_your_secret_key
                  */
                 "X-Nozle-Key": string;
                 /**
@@ -29052,6 +29888,11 @@ export interface operations {
                  * @example cust_123
                  */
                 "X-Nozle-Customer-Id": string;
+                /**
+                 * @description External ID of the subscription to bill. It must be an active subscription of the customer, or the response is `422 active_subscription_not_found`. Required when the customer has several active subscriptions. Not forwarded to the provider.
+                 * @example sub_123
+                 */
+                "X-Nozle-Subscription"?: string;
                 /** @description Stored as the `feature` property of the usage event. */
                 "X-Nozle-Feature"?: string;
                 /** @description Code of the usage event. Default `llm_tokens`. It bills only when a metered Feature has this code. */
@@ -29075,6 +29916,21 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
+            /** @description No subscription to bill. `active_subscription_not_found` when the customer is unknown, has no active subscription, or `X-Nozle-Subscription` names no active subscription of the customer; `active_subscription_ambiguous` when the customer has several active subscriptions and no `X-Nozle-Subscription`. The provider is not called. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "active_subscription_ambiguous",
+                     *       "error": "customer has multiple active subscriptions; set X-Nozle-Subscription"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["EngineError"];
+                };
+            };
             /** @description Engine could not reach the provider or read its response. The body is empty. */
             502: {
                 headers: {
@@ -29101,7 +29957,7 @@ export interface operations {
             header: {
                 /**
                  * @description Nozle secret key (`sk_`). A `pk_` key returns `403`.
-                 * @example sk_live_your_nozle_key
+                 * @example sk_nozle_your_secret_key
                  */
                 "X-Nozle-Key": string;
                 /**
@@ -29109,6 +29965,11 @@ export interface operations {
                  * @example cust_123
                  */
                 "X-Nozle-Customer-Id": string;
+                /**
+                 * @description External ID of the subscription to bill. It must be an active subscription of the customer, or the response is `422 active_subscription_not_found`. Required when the customer has several active subscriptions. Not forwarded to the provider.
+                 * @example sub_123
+                 */
+                "X-Nozle-Subscription"?: string;
                 /** @description Stored as the `feature` property of the usage event. */
                 "X-Nozle-Feature"?: string;
                 /** @description Code of the usage event. Default `llm_tokens`. It bills only when a metered Feature has this code. */
@@ -29149,6 +30010,21 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
+            /** @description No subscription to bill. `active_subscription_not_found` when the customer is unknown, has no active subscription, or `X-Nozle-Subscription` names no active subscription of the customer; `active_subscription_ambiguous` when the customer has several active subscriptions and no `X-Nozle-Subscription`. The provider is not called. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "active_subscription_ambiguous",
+                     *       "error": "customer has multiple active subscriptions; set X-Nozle-Subscription"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["EngineError"];
+                };
+            };
             /** @description Engine could not reach the provider or read its response. The body is empty. */
             502: {
                 headers: {
@@ -29651,90 +30527,6 @@ export interface operations {
                      */
                     organization_id: string;
                     accounting_provider_customer_error: components["schemas"]["CustomerIntegratrionErrorObject"];
-                };
-            };
-        };
-        responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    customerCrmProviderCreated: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Details of the customer */
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    webhook_type: "customer.crm_provider_created";
-                    /** @enum {string} */
-                    object_type: "customer";
-                    /**
-                     * Format: uuid
-                     * @description Unique identifier of the organization, created by Nozle.
-                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
-                     */
-                    organization_id: string;
-                    customer: components["schemas"]["CustomerObject"];
-                };
-            };
-        };
-        responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    customerCrmProviderError: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Details of the customer and of the CRM provider error */
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    webhook_type: "customer.crm_provider_error";
-                    /** @enum {string} */
-                    object_type: "crm_provider_customer_error";
-                    /**
-                     * Format: uuid
-                     * @description Unique identifier of the organization, created by Nozle.
-                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
-                     */
-                    organization_id: string;
-                    crm_provider_customer_error: components["schemas"]["CustomerIntegratrionErrorObject"];
                 };
             };
         };
@@ -30750,48 +31542,6 @@ export interface operations {
             };
         };
     };
-    invoiceResynced: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Details of the invoice */
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    webhook_type: "invoice.resynced";
-                    /** @enum {string} */
-                    object_type: "invoice";
-                    /**
-                     * Format: uuid
-                     * @description Unique identifier of the organization, created by Nozle.
-                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
-                     */
-                    organization_id: string;
-                    invoice: components["schemas"]["InvoiceObjectExtended"];
-                };
-            };
-        };
-        responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     integrationProviderError: {
         parameters: {
             query?: never;
@@ -31148,6 +31898,48 @@ export interface operations {
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "plan.updated";
+                    /** @enum {string} */
+                    object_type: "plan";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    plan: components["schemas"]["PlanObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 200 status to indicate that the data was received successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    planVersionCreated: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Signature of the webhook payload */
+                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
+                /** @description Algorithm used to generate the signature */
+                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
+                /** @description Unique id of the webhook. It can be used for idempotency */
+                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The new version */
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "plan.version_created";
                     /** @enum {string} */
                     object_type: "plan";
                     /**

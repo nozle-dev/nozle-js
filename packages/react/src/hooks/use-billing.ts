@@ -13,6 +13,8 @@ export interface BillingSubscription {
     status: string;
     ending_at: string | null;
     plan: { code: string; name: string; amount_cents: number | string; currency: string; interval: string };
+    /** The version of the plan code the subscription is billed on (plan versioning). */
+    plan_version?: number | null;
   } | null;
   pending_change: {
     plan_code: string;
