@@ -8,6 +8,10 @@
 
 - `client.managePaymentMethod(customerId, returnUrl?, { idempotencyKey? })` lets a Stripe customer add or replace their saved payment method and returns `ManagePaymentMethodResult` (`url`, `expires_at`, `provider: "stripe"`): redirect the customer to `url`. Needs a secret key. Razorpay customers pay each invoice by payment link, so for them the call throws `NozleApiError` with status 422 and `hasCode("razorpay_pays_by_link")`. Other Engine errors (`invalid_return_url`, `no_linked_payment_provider`, `provider_not_supported`, `missing_payment_provider_customer`) also throw `NozleApiError`.
 
+### Fixed
+
+- `track()` puts its transaction ID on the error it throws (`error.transactionId`, typed on `NozleApiError`), for an error response and for a network error or timeout, including the ID it generated when none was passed. Pass it back as `transactionId` when you retry, with the same event and `timestamp`: Engine records an event once per transaction ID, so the retry no longer bills the event twice. Before, a generated ID was lost when the call threw, and a retry sent a new one.
+
 ## React 0.14.0 — 2026-10-22
 
 ### Added

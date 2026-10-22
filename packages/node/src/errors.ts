@@ -12,6 +12,8 @@ export class NozleApiError extends Error {
   readonly requestId?: string;
   /** Seconds to wait before retrying, from the `Retry-After` header, when the service sent one. */
   readonly retryAfter?: number;
+  /** Set by `track()`: the event's transaction ID. Pass it back as `transactionId` when you retry, so the event is recorded once. */
+  transactionId?: string;
 
   constructor(
     operation: string,

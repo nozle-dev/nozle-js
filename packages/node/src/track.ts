@@ -28,17 +28,23 @@ export async function track(
     body.timestamp = eventTimestamp(options.timestamp);
   }
 
-  const res = await request(policy, `${baseUrl}/api/v1/events`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ event: body }),
-  }, { idempotent: true });
+  try {
+    const res = await request(policy, `${baseUrl}/api/v1/events`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ event: body }),
+    }, { idempotent: true });
 
-  if (!res.ok) {
-    throw await apiError(`track`, res);
+    if (!res.ok) {
+      throw await apiError(`track`, res);
+    }
+  } catch (error) {
+    // The event may have been recorded; retrying with this ID records it once.
+    if (typeof error === "object" && error !== null) Object.assign(error, { transactionId });
+    throw error;
   }
 
   return transactionId;

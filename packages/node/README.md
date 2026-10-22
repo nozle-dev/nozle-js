@@ -153,6 +153,18 @@ Subscription auto-resolution: if no `subscriptionId` is provided, the SDK looks 
 
 `track()` returns the `transactionId`. The SDK generates a UUID version 7 identifier before sending the request when one is not supplied. The identifier is unique across the Nozle organization and can immediately be reused as a Cost Event parent, including when the two requests arrive out of order.
 
+When `track()` throws (an error response, a network error or a timeout), the event may still have been recorded. The error carries the transaction ID as `error.transactionId`, also when the SDK generated it. Retry with that ID and the same event: Engine records an event once per transaction ID, so the retry does not bill it twice. Also pass a `timestamp` and reuse it on the retry: without one, each attempt is stamped with its own arrival time, and Nozle may count two attempts with different timestamps separately.
+
+```ts
+const timestamp = new Date().toISOString();
+try {
+  await nozle.track("cust_123", "api_call", { tokens: 100 }, { timestamp });
+} catch (error) {
+  const transactionId = (error as { transactionId?: string }).transactionId;
+  await nozle.track("cust_123", "api_call", { tokens: 100 }, { transactionId, timestamp });
+}
+```
+
 ```ts
 const transactionId = nozle.events.createTransactionId();
 
