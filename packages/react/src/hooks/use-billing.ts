@@ -15,6 +15,8 @@ export interface BillingSubscription {
     plan: { code: string; name: string; amount_cents: number | string; currency: string; interval: string };
     /** The version of the plan code the subscription is billed on (plan versioning). */
     plan_version?: number | null;
+    /** That version's entitlements, from the billing handler: the limits the customer actually has. */
+    entitlements?: { feature_type: string; code: string; name: string; usage_limit?: number | null }[] | null;
   } | null;
   pending_change: {
     plan_code: string;

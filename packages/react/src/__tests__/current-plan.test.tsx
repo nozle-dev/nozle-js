@@ -134,4 +134,29 @@ describe("CurrentPlan from the backend", () => {
     expect(screen.queryByText("250 / 1,000")).toBeNull();
     expect(screen.queryByText(/1,000/)).toBeNull();
   });
+
+  it("shows an older version's own limits when the billing handler sends them", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), "https://app.example");
+        if (url.pathname.endsWith("/api/v1/plans")) {
+          return Response.json({ plans: [{ ...plan, amount_currency: "USD", version: 2, is_current: true, entitlements: [{ feature_type: "metered", code: "events", name: "Events", usage_limit: 2000 }] }] });
+        }
+        const route = url.pathname.split("/").pop();
+        if (route === "subscription") {
+          return Response.json({ ...active, subscription: { ...active.subscription, plan_version: 1, entitlements: [{ feature_type: "metered", code: "events", name: "Events", usage_limit: 1000 }] } });
+        }
+        if (route === "usage") return Response.json({ usage: { charges_usage: [{ units: "250", feature: { code: "events", name: "Events" } }] } });
+        return Response.json({}, { status: 404 });
+      }),
+    );
+    render(
+      <BillingProvider publishableKey="pk_test" billingEndpoint="/api/nozle">
+        <CurrentPlan />
+      </BillingProvider>,
+    );
+    expect(await screen.findByText("250 / 1,000")).toBeTruthy();
+    expect(screen.queryByText(/2,000/)).toBeNull();
+  });
 });

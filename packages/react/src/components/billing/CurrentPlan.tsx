@@ -101,11 +101,14 @@ function CurrentPlanFromBackend(props: CurrentPlanProps): React.ReactElement {
   const planCode = subscription.data?.subscription?.plan_code;
   const catalogPlan = plans.plans.find((plan) => plan.code === planCode);
   // NOTE: The catalog lists the current version of each code. A customer on an older version has that version's
-  //       limits, which the catalog does not have: show their usage without another version's limits.
+  //       limits: use the entitlements the billing handler read for their version, or, without them, show their
+  //       usage without another version's limits.
+  const own = subscription.data?.subscription?.entitlements;
   const subscribedVersion = subscription.data?.subscription?.plan_version;
   const sameVersion = typeof subscribedVersion !== "number" || typeof catalogPlan?.version !== "number" || catalogPlan.version === subscribedVersion;
+  const usageData = usage.data as CustomerUsageData | null;
   const meters =
-    props.usage ?? currentPlanMeters(catalogPlan?.entitlements, usage.data as CustomerUsageData | null, sameVersion);
+    props.usage ?? (own ? currentPlanMeters(own, usageData) : currentPlanMeters(catalogPlan?.entitlements, usageData, sameVersion));
   return (
     <CurrentPlanView
       {...props}

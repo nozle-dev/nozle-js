@@ -180,6 +180,8 @@ export interface SubscriptionOptions {
     plan: SubscriptionPlan;
     /** The version of the plan code the subscription is billed on. Set by the billing handler from Core. */
     plan_version?: number | null;
+    /** That version's entitlements (with its usage limits). Set by the billing handler; null when unavailable. */
+    entitlements?: unknown[] | null;
   };
   pending_change: {
     id: string;
