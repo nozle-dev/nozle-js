@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## Node.js 0.16.0 — unreleased
+## Node.js 0.16.0 — 2026-10-24
 
 ### Added
 
@@ -11,7 +11,7 @@
 - `client.planVersions` (secret keys): `list(code)` lists every version with its price and active subscriptions, `get(code, version)` reads one, and `previewMigration`, `createMigration`, `listMigrations`, `getMigration` and `cancelMigration` move the subscriptions of one version to another, each at the end of its billing period. Migration items carry `move_status` (`pending`, `moved`, `canceled`). A second migration of a code while one runs throws `NozleApiError` 409 (`plan_version_migration_running`).
 - The billing handler's `subscription` route includes `subscription.plan_version`, the version the customer is billed on, and `subscription.entitlements`, that version's entitlements with its usage limits (read from Core with the secret key; `null` when they cannot be read).
 
-## React 0.15.0 — unreleased
+## React 0.15.0 — 2026-10-24
 
 ### Fixed
 
