@@ -463,8 +463,8 @@ See the [Stripe](https://docs.nozle.dev/integrations/stripe) and [Razorpay](http
 ### Cancel a subscription
 
 Cancellation is server-only and requires an `sk_` key. Without a timing, the
-organization's cancellation timing applies (set in the dashboard; Nozle's default is
-immediate). Pass the timing to choose it per call:
+organization's cancellation timing applies (set in the dashboard; new organizations default to `end_of_period`;
+existing organizations keep their setting). Pass the timing to choose it per call:
 
 ```ts
 const result = await nozle.cancelSubscription("cust_123", "sub_123", "end_of_period");
