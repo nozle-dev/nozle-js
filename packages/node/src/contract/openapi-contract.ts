@@ -7,6 +7,13 @@
  */
 import type { components } from "../generated/openapi";
 import type {
+  PlanVersion,
+  PlanVersionMigration,
+  PlanVersionMigrationItem,
+  PlanVersionMigrationPreview,
+  PlanVersionMigrationPreviewItem,
+} from "../plan-versions";
+import type {
   CanResult,
   CostEventAccepted,
   CreditBalance,
@@ -41,4 +48,9 @@ export type OpenApiContract = [
   Expect<Fits<Schemas["CreditsEntityBalance"], EntityCreditBalance>>,
   Expect<Fits<Schemas["CreditsEntityBalanceList"], EntityCreditBalances>>,
   Expect<Fits<Schemas["BillingSubscriptionOptionsResponse"], SubscriptionOptions>>,
+  Expect<Fits<Schemas["PlanVersion"], PlanVersion>>,
+  Expect<Fits<Schemas["PlanVersionMigration"], PlanVersionMigration>>,
+  Expect<Fits<Schemas["PlanVersionMigrationItem"], PlanVersionMigrationItem>>,
+  Expect<Fits<Schemas["PlanVersionMigrationPreview"], PlanVersionMigrationPreview>>,
+  Expect<Fits<Schemas["PlanVersionMigrationPreviewItem"], PlanVersionMigrationPreviewItem>>,
 ];

@@ -15,6 +15,7 @@ import { UsageNamespace } from "./usage";
 import { WebhooksNamespace } from "./webhooks";
 import { InvoicesNamespace } from "./invoices";
 import { AlertsNamespace } from "./alerts";
+import { PlanVersionsNamespace } from "./plan-versions";
 import type {
   NozleConfig,
   CanResult,
@@ -31,6 +32,7 @@ import type {
   SubscriptionChangePreview,
   WithdrawPendingSubscriptionChangeResult,
   RazorpayVerification,
+  SubscribeOptions,
   SubscribeResult,
   CancellationPolicy,
   CancelSubscriptionOptions,
@@ -70,6 +72,8 @@ export class Nozle {
   readonly invoices: InvoicesNamespace;
   /** Usage and wallet-balance alerts; Nozle sends `alert.triggered` when one fires. */
   readonly alerts: AlertsNamespace;
+  /** The versions of a plan code and the migrations that move subscribers between them (secret keys). */
+  readonly planVersions: PlanVersionsNamespace;
 
   private readonly policy: RequestPolicy;
   private subCache = new Map<string, string>();
@@ -98,6 +102,7 @@ export class Nozle {
     this.webhooks = new WebhooksNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.invoices = new InvoicesNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.alerts = new AlertsNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.planVersions = new PlanVersionsNamespace(this.eventsUrl, this.apiKey, this.policy);
   }
 
   async track(
@@ -308,9 +313,17 @@ export class Nozle {
     return res.json();
   }
 
-  async subscribe(customerId: string, planCode: string): Promise<SubscribeResult> {
+  /**
+   * Subscribes the customer to the current version of the plan, or to `options.planVersion` (for example to keep
+   * selling an older price). The same customer and code again keep the subscription's own version.
+   */
+  async subscribe(customerId: string, planCode: string, options: SubscribeOptions = {}): Promise<SubscribeResult> {
     if (!this.apiKey.startsWith("sk_")) {
       throw new Error("subscribe requires a secret key");
+    }
+    const { planVersion } = options;
+    if (planVersion !== undefined && (!Number.isInteger(planVersion) || planVersion < 1)) {
+      throw new Error("planVersion must be an integer of 1 or more");
     }
     const res = await request(this.policy, `${this.baseUrl}/api/v1/subscribe`, {
       method: "POST",
@@ -321,6 +334,7 @@ export class Nozle {
       body: JSON.stringify({
         plan_code: planCode,
         customer_id: customerId,
+        ...(planVersion !== undefined && { plan_version: planVersion }),
       }),
     });
     if (!res.ok) throw await apiError(`subscribe`, res);

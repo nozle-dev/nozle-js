@@ -2,13 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { createBillingHandler } from "../billing-handler";
 import { NozleApiError } from "../errors";
 
-function fakeNozle(subscriptions: Array<{ external_id: string }> = [{ external_id: "sub_1" }], overdue = 0) {
+function fakeNozle(subscriptions: Array<{ external_id: string; plan_code?: string; plan_version?: number }> = [{ external_id: "sub_1" }], overdue = 0) {
   return {
     invoices: {
       list: vi.fn(async () => ({ invoices: [], meta: { total_count: overdue } })),
     },
     getSubscriptions: vi.fn(async () => subscriptions),
     subscriptionOptions: vi.fn(async (_c: string, s: string) => ({ subscription: { external_id: s }, pending_change: null })),
+    planVersions: {
+      get: vi.fn(async (_code: string, version: number) =>
+        version === 9 ? Promise.reject(new Error("gone")) : { entitlements: [{ code: "calls", feature_type: "metered", usage_limit: 1000 }] }),
+    },
     can: vi.fn(async () => ({ allowed: true, used: 1, limit: 10, remaining: 9 })),
     credits: {
       listBalances: vi.fn(async () => ({ balances: [] })),
@@ -28,7 +32,7 @@ describe("createBillingHandler", () => {
     const handler = createBillingHandler(nozle as any, { getCustomerId: () => "cust_session" });
 
     expect(await (await handler(get("/api/nozle/subscription?customer_id=other"))).json()).toEqual({
-      subscription: { external_id: "sub_1" },
+      subscription: { external_id: "sub_1", plan_version: null, entitlements: null },
       pending_change: null,
       past_due: false,
     });
@@ -42,6 +46,20 @@ describe("createBillingHandler", () => {
     expect(nozle.pastUsage).toHaveBeenCalledWith("cust_session", { subscriptionId: "sub_1", periods: 3 });
     await handler(get("/api/nozle/preview?plan=pro"));
     expect(nozle.previewSubscriptionChange).toHaveBeenCalledWith("cust_session", "sub_1", "pro");
+  });
+
+  it("says which plan version the subscription is billed on, with that version's entitlements", async () => {
+    const nozle = fakeNozle([{ external_id: "sub_1", plan_code: "pro", plan_version: 1 }]);
+    const handler = createBillingHandler(nozle as any, { getCustomerId: () => "cust" });
+    expect(await (await handler(get("/x/subscription"))).json()).toMatchObject({
+      subscription: { external_id: "sub_1", plan_version: 1, entitlements: [{ code: "calls", usage_limit: 1000 }] },
+    });
+    expect(nozle.planVersions.get).toHaveBeenCalledWith("pro", 1);
+  });
+
+  it("still answers when the version's entitlements cannot be read", async () => {
+    const handler = createBillingHandler(fakeNozle([{ external_id: "sub_1", plan_code: "pro", plan_version: 9 }]) as any, { getCustomerId: () => "cust" });
+    expect(await (await handler(get("/x/subscription"))).json()).toMatchObject({ subscription: { plan_version: 9, entitlements: null } });
   });
 
   it("answers 401 without a session, 404 for unknown routes, 405 for writes and 400 for missing input", async () => {

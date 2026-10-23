@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## Node.js 0.16.0 — unreleased
+
+### Added
+
+- Plan versions. `Plan` has `version` and `is_current`; `plans()` returns current versions only.
+- `subscribe(customerId, planCode, { planVersion })` sells a chosen version of the plan code instead of the current one (needs Engine 2.7.0). The same customer and code again keep the subscription's version; another version of an existing subscription throws `NozleApiError` 422 (`plan_version_change_not_supported`), an unknown version 404 (`plan_version_not_found`).
+- `client.planVersions` (secret keys): `list(code)` lists every version with its price and active subscriptions, `get(code, version)` reads one, and `previewMigration`, `createMigration`, `listMigrations`, `getMigration` and `cancelMigration` move the subscriptions of one version to another, each at the end of its billing period. Migration items carry `move_status` (`pending`, `moved`, `canceled`). A second migration of a code while one runs throws `NozleApiError` 409 (`plan_version_migration_running`).
+- The billing handler's `subscription` route includes `subscription.plan_version`, the version the customer is billed on, and `subscription.entitlements`, that version's entitlements with its usage limits (read from Core with the secret key; `null` when they cannot be read).
+
+## React 0.15.0 — unreleased
+
+### Fixed
+
+- `<CurrentPlan />` showed a customer billed on an older version of the plan the current version's usage limits (the public catalog lists current versions only). With a billing handler from `@nozle-js/node` 0.16.0 it shows the limits of the customer's own version; with a handler that sends the version but not its entitlements, the meters show usage without another version's limits. The pricing table never shows a plan with `is_current: false`, even from a `plans` prop.
+
+### Added
+
+- `PricingPlan.version` and `is_current`, and `BillingSubscription.subscription.plan_version` and `entitlements`.
+
 ## Node.js 0.15.0 — 2026-10-23
 
 ### Changed

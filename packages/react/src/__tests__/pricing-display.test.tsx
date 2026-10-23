@@ -347,6 +347,7 @@ describe("getPricingCards", () => {
         plan("pro", { amount_cents: 5000 }),
         plan("pro_yearly", { interval: "yearly", amount_cents: 50000 }),
         plan("old", { pending_deletion: true }),
+        plan("pro_v1", { amount_cents: 4000, version: 1, is_current: false }),
       ],
     };
     expect(getPricingCards(legacy).map((c) => c.key)).toEqual(["free", "pro", "pro_yearly"]);

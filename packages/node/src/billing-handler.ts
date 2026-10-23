@@ -48,7 +48,13 @@ const routes: Record<string, Route> = {
     ]);
     const past_due = (overdue.meta?.total_count ?? overdue.invoices.length) > 0;
     if (!subscription) return { subscription: null, pending_change: null, past_due };
-    return { ...(await nozle.subscriptionOptions(customerId, subscription.external_id)), past_due };
+    const options = await nozle.subscriptionOptions(customerId, subscription.external_id);
+    // The version the customer is billed on, and that version's entitlements: the public catalog lists the
+    // current version only, so a customer on an older version would otherwise see another version's limits.
+    const plan_version = subscription.plan_version ?? null;
+    const plan = plan_version === null ? null : await nozle.planVersions.get<{ entitlements?: unknown[] }>(subscription.plan_code, plan_version).catch(() => null);
+    const entitlements = plan?.entitlements ?? null;
+    return { ...options, subscription: options.subscription && { ...options.subscription, plan_version, entitlements }, past_due };
   },
   entitlement: (nozle, customerId, query) => nozle.can(customerId, required(query, "feature")),
   credits: (nozle, customerId) => nozle.credits.listBalances(customerId),

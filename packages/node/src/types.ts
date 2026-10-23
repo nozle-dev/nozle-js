@@ -84,6 +84,10 @@ export interface Plan {
   amount_cents: number;
   amount_currency: string;
   interval: string;
+  /** The version of the code this plan is (plan versioning). `plans()` returns current versions only. */
+  version?: number;
+  /** Whether new subscriptions get this version. */
+  is_current?: boolean;
 }
 
 export interface RazorpayCheckoutResult {
@@ -174,6 +178,10 @@ export interface SubscriptionOptions {
     status: string;
     ending_at: string | null;
     plan: SubscriptionPlan;
+    /** The version of the plan code the subscription is billed on. Set by the billing handler from Core. */
+    plan_version?: number | null;
+    /** That version's entitlements (with its usage limits). Set by the billing handler; null when unavailable. */
+    entitlements?: unknown[] | null;
   };
   pending_change: {
     id: string;
@@ -365,6 +373,14 @@ export interface EntitySubscriptionCancelParams {
 export interface EntitySubscriptionCancelResult {
   entity_subscription: EntitySubscription;
   subscription_transition: SubscriptionTransitionResult["subscription_transition"];
+}
+
+export interface SubscribeOptions {
+  /**
+   * The version of the plan code to sell instead of the current one. Another version of an existing subscription
+   * fails with a 422 `plan_version_change_not_supported`; an unknown version with a 404 `plan_version_not_found`.
+   */
+  planVersion?: number;
 }
 
 export interface SubscribeResult {

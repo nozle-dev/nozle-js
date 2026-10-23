@@ -37,6 +37,10 @@ export interface PricingPlan {
   description?: string | null;
   pending_deletion?: boolean;
   plan_family_code?: string | null;
+  /** The version of the code this plan is (plan versioning). The catalog lists current versions only. */
+  version?: number;
+  /** False for an older version, which is never shown on the pricing table. */
+  is_current?: boolean;
   /** Present in the public catalog. Absent from an older or reduced response. */
   entitlements?: PricingEntitlement[];
   credit_grant_rules?: CatalogCreditGrantRule[];
@@ -266,8 +270,10 @@ interface PricingGroup {
   plans: PricingPlan[];
 }
 
+// NOTE: An older version (is_current false) is the pricing of its existing subscribers, never one to sell, even
+//       when a `plans` prop mixes versions in.
 function isLive(plan: PricingPlan): boolean {
-  return plan.pending_deletion !== true;
+  return plan.pending_deletion !== true && plan.is_current !== false;
 }
 
 function hasFamilies(
