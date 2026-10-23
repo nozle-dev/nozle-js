@@ -6,7 +6,7 @@
 
 ### Changed
 
-- Node.js: `cancelSubscription(customerId, subscriptionId)` without a timing no longer sends `end_of_period`. It sends no timing, so the organization's cancellation timing applies (Nozle's default is `immediate`). Pass `"end_of_period"` to keep the previous behaviour.
+- Node.js: `cancelSubscription(customerId, subscriptionId)` without a timing no longer sends `end_of_period`. It sends no timing, so the organization's cancellation timing applies (new organizations default to `end_of_period`; existing organizations keep their setting). Pass `"end_of_period"` to keep the previous behaviour.
 
 ### Added
 
