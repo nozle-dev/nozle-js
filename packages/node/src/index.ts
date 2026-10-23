@@ -46,6 +46,7 @@ export type {
   HostedCheckoutResult,
   SubscribeResult,
   CancellationPolicy,
+  CancelSubscriptionOptions,
   CancelSubscriptionResult,
   SubscriptionTransitionOperation,
   SubscriptionTransitionTiming,

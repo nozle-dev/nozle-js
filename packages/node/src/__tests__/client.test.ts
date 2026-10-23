@@ -506,7 +506,7 @@ describe("Nozle", () => {
   });
 
   describe("cancelSubscription", () => {
-    it("schedules end-of-period cancellation by default", async () => {
+    it("sends no timing by default so the organization's cancellation timing applies", async () => {
       fetchMock.mockResolvedValueOnce(
         jsonResponse({
           subscription: {
@@ -525,8 +525,30 @@ describe("Nozle", () => {
       const [url, init] = fetchMock.mock.calls[0];
       expect(url.toString()).toContain("/api/v1/subscriptions/sub%2F1?");
       expect(url.toString()).toContain("customer_id=customer+1");
-      expect(url.toString()).toContain("cancellation_policy=end_of_period");
+      expect(new URL(url.toString()).searchParams.toString()).toBe("customer_id=customer+1");
       expect(init.method).toBe("DELETE");
+    });
+
+    it("forwards the timing and settlement options given", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ subscription: { external_id: "sub_1", status: "terminated", ending_at: null } }),
+      );
+      const client = new Nozle({ apiKey: "sk_test" });
+
+      await client.cancelSubscription("cust_1", "sub_1", {
+        policy: "immediate",
+        creditAction: "refund",
+        refundMode: "full",
+        finalInvoiceAction: "skip",
+      });
+
+      expect(Object.fromEntries(new URL(fetchMock.mock.calls[0][0].toString()).searchParams)).toEqual({
+        customer_id: "cust_1",
+        cancellation_policy: "immediate",
+        credit_action: "refund",
+        refund_mode: "full",
+        final_invoice_action: "skip",
+      });
     });
 
     it("can request explicit immediate termination", async () => {
@@ -559,6 +581,9 @@ describe("Nozle", () => {
       );
       await expect(
         client.cancelSubscription("cust_1", "sub_1", "whenever" as CancellationPolicy),
+      ).rejects.toThrow("policy must be end_of_period or immediate");
+      await expect(
+        client.cancelSubscription("cust_1", "sub_1", { policy: "whenever" as CancellationPolicy }),
       ).rejects.toThrow("policy must be end_of_period or immediate");
       expect(fetchMock).not.toHaveBeenCalled();
     });

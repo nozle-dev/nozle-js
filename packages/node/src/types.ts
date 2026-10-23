@@ -374,6 +374,15 @@ export interface SubscribeResult {
 
 export type CancellationPolicy = "end_of_period" | "immediate";
 
+/** Options of `cancelSubscription`. Each one left out follows the subscription, then the organization's cancellation settings. */
+export interface CancelSubscriptionOptions {
+  /** When the subscription ends. Left out, the organization's cancellation timing applies. */
+  policy?: CancellationPolicy;
+  creditAction?: SubscriptionTransitionCreditAction;
+  refundMode?: SubscriptionTransitionRefundMode;
+  finalInvoiceAction?: SubscriptionTransitionFinalInvoiceAction;
+}
+
 export interface CancelSubscriptionResult {
   subscription: {
     external_id: string;
