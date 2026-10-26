@@ -343,6 +343,38 @@ describe("Nozle", () => {
     });
   });
 
+  describe("can selectors and subscription errors", () => {
+    it("sends subscription_id and entity_id when given", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ allowed: true, used: 1, limit: 5, remaining: 4 }));
+      const client = new Nozle({ apiKey: "sk_test" });
+      await client.can("cust_1", "seats", undefined, { subscriptionId: "sub_a", entityId: "ent_1" });
+      const url = new URL(fetchMock.mock.calls[0][0].toString());
+      expect(url.searchParams.get("subscription_id")).toBe("sub_a");
+      expect(url.searchParams.get("entity_id")).toBe("ent_1");
+    });
+
+    it("sends no selector by default and returns the subscription_required reason", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ allowed: false, reason: "subscription_required", used: 0, limit: null, remaining: null }));
+      const client = new Nozle({ apiKey: "sk_test" });
+      const result = await client.can("cust_1", "seats");
+      const url = new URL(fetchMock.mock.calls[0][0].toString());
+      expect(url.searchParams.has("subscription_id")).toBe(false);
+      expect(url.searchParams.has("entity_id")).toBe(false);
+      expect(result.reason).toBe("subscription_required");
+    });
+
+    it("throws NozleApiError with the REST codes when track cannot pick one subscription", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      fetchMock.mockResolvedValueOnce(jsonResponse({ subscriptions: [] }));
+      await expect(client.track("c", "e")).rejects.toMatchObject({ name: "NozleApiError", status: 422, code: "active_subscription_not_found" });
+      fetchMock.mockResolvedValueOnce(jsonResponse({ subscriptions: [{ external_id: "a" }, { external_id: "b" }] }));
+      const err = await client.track("c", "e").catch((e) => e);
+      expect(err).toBeInstanceOf(NozleApiError);
+      expect(err.code).toBe("active_subscription_ambiguous");
+      expect(err.message).toContain("subscriptionId");
+    });
+  });
+
   describe("customers", () => {
     it("upserts through Core with the merchant key and Core contract", async () => {
       fetchMock.mockResolvedValueOnce(

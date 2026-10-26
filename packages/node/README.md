@@ -37,6 +37,10 @@ await nozle.costEvents.track({
 
 // Entitlement check
 const { allowed, reason, used, limit } = await nozle.can("cust_123", "code_completion");
+
+// A customer with several subscriptions: say which one (external ids). Without a selector the result is
+// { allowed: false, reason: "subscription_required" }.
+await nozle.can("cust_123", "seats", undefined, { subscriptionId: "sub_a" }); // or { entityId: "ent_1" }
 ```
 
 ## Configuration

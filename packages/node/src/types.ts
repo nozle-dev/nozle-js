@@ -37,6 +37,17 @@ export interface CostEventAccepted {
   cost_event_id: string;
 }
 
+/**
+ * Which subscription `can()` evaluates, for a customer with several. Without either, the customer's one
+ * subscription is used; with several, the result is `allowed: false, reason: "subscription_required"`.
+ */
+export interface CanOptions {
+  /** External id of the subscription. */
+  subscriptionId?: string;
+  /** External id of the Entity whose subscription is evaluated. */
+  entityId?: string;
+}
+
 export interface CanResult {
   allowed: boolean;
   reason?: string;

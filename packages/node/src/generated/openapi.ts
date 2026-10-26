@@ -2774,7 +2774,7 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Until January 19, 2027, an old `lago_eu_<rest>` code resolves to the `nozle_eu_<rest>` tax (a tax you created yourself with a `lago_eu_*` code keeps it). */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
                 code: string;
             };
             cookie?: never;
@@ -24342,7 +24342,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Until January 19, 2027, an old `lago_eu_<rest>` code resolves to the `nozle_eu_<rest>` tax (a tax you created yourself with a `lago_eu_*` code keeps it). */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
                 code: string;
             };
             cookie?: never;
@@ -24367,7 +24367,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Until January 19, 2027, an old `lago_eu_<rest>` code resolves to the `nozle_eu_<rest>` tax (a tax you created yourself with a `lago_eu_*` code keeps it). */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
                 code: string;
             };
             cookie?: never;
@@ -24399,7 +24399,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Until January 19, 2027, an old `lago_eu_<rest>` code resolves to the `nozle_eu_<rest>` tax (a tax you created yourself with a `lago_eu_*` code keeps it). */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
                 code: string;
             };
             cookie?: never;

@@ -83,6 +83,19 @@ describe("billing hooks", () => {
     expect((init.headers as Record<string, string>)["X-CSRF-Token"]).toBe("t1");
   });
 
+  it("sends the subscription and Entity selectors of useEntitlement", async () => {
+    const fetch = stubFetch();
+    const { result } = renderHook(
+      () => useEntitlement("seats", { subscriptionId: "sub_a", entityId: "ent_1" }),
+      { wrapper: wrapper() },
+    );
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    const [url] = fetch.mock.calls.find(([u]) => String(u).includes("entitlement")) as [string, RequestInit];
+    const query = new URL(url, "https://app.example").searchParams;
+    expect(query.get("subscription_id")).toBe("sub_a");
+    expect(query.get("entity_id")).toBe("ent_1");
+  });
+
   it("picks a credit balance and pages credit history", async () => {
     stubFetch();
     const { result } = renderHook(

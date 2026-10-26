@@ -56,7 +56,15 @@ const routes: Record<string, Route> = {
     const entitlements = plan?.entitlements ?? null;
     return { ...options, subscription: options.subscription && { ...options.subscription, plan_version, entitlements }, past_due };
   },
-  entitlement: (nozle, customerId, query) => nozle.can(customerId, required(query, "feature")),
+  // The Engine checks that the subscription or Entity belongs to the signed-in customer.
+  entitlement: (nozle, customerId, query) => {
+    const subscriptionId = query.get("subscription_id") || undefined;
+    const entityId = query.get("entity_id") || undefined;
+    const feature = required(query, "feature");
+    return subscriptionId || entityId
+      ? nozle.can(customerId, feature, undefined, { subscriptionId, entityId })
+      : nozle.can(customerId, feature);
+  },
   credits: (nozle, customerId) => nozle.credits.listBalances(customerId),
   "credit-history": (nozle, customerId, query) => {
     const limit = query.get("limit");
