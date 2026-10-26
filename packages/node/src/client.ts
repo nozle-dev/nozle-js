@@ -6,7 +6,7 @@ import { CostEventsNamespace } from "./cost-events";
 import { CreditSystemsNamespace } from "./credit-systems";
 import { EntitiesNamespace } from "./entities";
 import { EntitySubscriptionsNamespace } from "./entity-subscriptions";
-import { apiError } from "./errors";
+import { apiError, subscriptionError } from "./errors";
 import { EventsNamespace } from "./events";
 import { MarginClient } from "./margin";
 import { recordUsage as _recordUsage, type RecordUsageParams } from "./provider-usage";
@@ -18,6 +18,7 @@ import { AlertsNamespace } from "./alerts";
 import { PlanVersionsNamespace } from "./plan-versions";
 import type {
   NozleConfig,
+  CanOptions,
   CanResult,
   CoreSubscription,
   CustomerUsage,
@@ -118,8 +119,8 @@ export class Nozle {
     return _track(this.baseUrl, this.apiKey, customerId, event, metadata, opts, this.policy);
   }
 
-  async can(customerId: string, feature: string, metadata?: Record<string, string>): Promise<CanResult> {
-    return _can(this.baseUrl, this.apiKey, customerId, feature, metadata, this.policy);
+  async can(customerId: string, feature: string, metadata?: Record<string, string>, options?: CanOptions): Promise<CanResult> {
+    return _can(this.baseUrl, this.apiKey, customerId, feature, metadata, this.policy, options);
   }
 
   async plans(): Promise<Plan[]> {
@@ -587,10 +588,11 @@ export class Nozle {
     const subs = data.subscriptions ?? [];
 
     if (subs.length === 0) {
-      throw new Error(`No active subscription for customer '${customerId}'`);
+      throw subscriptionError("active_subscription_not_found", `No active subscription for customer '${customerId}'`);
     }
     if (subs.length > 1) {
-      throw new Error(
+      throw subscriptionError(
+        "active_subscription_ambiguous",
         `Customer '${customerId}' has ${subs.length} active subscriptions — pass subscriptionId explicitly`,
       );
     }

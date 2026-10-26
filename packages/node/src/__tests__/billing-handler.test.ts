@@ -27,6 +27,13 @@ function fakeNozle(subscriptions: Array<{ external_id: string; plan_code?: strin
 const get = (path: string) => new Request(`https://app.example${path}`);
 
 describe("createBillingHandler", () => {
+  it("passes the entitlement selectors to can()", async () => {
+    const nozle = fakeNozle();
+    const handler = createBillingHandler(nozle as any, { getCustomerId: () => "cust_session" });
+    await handler(get("/api/nozle/entitlement?feature=seats&subscription_id=sub_a&entity_id=ent_1"));
+    expect(nozle.can).toHaveBeenCalledWith("cust_session", "seats", undefined, { subscriptionId: "sub_a", entityId: "ent_1" });
+  });
+
   it("serves each route for the session customer only, ignoring any customer in the query", async () => {
     const nozle = fakeNozle();
     const handler = createBillingHandler(nozle as any, { getCustomerId: () => "cust_session" });

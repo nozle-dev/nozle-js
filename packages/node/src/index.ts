@@ -40,6 +40,7 @@ export type {
   TrackOptions,
   CostEventParams,
   CostEventAccepted,
+  CanOptions,
   CanResult,
   Plan,
   CheckoutResult,

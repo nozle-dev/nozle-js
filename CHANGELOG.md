@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## Node.js 0.17.0 — 2026-10-26
+
+### Added
+
+- `can(customerId, feature, metadata?, { subscriptionId?, entityId? })` evaluates one subscription (or one Entity's subscription) of a customer with several. Without a selector, a customer with several current subscriptions gets `allowed: false, reason: "subscription_required"`. The billing handler's `entitlement` route passes `subscription_id` and `entity_id` from its query string; the Engine checks they belong to the signed-in customer.
+
+### Changed
+
+- `track()` with no `subscriptionId` for a customer with no or several active subscriptions now throws `NozleApiError` (status 422, `code` `active_subscription_not_found` or `active_subscription_ambiguous`, the Engine's codes) instead of a plain `Error`. The messages are unchanged.
+- `src/generated/openapi.ts`: a description no longer mentions the old `lago_eu_*` tax code.
+
+## React 0.16.0 — 2026-10-26
+
+### Added
+
+- `useEntitlement(feature, { subscriptionId, entityId })` evaluates one subscription or Entity of a customer with several. Needs the billing handler of `@nozle-js/node` 0.17.0.
+
 ## Node.js 0.16.0 — 2026-10-24
 
 ### Added

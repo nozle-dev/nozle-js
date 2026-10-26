@@ -43,6 +43,13 @@ export class NozleApiError extends Error {
   }
 }
 
+/** The error for a customer with no, or several, active subscriptions, with the code the Engine uses for the same case. */
+export function subscriptionError(code: "active_subscription_not_found" | "active_subscription_ambiguous", message: string): NozleApiError {
+  const error = new NozleApiError("subscription lookup", { status: 422, statusText: "Unprocessable Entity" }, { code });
+  error.message = message;
+  return error;
+}
+
 /** Builds the error for a non-2xx response, reading `code` and `error_details` from a JSON body when there is one. */
 export async function apiError(operation: string, response: Response): Promise<NozleApiError> {
   const body = await Promise.resolve()

@@ -75,13 +75,25 @@ export function useSubscription() {
   );
 }
 
-/** Whether the customer may use a feature now, with used, limit and remaining. */
-export function useEntitlement(featureCode: string, options: { enabled?: boolean } = {}) {
+/**
+ * Whether the customer may use a feature now, with used, limit and remaining. A customer with several
+ * subscriptions needs `subscriptionId` (external id) or `entityId`; without one the result is
+ * `allowed: false, reason: "subscription_required"`.
+ */
+export function useEntitlement(
+  featureCode: string,
+  options: { enabled?: boolean; subscriptionId?: string; entityId?: string } = {},
+) {
   const { fetchRoute, queryClient, endpoint } = useBilling();
   return useQuery(
     {
-      queryKey: ["nozle", endpoint, "entitlement", featureCode],
-      queryFn: () => fetchRoute<EntitlementResult>("entitlement", { feature: featureCode }),
+      queryKey: ["nozle", endpoint, "entitlement", featureCode, options.subscriptionId, options.entityId],
+      queryFn: () =>
+        fetchRoute<EntitlementResult>("entitlement", {
+          feature: featureCode,
+          subscription_id: options.subscriptionId,
+          entity_id: options.entityId,
+        }),
       enabled: Boolean(featureCode) && options.enabled !== false,
       staleTime: 10_000,
     },
