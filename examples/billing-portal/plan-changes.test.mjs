@@ -63,9 +63,9 @@ function fixture(overrides = {}, configuration = {}) {
     async checkout(...args) {
       calls.push(["checkout", ...args]);
       return {
-        type: "stripe",
-        client_secret: "customer-payment-secret",
-        publishable_key: "pk_public",
+        type: "hosted",
+        url: "https://checkout.stripe.com/c/pay/intent",
+        payment_url: "https://checkout.stripe.com/c/pay/intent",
         checkout_id: "intent",
       };
     },
@@ -89,7 +89,7 @@ function fixture(overrides = {}, configuration = {}) {
       calls.push(["status", ...args]);
       return {
         status: "awaiting_payment",
-        checkout: { type: "stripe", client_secret: "customer-payment-secret" },
+        checkout: { type: "hosted", url: "https://checkout.stripe.com/c/pay/intent" },
       };
     },
     async verifyCheckout(...args) {
@@ -260,7 +260,7 @@ test("status and Razorpay verification bind checkout to authenticated customer a
     subscriptionId: "external",
   });
   assert.equal(state.checkoutStatus, "awaiting_payment");
-  assert.equal(state.checkout.type, "stripe");
+  assert.equal(state.checkout.type, "hosted");
   const verification = {
     razorpay_order_id: "order",
     razorpay_payment_id: "payment",
@@ -293,35 +293,10 @@ test("atomic quote conflicts return a safe 409", async () => {
   });
 });
 
-test("embedded Stripe uses only a configured publishable key and keeps hosted checkout preferred", async () => {
-  const f = fixture(
-    {
-      async checkout() {
-        return { type: "stripe", client_secret: "customer-secret" };
-      },
-    },
-    { stripePublishableKey: "pk_test_public" },
-  );
-  assert.equal(
-    (await f.dispatch("authenticated", route("apply"), applyBody))
-      .publishable_key,
-    "pk_test_public",
-  );
-  const hosted = fixture(
-    {
-      async checkout() {
-        return { type: "stripe", url: "https://checkout.stripe.com/example" };
-      },
-    },
-    { stripePublishableKey: "pk_test_public" },
-  );
-  assert.equal(
-    (await hosted.dispatch("authenticated", route("apply"), applyBody))
-      .publishable_key,
-    undefined,
-  );
-  assert.throws(
-    () => fixture({}, { stripePublishableKey: "sk_secret" }),
-    /publishable key/,
-  );
+test("a Stripe checkout is passed through as the hosted result, with no client secret", async () => {
+  const f = fixture();
+  const result = await f.dispatch("authenticated", route("apply"), applyBody);
+  assert.equal(result.type, "hosted");
+  assert.equal(result.url, "https://checkout.stripe.com/c/pay/intent");
+  assert.doesNotMatch(JSON.stringify(result), /client_secret|publishable_key/);
 });

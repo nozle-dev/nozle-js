@@ -70,7 +70,6 @@ export interface PricingTableProps {
   /** Called with the selected interval's plan and its family (null without families). */
   onSelect?: (plan: PricingPlan, family: PricingFamily | null) => void;
   returnUrl?: string;
-  onStripeClientSecret?: (clientSecret: string) => void;
   onCheckoutResult?: (result: CheckoutResult) => void;
   onCheckoutError?: (error: Error) => void;
   /** Show the interval switch when several intervals exist. Defaults to true. */
@@ -506,7 +505,6 @@ export function PricingTable({
   sort,
   onSelect,
   returnUrl,
-  onStripeClientSecret,
   onCheckoutResult,
   onCheckoutError,
   showToggle: showToggleProp,
@@ -576,7 +574,6 @@ export function PricingTable({
       });
       onCheckoutResult?.(result);
       await handleCheckoutResult(result, {
-        onStripeClientSecret,
         verifyCheckout: billing?.verifyCheckout,
         getCheckoutStatus: billing?.getCheckoutStatus,
         onProcessing: () => setProcessing(true),

@@ -152,6 +152,7 @@ export class Nozle {
         ...(options.subscriptionId && { subscription_id: options.subscriptionId }),
         ...(options.quoteId && { quote_id: options.quoteId }),
         ...(returnUrl && { return_url: returnUrl }),
+        ...(options.cancelUrl && { cancel_url: options.cancelUrl }),
         ...(options.registerMandate !== undefined && {
           register_mandate: options.registerMandate,
         }),
@@ -177,6 +178,7 @@ export class Nozle {
       "",
       {
         invoice_id: invoiceId,
+        ...(options.cancelUrl && { cancel_url: options.cancelUrl }),
         ...(options.registerMandate !== undefined && {
           register_mandate: options.registerMandate,
         }),

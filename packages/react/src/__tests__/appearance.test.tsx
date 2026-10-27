@@ -5,7 +5,6 @@ import { BillingProvider, CreditBalance, PricingTable, UsageMeter } from "../ind
 import * as themes from "../themes.js";
 import { dark, light, neobrutal } from "../themes.js";
 import { mergeAppearance, T, text, toCssVars } from "../appearance/tokens.js";
-import { toStripeAppearance } from "../components/billing/Checkout.js";
 
 const balance = { credit_system_name: "AI credits", unit_name: "credit", available: "120", as_of: "2026-10-01T00:00:00Z" };
 
@@ -194,22 +193,5 @@ describe("components", () => {
     );
     expect(document.querySelector(".nozle-usageMeter__fill")?.className).toContain("my-fill");
     expect((document.querySelector(".nozle-usageMeter__track") as HTMLElement).style.height).toBe("12px");
-  });
-});
-
-describe("toStripeAppearance", () => {
-  it("maps resolved colours and picks night for a dark background", () => {
-    expect(
-      toStripeAppearance({ primary: "rgb(129, 140, 248)", background: "rgb(17, 24, 39)", foreground: "rgb(243, 244, 246)", radius: "12px" }),
-    ).toEqual({
-      theme: "night",
-      variables: { colorPrimary: "rgb(129, 140, 248)", colorBackground: "rgb(17, 24, 39)", colorText: "rgb(243, 244, 246)", borderRadius: "12px" },
-    });
-  });
-
-  it("uses the stripe theme on a light background and drops colours Stripe cannot read", () => {
-    const result = toStripeAppearance({ primary: "oklch(0.5 0.2 270)", background: "rgb(255, 255, 255)" });
-    expect(result.theme).toBe("stripe");
-    expect(result.variables).toEqual({ colorBackground: "rgb(255, 255, 255)" });
   });
 });

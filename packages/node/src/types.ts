@@ -136,9 +136,13 @@ export interface ProcessingCheckoutResult {
   plan_upgrade_intent_id?: string;
 }
 
-/** A Razorpay payment link. Redirect the customer to `payment_url`. */
+/**
+ * A hosted payment page: the Stripe Checkout page or a Razorpay payment link. Redirect the customer to `url`
+ * (`payment_url` is the same address), then poll `checkoutStatus` with `checkout_id` after they return.
+ */
 export interface HostedCheckoutResult {
   type: "hosted";
+  url: string;
   payment_url: string;
   checkout_id?: string;
   amount_cents?: number;
@@ -146,6 +150,8 @@ export interface HostedCheckoutResult {
   expires_at?: string;
   invoice_id?: string;
   plan_upgrade_intent_id?: string;
+  external_entity_id?: string;
+  external_subscription_id?: string;
 }
 
 /**
@@ -166,6 +172,8 @@ export interface CheckoutOptions {
   subscriptionId?: string;
   /** Opaque quote from previewSubscriptionChange; never reformat or inspect it. */
   quoteId?: string;
+  /** Where the hosted page sends a customer who leaves it. Validated like `returnUrl`; defaults to the return URL. A return URL may contain `{CHECKOUT_SESSION_ID}`. */
+  cancelUrl?: string;
 }
 
 export interface SubscriptionCheckoutScope {
@@ -256,26 +264,6 @@ export type CheckoutResult =
   | ProcessingCheckoutResult
   | HostedCheckoutResult
   | {
-      type: "stripe";
-      /** Not returned by Nozle. Use your own Stripe publishable key for the connected account. */
-      publishable_key?: string;
-      /** Not returned by Nozle. */
-      stripe_account?: string;
-      /** Embedded Checkout Session secret (`cs_...`). Same value as `clientSecret`. */
-      client_secret?: string;
-      clientSecret?: string;
-      /** Not returned by plan and invoice checkout, which never issue a Stripe-hosted URL. */
-      url?: string;
-      invoice_id?: string;
-      /** Set instead of `invoice_id` for a paid upgrade; poll it with `checkoutStatus`. */
-      plan_upgrade_intent_id?: string;
-      amount_cents?: number;
-      currency?: string;
-      external_entity_id?: string;
-      external_subscription_id?: string;
-      checkout_id?: string;
-    }
-  | {
       type: "completed" | "scheduled";
       status: string;
       /** `credits` or `none` on a completed result. */
@@ -358,13 +346,14 @@ export interface EntitySubscriptionCheckoutItemResult {
 
 export interface EntitySubscriptionCheckoutManyResult {
   id: string;
-  type: "stripe" | "razorpay" | "processing" | "completed";
+  type: "hosted" | "razorpay" | "processing" | "completed";
   checkout_id?: string;
   key_id?: string;
   order_id?: string;
   status: string;
-  client_secret: string | null;
-  clientSecret?: string | null;
+  /** Hosted result: redirect the customer here. */
+  url?: string;
+  payment_url?: string;
   invoice_id: string;
   amount_cents: number;
   currency: string;

@@ -314,8 +314,8 @@ const checkout = await nozle.entitySubscriptions.checkoutMany("workspace_123", {
 });
 ```
 
-Return the result to your frontend and mount `checkout.client_secret` with the
-`Checkout` component from `@nozle-js/react`. Never expose the secret Nozle key
+For Stripe the result is `type: "hosted"`: redirect the customer to `checkout.url`, then poll
+`checkoutStatus(checkout.checkout_id)` after they return. Never expose the secret Nozle key
 to the browser.
 
 Allocation and deallocation preserve exact decimal strings, source provenance, and expiry. They are backend-only operations and may also be disabled by the Engine's exact organization/Credit System rollout gate.
@@ -426,13 +426,12 @@ Nozle collects through the payment provider connected to your organization and a
 
 | `type` | Provider | Next step |
 | --- | --- | --- |
-| `stripe` | Stripe | Send `client_secret` (a `cs_` embedded Checkout Session secret) to the browser |
+| `hosted` | Stripe, Razorpay link | Redirect the customer to `url` (the Stripe Checkout page; `payment_url` is the same address), then poll `checkoutStatus(checkout_id)` |
 | `razorpay` | Razorpay | Open the Razorpay modal with `key_id`, `order_id`, `amount_cents` and `currency`, then verify |
-| `hosted` | Razorpay | Declared in the result types; `POST /checkout` does not return it for Razorpay. Invoice payment URLs and credit top-ups return a `payment_url` (an rzp.io payment link) with no checkout id to poll |
 | `processing` | Razorpay or Stripe | Recover with `checkoutStatus(checkout_id)` instead of starting another checkout. Razorpay returns it while the order is not ready; Stripe returns it when a quoted upgrade is replayed while its webhook is still pending |
 | `completed`, `scheduled` | Either | No payment is due now. Credits covered it, or the change takes effect later |
 
-**Stripe.** Plan and invoice checkout always create an embedded Checkout Session. They never return a Stripe-hosted URL or your Stripe publishable key, so the browser needs the `pk_` key for the Stripe account connected in Nozle (the React `Checkout` component takes it as `publishableKey`). Credit top-up purchases are different: they return a Stripe-hosted `payment_url` (`checkout.stripe.com`, valid for 24 hours).
+**Stripe.** Every Stripe checkout is the Stripe-hosted Checkout page; there is no embedded form. Redirect the customer to `url`. Pass `cancelUrl` in the options to choose where Stripe sends a customer who leaves the page (validated like `returnUrl`, defaults to it). A return URL may contain the literal `{CHECKOUT_SESSION_ID}`, which Stripe replaces with the Checkout Session id. Credit top-up purchases also return a Stripe-hosted `payment_url` (valid for 24 hours).
 
 ```ts
 import { Nozle } from "@nozle-js/node";
@@ -440,12 +439,12 @@ import { Nozle } from "@nozle-js/node";
 const nozle = new Nozle({ apiKey: process.env.NOZLE_SECRET_KEY! });
 const returnUrl = "https://app.example.com/settings/billing";
 
-const result = await nozle.checkout("cust_123", "pro_monthly", returnUrl);
-if (result.type === "stripe") {
-  // Return the secret to the browser and mount Stripe Embedded Checkout with it.
-  const clientSecret = result.client_secret ?? result.clientSecret;
-  // A new subscription has no checkout ID to poll: reload the subscription after
-  // Embedded Checkout completes. A paid upgrade carries plan_upgrade_intent_id.
+const result = await nozle.checkout("cust_123", "pro_monthly", returnUrl, {
+  cancelUrl: "https://app.example.com/pricing",
+});
+if (result.type === "hosted") {
+  // Redirect the customer to result.url. After they return, poll
+  // nozle.checkoutStatus(result.checkout_id): `checkout` is `completed` once paid.
 }
 ```
 

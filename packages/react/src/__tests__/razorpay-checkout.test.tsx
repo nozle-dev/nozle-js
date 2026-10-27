@@ -303,22 +303,21 @@ describe('Razorpay checkout confirmation', () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it('hands a Stripe Embedded Checkout secret to the caller and requires a handler for it', async () => {
-    const onStripeClientSecret = vi.fn();
+  it('redirects a hosted Stripe result to its url', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { assign, href: 'https://merchant.example/billing' });
     await handleCheckoutResult(
       {
-        type: 'stripe',
-        client_secret: 'cs_test_1',
-        clientSecret: 'cs_test_1',
+        type: 'hosted',
+        url: 'https://checkout.stripe.com/c/pay/cs_test_1',
+        payment_url: 'https://checkout.stripe.com/c/pay/cs_test_1',
         plan_upgrade_intent_id: 'intent-1',
         amount_cents: 1000,
         currency: 'USD',
       },
-      { onStripeClientSecret },
+      {},
     );
-    expect(onStripeClientSecret).toHaveBeenCalledExactlyOnceWith('cs_test_1');
-    await expect(
-      handleCheckoutResult({ type: 'stripe', client_secret: 'cs_test_1' }, {}),
-    ).rejects.toThrow('onStripeClientSecret is required');
+    expect(assign).toHaveBeenCalledExactlyOnceWith('https://checkout.stripe.com/c/pay/cs_test_1');
+    vi.unstubAllGlobals();
   });
 });

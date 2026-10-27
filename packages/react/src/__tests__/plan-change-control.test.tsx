@@ -276,7 +276,7 @@ describe("subscription plan changes", () => {
     const f = fixture();
     f.set({
       checkoutStatus: "awaiting_payment",
-      checkout: { type: "stripe", url: "https://checkout.example/test" },
+      checkout: { type: "hosted", url: "https://checkout.example/test" },
     });
     f.mount();
     await screen.findByRole("button", { name: "Resume test payment" });
