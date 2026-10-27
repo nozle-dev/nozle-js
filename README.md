@@ -67,7 +67,7 @@ export function BillingPage({ csrfToken }: { csrfToken: string }) {
 }
 ```
 
-Both Stripe and Razorpay flow through the same `checkout()` call. Stripe returns the hosted Stripe Checkout page (`type: "hosted"`, redirect to `url`); Razorpay returns an order for the Razorpay modal (`type: "razorpay"`). Your backend confirms the outcome with `checkoutStatus()` (and `verifyCheckout()` for Razorpay). The Node guide shows both flows side by side, and the React guide shows `CheckoutButton` handling each result. See the [Stripe](https://docs.nozle.dev/integrations/stripe) and [Razorpay](https://docs.nozle.dev/integrations/razorpay) integration guides.
+Both Stripe and Razorpay flow through the same `checkout()` call. Stripe returns the hosted Stripe Checkout page (`type: "hosted"`, redirect to `url`); Razorpay returns an order for the Razorpay modal (`type: "razorpay"`). Your backend confirms the outcome through webhooks or by reloading billing state; only a paid upgrade (`plan_upgrade_intent_id`) and Razorpay have `checkoutStatus()`, plus `verifyCheckout()` for Razorpay. The Node guide shows both flows side by side, and the React guide shows `CheckoutButton` handling each result. See the [Stripe](https://docs.nozle.dev/integrations/stripe) and [Razorpay](https://docs.nozle.dev/integrations/razorpay) integration guides.
 
 See the [React package guide](packages/react/README.md) for the complete callback shape, provider responses, and billing portal setup. The [runnable billing portal example](examples/billing-portal/README.md) includes a Node merchant server and React app. Its demo login and file store are examples; use your application's authentication and shared transactional storage in production.
 

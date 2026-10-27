@@ -105,7 +105,7 @@ Your merchant backend returns whatever result Nozle gives for the customer's con
 
 | Result `type` | Provider | What `CheckoutButton` does |
 | --- | --- | --- |
-| `hosted` | Stripe, Razorpay link | Redirects the page to `url` (HTTPS only). Stripe sends the customer back to your `returnUrl`; read the outcome there |
+| `hosted` | Stripe, Razorpay link | Redirects the page to `url` (HTTPS only), with no status polling. Stripe sends the customer back to your `returnUrl`; confirm the outcome there |
 | `razorpay` | Razorpay | Loads Razorpay's `checkout.js`, opens the modal, then calls your `verifyCheckout` and polls your `getCheckoutStatus` (30 attempts, one second apart) |
 | `processing` | Razorpay or Stripe | Polls `getCheckoutStatus`. For Razorpay it opens the order once ready; Stripe returns `processing` when a quoted upgrade is replayed while its webhook is pending |
 | `completed`, `scheduled` | Either | Calls `onComplete` or `onScheduled`. No payment is collected |
@@ -157,7 +157,7 @@ export function Upgrade({ csrfToken }: { csrfToken: string }) {
 }
 ```
 
-After a hosted payment the customer lands on your `returnUrl` (it may contain `{CHECKOUT_SESSION_ID}`, which Stripe fills in); show success from that page by polling your `getCheckoutStatus` or reloading billing status. A new-subscription checkout retried while the subscription is still incomplete fails with HTTP 422 `subscription_incomplete`, even with the same idempotency key; your backend can recover with an invoice checkout for the `invoice_id` from the first response. An invoice checkout retried with the same key and a different body currently returns HTTP 500, not 409.
+After a hosted payment the customer lands on your `returnUrl` (it may contain `{CHECKOUT_SESSION_ID}`, which Stripe fills in); show success from that page by reloading billing status (the subscription or `useEntitlement`), or from the `invoice.payment_succeeded` / subscription webhooks on your backend. A Stripe `checkout_id` is the Stripe session id, not a status id, so `getCheckoutStatus` is never called with it; only a paid upgrade has a status call, keyed by `plan_upgrade_intent_id`. A new-subscription checkout retried while the subscription is still incomplete fails with HTTP 422 `subscription_incomplete`, even with the same idempotency key; your backend can recover with an invoice checkout for the `invoice_id` from the first response. An invoice checkout retried with the same key and a different body currently returns HTTP 500, not 409.
 
 `CheckoutButton` rejects a Razorpay result without `checkout_id`, `key_id` and `order_id`, and fails when `BillingProvider` has no `verifyCheckout`. A modal `payment.failed` event shows "Payment failed. You can retry checkout." For a UPI AutoPay mandate, pass `registerMandate` to `CheckoutButton`; the modal then receives `customer_id` and `recurring: "1"` from the result. Show success only after both `status` and `fulfillment_status` are `succeeded`. See the [Stripe](https://docs.nozle.dev/integrations/stripe) and [Razorpay](https://docs.nozle.dev/integrations/razorpay) integration guides.
 

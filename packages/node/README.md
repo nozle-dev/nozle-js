@@ -314,8 +314,8 @@ const checkout = await nozle.entitySubscriptions.checkoutMany("workspace_123", {
 });
 ```
 
-For Stripe the result is `type: "hosted"`: redirect the customer to `checkout.url`, then poll
-`checkoutStatus(checkout.checkout_id)` after they return. Never expose the secret Nozle key
+For Stripe the result is `type: "hosted"`: redirect the customer to `checkout.url`. After they return, confirm the outcome as described under
+"Payment providers" below (a Stripe `checkout_id` is not a status id). Never expose the secret Nozle key
 to the browser.
 
 Allocation and deallocation preserve exact decimal strings, source provenance, and expiry. They are backend-only operations and may also be disabled by the Engine's exact organization/Credit System rollout gate.
@@ -426,12 +426,12 @@ Nozle collects through the payment provider connected to your organization and a
 
 | `type` | Provider | Next step |
 | --- | --- | --- |
-| `hosted` | Stripe, Razorpay link | Redirect the customer to `url` (the Stripe Checkout page; `payment_url` is the same address), then poll `checkoutStatus(checkout_id)` |
+| `hosted` | Stripe, Razorpay link | Redirect the customer to `url` (the Stripe Checkout page; `payment_url` is the same address), then confirm as described below (Stripe: `checkout_id` is the Stripe session id, not a status id) |
 | `razorpay` | Razorpay | Open the Razorpay modal with `key_id`, `order_id`, `amount_cents` and `currency`, then verify |
 | `processing` | Razorpay or Stripe | Recover with `checkoutStatus(checkout_id)` instead of starting another checkout. Razorpay returns it while the order is not ready; Stripe returns it when a quoted upgrade is replayed while its webhook is still pending |
 | `completed`, `scheduled` | Either | No payment is due now. Credits covered it, or the change takes effect later |
 
-**Stripe.** Every Stripe checkout is the Stripe-hosted Checkout page; there is no embedded form. Redirect the customer to `url`. Pass `cancelUrl` in the options to choose where Stripe sends a customer who leaves the page (validated like `returnUrl`, defaults to it). A return URL may contain the literal `{CHECKOUT_SESSION_ID}`, which Stripe replaces with the Checkout Session id. Credit top-up purchases also return a Stripe-hosted `payment_url` (valid for 24 hours).
+**Stripe.** Every Stripe checkout is the Stripe-hosted Checkout page; there is no embedded form. `checkout_id` of a Stripe result is the Stripe session id (`cs_...`); `checkoutStatus` does not accept it. An upgrade session lasts 35 minutes, an Entity batch 23 hours. Redirect the customer to `url`. Pass `cancelUrl` in the options to choose where Stripe sends a customer who leaves the page (validated like `returnUrl`, defaults to it). A return URL may contain the literal `{CHECKOUT_SESSION_ID}`, which Stripe replaces with the Checkout Session id. Credit top-up purchases also return a Stripe-hosted `payment_url` (valid for 24 hours).
 
 ```ts
 import { Nozle } from "@nozle-js/node";
@@ -443,8 +443,13 @@ const result = await nozle.checkout("cust_123", "pro_monthly", returnUrl, {
   cancelUrl: "https://app.example.com/pricing",
 });
 if (result.type === "hosted") {
-  // Redirect the customer to result.url. After they return, poll
-  // nozle.checkoutStatus(result.checkout_id): `checkout` is `completed` once paid.
+  // Redirect the customer to result.url.
+  // Paid upgrade (result.plan_upgrade_intent_id): after they return, poll
+  //   nozle.checkoutStatus(result.plan_upgrade_intent_id, { customerId, subscriptionId });
+  //   status is awaiting_payment (hosted nested), processing, succeeded or expired.
+  // New subscription or invoice (result.invoice_id): there is no status call. The customer
+  //   returns to your return URL; confirm with the invoice.payment_succeeded or subscription
+  //   webhook, or by reloading billing state (can() or the subscription read).
 }
 ```
 

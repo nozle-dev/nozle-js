@@ -138,7 +138,9 @@ export interface ProcessingCheckoutResult {
 
 /**
  * A hosted payment page: the Stripe Checkout page or a Razorpay payment link. Redirect the customer to `url`
- * (`payment_url` is the same address), then poll `checkoutStatus` with `checkout_id` after they return.
+ * (`payment_url` is the same address). For a paid upgrade poll `checkoutStatus(plan_upgrade_intent_id, scope)` after they return.
+ * A new subscription or invoice checkout has no status call: confirm through webhooks or by reloading billing state.
+ * A Stripe `checkout_id` is the Stripe session id, not a status id.
  */
 export interface HostedCheckoutResult {
   type: "hosted";

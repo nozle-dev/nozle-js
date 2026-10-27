@@ -50,6 +50,29 @@ describe("hosted Stripe checkout", () => {
     noStripeScript();
   });
 
+  it("a hosted Stripe result never triggers a status poll with its checkout_id", async () => {
+    const assign = stubLocation();
+    const getCheckoutStatus = vi.fn();
+    const verifyCheckout = vi.fn();
+    const createCheckout = vi
+      .fn()
+      .mockResolvedValue({ ...hosted, plan_upgrade_intent_id: "intent_1", invoice_id: undefined });
+    const view = render(
+      <BillingProvider
+        publishableKey="pk_test"
+        createCheckout={createCheckout}
+        getCheckoutStatus={getCheckoutStatus}
+        verifyCheckout={verifyCheckout}
+      >
+        <CheckoutButton planCode="pro" returnUrl="https://merchant.example/done" />
+      </BillingProvider>,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Get Started" }));
+    await waitFor(() => expect(assign).toHaveBeenCalledExactlyOnceWith(hosted.url));
+    expect(getCheckoutStatus).not.toHaveBeenCalled();
+    expect(verifyCheckout).not.toHaveBeenCalled();
+  });
+
   it("useCheckoutSession redirects a hosted result", async () => {
     const assign = stubLocation();
     const createCheckout = vi.fn().mockResolvedValue(hosted);
