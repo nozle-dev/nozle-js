@@ -75,7 +75,7 @@ export interface PricingTableProps {
   onCheckoutError?: (error: Error) => void;
   /** Show the interval switch when several intervals exist. Defaults to true. */
   showToggle?: boolean;
-  /** Interval shown first ("annual" is accepted for "yearly"). Defaults to monthly when offered. */
+  /** Interval shown first ("annual" is accepted for "yearly"). Defaults to the interval of `currentPlanCode`, else monthly when offered. */
   defaultInterval?: PricingInterval | 'annual';
   /** Family code or plan code to highlight. Overrides the family's `pricing_highlighted`. */
   highlightPlan?: string;
@@ -590,10 +590,12 @@ export function PricingTable({
     }
   }
 
+  const current = catalog.plans.find((p) => p.code === currentPlan);
   const available = getAvailableIntervals(catalog);
+  // Without a defaultInterval the switch opens on the current plan's interval, so its card shows as current.
   const interval = selectedInterval !== null && available.includes(selectedInterval)
     ? selectedInterval
-    : getDefaultInterval(catalog, defaultInterval);
+    : getDefaultInterval(catalog, defaultInterval ?? current?.interval);
   const switchVisible = showToggle && available.length > 1 && interval !== null;
   // Without families the switch filters plans by interval, as before; with
   // the switch hidden every plan is shown.
@@ -607,7 +609,6 @@ export function PricingTable({
     sort,
   });
   // Plans of different intervals are compared by their cost over a year.
-  const current = catalog.plans.find((p) => p.code === currentPlan);
   const currentYearly = current ? yearlyMinor(current) : null;
   const isUpgrade = (plan: PricingPlan): boolean | undefined => {
     if (!current || current.amount_currency !== plan.amount_currency) return undefined;

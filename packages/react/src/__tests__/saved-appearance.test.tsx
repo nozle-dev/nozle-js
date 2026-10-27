@@ -1,6 +1,7 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { BillingProvider, PlanCard, PricingTable, UsageMeter } from "../index.js";
 import { sanitizeSavedAppearance } from "../appearance/saved.js";
 import { dark, neobrutal, nozle } from "../themes.js";
@@ -151,6 +152,24 @@ describe("BillingProvider saved appearance", () => {
     expect(meter().style.getPropertyValue("--nozle-border")).toBe("#222222");
     const card = document.querySelector(".nozle-planCard") as HTMLElement;
     expect(card.style.getPropertyValue("--nozle-primary")).toBe("#111111");
+  });
+
+  it("uses initialSavedAppearance on the first render, before the catalog answers", () => {
+    stubCatalog({ theme: "dark", variables: { colorPrimary: "#e0482b" } });
+    render(<Provider initialSavedAppearance={{ theme: "dark", variables: { colorPrimary: "#e0482b" } }}><UsageMeter used={5} limit={10} label="Seats" /></Provider>);
+    expect(meter().style.getPropertyValue("--nozle-primary")).toBe("#e0482b");
+    expect(meter().style.getPropertyValue("--nozle-card")).toBe(dark.variables?.colorCard);
+  });
+
+  it("renders initialSavedAppearance on the server", () => {
+    const html = renderToString(<Provider initialSavedAppearance={{ variables: { colorPrimary: "#e0482b" } }}><UsageMeter used={5} limit={10} label="Seats" /></Provider>);
+    expect(html).toContain("--nozle-primary:#e0482b");
+  });
+
+  it("lets the catalog's saved appearance replace initialSavedAppearance", async () => {
+    stubCatalog({ variables: { colorPrimary: "#111111" } });
+    render(<Provider initialSavedAppearance={{ variables: { colorPrimary: "#e0482b" } }}><UsageMeter used={5} limit={10} label="Seats" /></Provider>);
+    await waitFor(() => expect(meter().style.getPropertyValue("--nozle-primary")).toBe("#111111"));
   });
 
   it("never fetches or applies it with savedAppearance={false}", async () => {
