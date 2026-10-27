@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## Node.js 0.19.0 — 2026-10-27
+
+### Added
+
+- `customers.importBillingState(customerId, params, { idempotencyKey })` imports a subscription another system already bills (Core `POST /customers/{customer_id}/billing-state-imports`), and `customers.importCreditBalance(customerId, params, { idempotencyKey })` records its opening credit balance (Engine `POST /customers/{customer_id}/credit-balance-imports`). Both need a secret key and an Idempotency-Key of at most 255 bytes, return the unwrapped import, and throw `NozleApiError` on failure.
+- `margin.forecast(params?)` (`GET /margin/forecast`) and `margin.simulate({ metricCode, newPriceDollars }, range?)` (`POST /margin/simulate`), with typed results.
+- `costIntelligence.report({ from, to, limit })`, `costIntelligence.previewSharedCostAllocation(poolId, { allocationPeriodStart })` and `costIntelligence.allocateSharedCost(poolId, { allocationPeriodStart })` (Engine `/cost-intelligence/*`, secret keys).
+- Root README: a Contributing section (root `npm ci`, how the React tests run).
+
+### Changed (breaking types)
+
+- `CheckoutResult`: the Stripe variant is now `StripeCheckoutResult` and no longer declares `publishable_key`, `stripe_account` or `url`, which Nozle never returns. The `"completed" | "scheduled"` variant is split into `CompletedCheckoutResult` and `ScheduledCheckoutResult`, so narrowing on `type` works. All three are exported. Runtime behaviour is unchanged.
+- Root README install pins now name the current releases (Node 0.19.0, React 0.17.0).
+
 ## Node.js 0.18.0 — 2026-10-27
 
 ### Added

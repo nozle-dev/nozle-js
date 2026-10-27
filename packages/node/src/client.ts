@@ -3,6 +3,7 @@ import { can as _can } from "./can";
 import { captureFetch as _captureFetch, type CaptureFetchOptions } from "./capture-fetch";
 import { CreditsNamespace } from "./credits";
 import { CostEventsNamespace } from "./cost-events";
+import { CostIntelligenceNamespace } from "./cost-intelligence";
 import { CreditSystemsNamespace } from "./credit-systems";
 import { EntitiesNamespace } from "./entities";
 import { EntitySubscriptionsNamespace } from "./entity-subscriptions";
@@ -46,6 +47,11 @@ import type {
   CustomerUpsertResult,
   CheckAndDeductParams,
   CheckAndDeductResult,
+  CreditBalanceImportParams,
+  CreditBalanceImport,
+  BillingStateImportParams,
+  BillingStateImport,
+  ImportOptions,
 } from "./types";
 
 function trimTrailingSlashes(url: string): string {
@@ -61,6 +67,8 @@ export class Nozle {
   readonly margin: MarginClient;
   readonly events: EventsNamespace;
   readonly costEvents: CostEventsNamespace;
+  /** Ledger-backed cost report and Shared Period Cost allocation (secret keys). */
+  readonly costIntelligence: CostIntelligenceNamespace;
   readonly customers: CustomersNamespace;
   readonly creditSystems: CreditSystemsNamespace;
   readonly entities: EntitiesNamespace;
@@ -94,7 +102,8 @@ export class Nozle {
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.policy);
     this.events = new EventsNamespace();
     this.costEvents = new CostEventsNamespace(this.baseUrl, this.apiKey, this.policy);
-    this.customers = new CustomersNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.costIntelligence = new CostIntelligenceNamespace(this.baseUrl, this.apiKey, this.policy);
+    this.customers = new CustomersNamespace(this.eventsUrl, this.apiKey, this.policy, this.baseUrl);
     this.creditSystems = new CreditSystemsNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.entities = new EntitiesNamespace(this.baseUrl, this.apiKey, this.policy);
     this.entitySubscriptions = new EntitySubscriptionsNamespace(this.eventsUrl, this.apiKey, this.policy);
@@ -614,7 +623,92 @@ class CustomersNamespace {
     private readonly baseUrl: string,
     private readonly apiKey: string,
     private readonly policy: RequestPolicy,
+    private readonly engineUrl: string,
   ) {}
+
+  /**
+   * Records the opening credit balance of a subscription imported with {@link importBillingState},
+   * without an invoice or a usage event (Engine). Retry an uncertain call with the same key and body.
+   */
+  async importCreditBalance(
+    customerId: string,
+    params: CreditBalanceImportParams,
+    options: ImportOptions,
+  ): Promise<CreditBalanceImport> {
+    const payload = await this.importRequest<{ credit_balance_import: CreditBalanceImport }>(
+      "customers.importCreditBalance",
+      `${this.engineUrl}/api/v1/customers/${encodeURIComponent(customerId)}/credit-balance-imports`,
+      customerId,
+      {
+        external_subscription_id: params.externalSubscriptionId,
+        credit_system_code: params.creditSystemCode,
+        granted_amount: params.grantedAmount,
+        remaining_amount: params.remainingAmount,
+        external_entity_id: params.externalEntityId,
+        dry_run: params.dryRun,
+      },
+      options,
+    );
+    return payload.credit_balance_import;
+  }
+
+  /**
+   * Imports a subscription another system already bills (`billing_authority: external`), without an
+   * invoice, checkout or payment (Core). Retry an uncertain call with the same key and body.
+   */
+  async importBillingState(
+    customerId: string,
+    params: BillingStateImportParams,
+    options: ImportOptions,
+  ): Promise<BillingStateImport> {
+    const sub = params.subscription;
+    const payload = await this.importRequest<{ billing_state_import: BillingStateImport }>(
+      "customers.importBillingState",
+      `${this.baseUrl}/api/v1/customers/${encodeURIComponent(customerId)}/billing-state-imports`,
+      customerId,
+      {
+        billing_state_import: {
+          dry_run: params.dryRun,
+          external_entity_id: params.externalEntityId,
+          subscription: sub && {
+            plan_code: sub.planCode,
+            status: sub.status,
+            billing_authority: sub.billingAuthority,
+            external_reference: sub.externalReference,
+            current_period_start: sub.currentPeriodStart,
+            current_period_end: sub.currentPeriodEnd,
+          },
+        },
+      },
+      options,
+    );
+    return payload.billing_state_import;
+  }
+
+  private async importRequest<T>(
+    operation: string,
+    url: string,
+    customerId: string,
+    body: unknown,
+    options: ImportOptions,
+  ): Promise<T> {
+    if (!this.apiKey.startsWith("sk_")) throw new Error(`${operation} requires a secret key`);
+    if (!customerId?.trim()) throw new Error(`${operation} requires customerId`);
+    const key = options?.idempotencyKey;
+    if (typeof key !== "string" || !key.trim() || new TextEncoder().encode(key).length > 255)
+      throw new Error(`${operation} requires an idempotencyKey up to 255 bytes`);
+    const res = await request(this.policy, url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": key,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw await apiError(operation, res);
+    return res.json();
+  }
 
   async upsert(params: CustomerUpsertParams): Promise<CustomerUpsertResult> {
     if (!this.apiKey.startsWith("sk_")) {

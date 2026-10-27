@@ -85,6 +85,29 @@ const calls: Record<string, (nozle: Nozle) => Promise<unknown>> = {
     n.entitySubscriptions.checkoutMany("cust", { items: [{ externalEntityId: "user-42", planCode: "pro" }], idempotencyKey: "b1" }),
   "entitySubscriptions.cancel": (n) => n.entitySubscriptions.cancel("cust", "user-42", { idempotencyKey: "c1" }),
   "entities.upsert": (n) => n.entities.upsert("cust", "user-42", { status: "active" }, { idempotencyKey: "e1" }),
+  "margin.simulate": (n) => n.margin.simulate({ metricCode: "agent_execution", newPriceDollars: 1 }),
+  "customers.importCreditBalance": (n) =>
+    n.customers.importCreditBalance(
+      "cust",
+      { externalSubscriptionId: "sub_1", creditSystemCode: "ai_credits", grantedAmount: "500", remainingAmount: "320", dryRun: true },
+      { idempotencyKey: "i1" },
+    ),
+  "customers.importBillingState": (n) =>
+    n.customers.importBillingState(
+      "cust",
+      {
+        dryRun: true,
+        subscription: {
+          planCode: "pro",
+          status: "active",
+          billingAuthority: "external",
+          externalReference: "ext_1",
+          currentPeriodStart: "2026-10-15T00:00:00Z",
+          currentPeriodEnd: "2026-11-15T00:00:00Z",
+        },
+      },
+      { idempotencyKey: "i2" },
+    ),
   "credits.allocate": (n) => n.credits.allocate("cust", "user-42", { creditSystemCode: "ai_credits", amount: "10" }, { idempotencyKey: "a1" }),
 };
 
