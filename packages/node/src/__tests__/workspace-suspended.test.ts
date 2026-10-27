@@ -15,7 +15,13 @@ const suspended = () =>
 // Retries on and a fast delay: a 402 must still be sent once.
 const client = () => new Nozle({ apiKey: "sk_test", maxRetries: 3, retryDelayMs: 1 });
 
-describe("workspace_suspended (402)", () => {
+const cardRequired = () =>
+  new Response(JSON.stringify({ code: "card_required", error: "Add a card to your Nozle workspace to use the API." }), {
+    status: 402,
+    statusText: "Payment Required",
+  });
+
+describe("workspace_suspended and card_required (402)", () => {
   const calls: Array<[string, () => Promise<unknown>]> = [
     ["can", () => client().can("c", "f")],
     ["track", () => client().track("c", "e", {}, { subscriptionId: "s" })],
@@ -23,14 +29,17 @@ describe("workspace_suspended (402)", () => {
     ["plans", () => client().plans()],
   ];
 
-  it.each(calls)("%s throws NozleApiError with the code, once", async (_name, call) => {
-    fetchMock.mockResolvedValue(suspended());
-    const error = await call().then(() => undefined, (cause: unknown) => cause);
-    expect(error).toBeInstanceOf(NozleApiError);
-    expect((error as NozleApiError).status).toBe(402);
-    expect((error as NozleApiError).code).toBe("workspace_suspended");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+  const cases = [["workspace_suspended", suspended], ["card_required", cardRequired]] as const;
+  for (const [code, response] of cases) {
+    it.each(calls)(`%s throws NozleApiError with ${code}, once`, async (_name, call) => {
+      fetchMock.mockResolvedValue(response());
+      const error = await call().then(() => undefined, (cause: unknown) => cause);
+      expect(error).toBeInstanceOf(NozleApiError);
+      expect((error as NozleApiError).status).toBe(402);
+      expect((error as NozleApiError).code).toBe(code);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  }
 
   it("the billing handler passes the code to the browser", async () => {
     const nozle = { can: vi.fn(async () => Promise.reject(new NozleApiError("can check", { status: 402, statusText: "Payment Required" }, { code: "workspace_suspended" }))) };

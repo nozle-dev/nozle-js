@@ -282,10 +282,10 @@ complete typed adapters, standalone controls, and the runnable Node/Python integ
 The hosted Nozle backend supports these flows; self-hosted deployments need the matching
 subscription-management endpoints and cancellation-date guard.
 
-## Workspace suspended (402)
+## Workspace suspended or card required (402)
 
-When your Nozle workspace is suspended because its Nozle invoices are unpaid, every API call answers HTTP 402 with `code` `workspace_suspended`. The billing hooks expose a `BillingRequestError` with `status` 402 and `code` `workspace_suspended` in `error`, and do not retry it. Show your own message; the portal and hooks do not crash the app.
- Do not retry blindly: the SDK never retries a 402. Pay the Nozle invoices in the dashboard and calls work again at once. Events sent during the suspension are refused, not queued.
+When your Nozle workspace is suspended because its Nozle invoices are unpaid, every API call answers HTTP 402 with `code` `workspace_suspended`. A workspace without a verified card answers 402 with `code` `card_required` the same way. The billing hooks expose a `BillingRequestError` with `status` 402 and `code` `workspace_suspended` in `error`, and do not retry it. Show your own message; the portal and hooks do not crash the app.
+Never retry blindly: the SDK does not retry a 402. Add a card in the Nozle dashboard (`card_required`) or pay the Nozle invoices (`workspace_suspended`) and calls work again at once. Events sent during the suspension are refused, not queued.
 
 ## License
 

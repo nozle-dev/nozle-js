@@ -81,10 +81,10 @@ See the [React package guide](packages/react/README.md) for the complete callbac
 
 Node `0.13.0` adds `captureFetch` and `recordUsage` for any LLM client, `createBillingHandler` for the React billing hooks, webhook verification, invoices, alerts and opt-in retries, and throws `NozleApiError` on every failed call. React `0.11.0` adds billing hooks on TanStack Query, the `appearance` API with predefined themes, `CurrentPlan`, credit and usage components, and pricing components that read the catalog; it has breaking changes to styling and to `PlanCard` and `PlanComparison` props. See each package guide for the full API and the changelog for release history.
 
-## Workspace suspended (402)
+## Workspace suspended or card required (402)
 
-When your Nozle workspace is suspended because its Nozle invoices are unpaid, every API call answers HTTP 402 with `code` `workspace_suspended`. `NozleApiError` (Node) and `BillingRequestError` (React) carry `status` 402 and `code` `workspace_suspended`; see the Node and React package guides.
- Do not retry blindly: the SDK never retries a 402. Pay the Nozle invoices in the dashboard and calls work again at once. Events sent during the suspension are refused, not queued.
+When your Nozle workspace is suspended because its Nozle invoices are unpaid, every API call answers HTTP 402 with `code` `workspace_suspended`. A workspace without a verified card answers 402 with `code` `card_required` the same way. `NozleApiError` (Node) and `BillingRequestError` (React) carry `status` 402 and `code` `workspace_suspended` or `card_required`; see the Node and React package guides.
+Never retry blindly: the SDK does not retry a 402. Add a card in the Nozle dashboard (`card_required`) or pay the Nozle invoices (`workspace_suspended`) and calls work again at once. Events sent during the suspension are refused, not queued.
 
 ## License
 

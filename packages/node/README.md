@@ -341,9 +341,9 @@ await nozle.usage.track(
 
 Keep the same idempotency key when retrying an uncertain mutation result. Never convert credit amounts to JavaScript numbers.
 
-## Workspace suspended (402)
+## Workspace suspended or card required (402)
 
-When your Nozle workspace is suspended because its Nozle invoices are unpaid, every API call answers HTTP 402 with `code` `workspace_suspended`. `NozleApiError` has `status` 402 and `code` `workspace_suspended`, from `can()`, `track()`, `usage.check()` and every other call; `can()` throws it instead of returning `allowed: false`. `createBillingHandler` passes the code to the browser.
+When your Nozle workspace is suspended because its Nozle invoices are unpaid, every API call answers HTTP 402 with `code` `workspace_suspended`. A workspace without a verified card answers 402 with `code` `card_required` the same way. `NozleApiError` has `status` 402 and `code` `workspace_suspended`, from `can()`, `track()`, `usage.check()` and every other call; `can()` throws it instead of returning `allowed: false`. `createBillingHandler` passes the code to the browser.
 
 ```ts
 try {
@@ -354,7 +354,8 @@ try {
   }
 }
 ```
- Do not retry blindly: the SDK never retries a 402. Pay the Nozle invoices in the dashboard and calls work again at once. Events sent during the suspension are refused, not queued.
+
+Never retry blindly: the SDK does not retry a 402. Add a card in the Nozle dashboard (`card_required`) or pay the Nozle invoices (`workspace_suspended`) and calls work again at once. Events sent during the suspension are refused, not queued.
 
 ## Health Check
 
