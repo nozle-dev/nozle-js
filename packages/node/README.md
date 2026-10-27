@@ -256,6 +256,40 @@ await nozle.customers.upsert({
 
 A payment provider assignment needs `providerCustomerId` or `syncWithProvider: true`; otherwise Core drops it. The same applies to `provider_customer_id` and `sync_with_provider` when you call the REST API directly.
 
+### Importing billing state and opening credit balances
+
+When you move customers from another billing system, import each subscription that system still bills, then its current credit balance. Both calls need a secret key and an `idempotencyKey` (at most 255 bytes): retry an uncertain call with the same key and the same body. `dryRun: true` validates without writing.
+
+```ts
+const imported = await nozle.customers.importBillingState(
+  "workspace_123",
+  {
+    subscription: {
+      planCode: "pro_monthly",
+      status: "active",
+      billingAuthority: "external",
+      externalReference: "merchant_subscription_123",
+      currentPeriodStart: "2026-10-15T00:00:00Z",
+      currentPeriodEnd: "2026-11-15T00:00:00Z",
+    },
+  },
+  { idempotencyKey: "import-workspace_123-state" },
+);
+
+await nozle.customers.importCreditBalance(
+  "workspace_123",
+  {
+    externalSubscriptionId: imported.subscription.external_subscription_id!,
+    creditSystemCode: "ai_credits",
+    grantedAmount: "500",
+    remainingAmount: "320",
+  },
+  { idempotencyKey: "import-workspace_123-credits" },
+);
+```
+
+Failures throw `NozleApiError`; for example `error.code === "idempotency_key_reused"` when a key is reused with a different body.
+
 ## Product credits
 
 Read exact-decimal balances and immutable operation history from the Phase 1 credit engine:
@@ -359,12 +393,25 @@ const byMetric = await nozle.margin.byMetric();
 const byPlan = await nozle.margin.byPlan();
 const byModel = await nozle.margin.byModel();
 const trend = await nozle.margin.trend({ granularity: "day" });
+const forecast = await nozle.margin.forecast(); // next 30 days, from the last month's daily trend
+const simulation = await nozle.margin.simulate({ metricCode: "agent_execution", newPriceDollars: 1 });
 
 // With time range
 const q1 = await nozle.margin.summary({
   from: "2025-01-01T00:00:00Z",
   to: "2025-03-31T23:59:59Z",
 });
+```
+
+### Cost Intelligence
+
+```ts
+const report = await nozle.costIntelligence.report({ from: "2026-10-01T00:00:00Z", limit: 50 });
+const preview = await nozle.costIntelligence.previewSharedCostAllocation(poolId, {
+  allocationPeriodStart: "2026-10-01T00:00:00Z",
+});
+// Books a closed period now; Nozle also books it within about 15 minutes of the close.
+const run = await nozle.costIntelligence.allocateSharedCost(poolId, { allocationPeriodStart: "2026-10-01T00:00:00Z" });
 ```
 
 ## Plans & Checkout

@@ -4,14 +4,14 @@ This monorepo contains the Nozle SDK for Node.js backends and the React package 
 
 | Package | Current release | Use it for |
 | --- | --- | --- |
-| [`@nozle-js/node`](packages/node/README.md) | `0.13.0` | Billing, subscriptions, credits, usage and Cost Events, entitlements, margins, invoices, alerts, webhooks, and LLM usage capture |
-| [`@nozle-js/react`](packages/react/README.md) | `0.11.0` | Public catalog, checkout UI, billing portal, billing hooks, and customer-facing controls |
+| [`@nozle-js/node`](packages/node/README.md) | `0.19.0` | Billing, subscriptions, credits, usage and Cost Events, entitlements, margins, invoices, alerts, webhooks, and LLM usage capture |
+| [`@nozle-js/react`](packages/react/README.md) | `0.17.0` | Public catalog, checkout UI, billing portal, billing hooks, and customer-facing controls |
 
 ## Install
 
 ```bash
-npm install @nozle-js/node@0.13.0
-npm install @nozle-js/react@0.11.0 @tanstack/react-query react react-dom @stripe/stripe-js @stripe/react-stripe-js
+npm install @nozle-js/node@0.19.0
+npm install @nozle-js/react@0.17.0 @tanstack/react-query react react-dom @stripe/stripe-js @stripe/react-stripe-js
 ```
 
 Install only the package your application needs. The React package runs in the browser; all customer-scoped writes and reads that need a secret key belong on your backend.
@@ -80,6 +80,19 @@ See the [React package guide](packages/react/README.md) for the complete callbac
 - [Release process](RELEASING.md)
 
 Node `0.13.0` adds `captureFetch` and `recordUsage` for any LLM client, `createBillingHandler` for the React billing hooks, webhook verification, invoices, alerts and opt-in retries, and throws `NozleApiError` on every failed call. React `0.11.0` adds billing hooks on TanStack Query, the `appearance` API with predefined themes, `CurrentPlan`, credit and usage components, and pricing components that read the catalog; it has breaking changes to styling and to `PlanCard` and `PlanComparison` props. See each package guide for the full API and the changelog for release history.
+
+## Contributing
+
+Run `npm ci` once at the repository root: it installs both workspaces, including the React test dependencies (jsdom, Testing Library). Then:
+
+```bash
+npm test --workspace=@nozle-js/node                                # Node unit tests (Vitest, Node 20+)
+npm run typecheck --workspace=@nozle-js/node
+npm test --workspace=@nozle-js/react -- --no-file-parallelism      # React tests run in jsdom
+npm run build --workspace=@nozle-js/node && node --test examples/billing-portal/*.test.mjs
+```
+
+`dist/` is not committed; rebuild it (`npm run build --workspace=<package>`) before running an example against your changes. CI runs the same steps (`.github/workflows/node-ci.yml`).
 
 ## License
 
