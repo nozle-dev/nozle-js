@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## Node.js 0.18.0 and React 0.17.0 — 2026-10-27
+## Node.js 0.19.0 and React 0.18.0 — 2026-10-27
 
 ### Added
 
@@ -14,6 +14,22 @@
 - **Breaking:** Stripe checkout is hosted only (Core 11.4.0, Engine 2.12.0). A Stripe `checkout()`, `checkoutInvoice()`, plan change or Entity checkout returns `{ type: "hosted", url, payment_url, checkout_id, ... }`: redirect the customer to `url`. Only a paid upgrade has a status call (`checkoutStatus(plan_upgrade_intent_id, scope)`); a Stripe `checkout_id` is the session id, not a status id, so confirm a new subscription or invoice through webhooks or by reloading billing state. The `type: "stripe"` result and every `client_secret` / `clientSecret` are removed, including on `entitySubscriptions.checkoutMany()` (now `type` `hosted` with `url`). `HostedCheckoutResult` gains `url`.
 - **Breaking (React):** the embedded Stripe component is removed. `Checkout` takes only `checkout={result}` and redirects to the hosted page or opens the Razorpay modal; the `clientSecret` / `publishableKey` props, `StripeCheckoutProps`, `toStripeAppearance` and every `onStripeClientSecret` prop (`CheckoutButton`, `UpgradeButton`, `UpgradeModal`, `PricingTable`) are gone. `useCheckoutSession().fetchClientSecret` is now `startCheckout`, which redirects. `@stripe/stripe-js` and `@stripe/react-stripe-js` are no longer peer dependencies.
 - The billing portal example no longer reads `STRIPE_PUBLISHABLE_KEY`.
+
+## Node.js 0.18.0 — 2026-10-27
+
+### Added
+
+- `plans({ includeHidden })` sends `include_hidden`. With a secret key, `includeHidden: false` returns the pricing table view (without plan families and features hidden from the pricing table), as a publishable key gets. Without the option the request is unchanged.
+
+## React 0.17.0 — 2026-10-27
+
+### Added
+
+- `BillingProvider initialSavedAppearance`: the `meta.sdk_appearance` of a `GET /api/v1/plans` response read on your server. It is used until the catalog request answers, so the first paint and server rendering show the saved theme instead of the default one.
+
+### Changed
+
+- `PricingTable` without `defaultInterval` opens on the interval of `currentPlanCode` when that plan is in the catalog (a yearly subscriber sees Annual and the Current Plan badge on their card), else monthly as before.
 
 ## Node.js 0.17.0 — 2026-10-26
 

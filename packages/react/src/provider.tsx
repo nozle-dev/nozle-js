@@ -11,6 +11,7 @@ import { QueryClient, useQuery } from "@tanstack/react-query";
 import { catalogQuery } from "./hooks/use-plans.js";
 import { AppearanceProvider } from "./appearance/context.js";
 import type { Appearance } from "./appearance/tokens.js";
+import { sanitizeSavedAppearance } from "./appearance/saved.js";
 
 export interface CheckoutSubscriptionResult {
   external_entity_id?: string;
@@ -290,6 +291,12 @@ export interface BillingProviderProps {
    * never fetch or apply them. Default true.
    */
   savedAppearance?: boolean;
+  /**
+   * The saved appearance to use until the catalog request answers: the `meta.sdk_appearance` of a
+   * `GET /api/v1/plans` response, read on your server. With it the first paint and server rendering
+   * already show the saved theme instead of the default one. Ignored when `savedAppearance` is false.
+   */
+  initialSavedAppearance?: unknown;
   children: ReactNode;
 }
 
@@ -305,6 +312,7 @@ export function BillingProvider({
   queryClient,
   appearance,
   savedAppearance = true,
+  initialSavedAppearance,
   children,
 }: BillingProviderProps): React.ReactElement {
   if (!publishableKey.startsWith("pk_")) {
@@ -342,7 +350,11 @@ export function BillingProvider({
     { ...catalogQuery(client), enabled: savedAppearance },
     activeQueryClient,
   );
-  const saved = savedAppearance ? catalog.data?.saved : undefined;
+  const initialSaved = useMemo(
+    () => (initialSavedAppearance === undefined ? undefined : sanitizeSavedAppearance(initialSavedAppearance)),
+    [initialSavedAppearance],
+  );
+  const saved = savedAppearance ? (catalog.data?.saved ?? initialSaved) : undefined;
 
   return React.createElement(
     BillingContext.Provider,

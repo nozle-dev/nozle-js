@@ -484,6 +484,17 @@ describe("Nozle", () => {
 
       expect(plans).toHaveLength(1);
       expect(plans[0].code).toBe("pro");
+      expect(fetchMock.mock.calls[0][0]).toBe("https://api.nozle.app/engine/api/v1/plans");
+    });
+
+    it("sends include_hidden when includeHidden is given", async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ plans: [] }));
+      const client = new Nozle({ apiKey: "sk_test" });
+      await client.plans({ includeHidden: false });
+      await client.plans({ includeHidden: true });
+
+      expect(fetchMock.mock.calls[0][0]).toBe("https://api.nozle.app/engine/api/v1/plans?include_hidden=false");
+      expect(fetchMock.mock.calls[1][0]).toBe("https://api.nozle.app/engine/api/v1/plans?include_hidden=true");
     });
   });
 

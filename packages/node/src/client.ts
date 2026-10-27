@@ -123,8 +123,14 @@ export class Nozle {
     return _can(this.baseUrl, this.apiKey, customerId, feature, metadata, this.policy, options);
   }
 
-  async plans(): Promise<Plan[]> {
-    const res = await request(this.policy, `${this.baseUrl}/api/v1/plans`, {
+  /**
+   * Current plan versions. A secret key gets every plan, including families hidden from the
+   * pricing table; `includeHidden: false` gets the pricing table view a publishable key gets.
+   */
+  async plans(options: { includeHidden?: boolean } = {}): Promise<Plan[]> {
+    const url = new URL(`${this.baseUrl}/api/v1/plans`);
+    if (options.includeHidden !== undefined) url.searchParams.set("include_hidden", String(options.includeHidden));
+    const res = await request(this.policy, url.toString(), {
       headers: { Authorization: `Bearer ${this.apiKey}` },
     });
     if (!res.ok) throw await apiError(`plans`, res);
