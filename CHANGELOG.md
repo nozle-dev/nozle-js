@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## Node.js 0.19.0 and React 0.18.0 — 2026-10-27
+## Node.js 0.20.0 and React 0.18.0 — 2026-10-27
 
 ### Added
 
@@ -14,6 +14,21 @@
 - **Breaking:** Stripe checkout is hosted only (Core 11.4.0, Engine 2.12.0). A Stripe `checkout()`, `checkoutInvoice()`, plan change or Entity checkout returns `{ type: "hosted", url, payment_url, checkout_id, ... }`: redirect the customer to `url`. Only a paid upgrade has a status call (`checkoutStatus(plan_upgrade_intent_id, scope)`); a Stripe `checkout_id` is the session id, not a status id, so confirm a new subscription or invoice through webhooks or by reloading billing state. The `type: "stripe"` result and every `client_secret` / `clientSecret` are removed, including on `entitySubscriptions.checkoutMany()` (now `type` `hosted` with `url`). `HostedCheckoutResult` gains `url`.
 - **Breaking (React):** the embedded Stripe component is removed. `Checkout` takes only `checkout={result}` and redirects to the hosted page or opens the Razorpay modal; the `clientSecret` / `publishableKey` props, `StripeCheckoutProps`, `toStripeAppearance` and every `onStripeClientSecret` prop (`CheckoutButton`, `UpgradeButton`, `UpgradeModal`, `PricingTable`) are gone. `useCheckoutSession().fetchClientSecret` is now `startCheckout`, which redirects. `@stripe/stripe-js` and `@stripe/react-stripe-js` are no longer peer dependencies.
 - The billing portal example no longer reads `STRIPE_PUBLISHABLE_KEY`.
+- The `CheckoutResult` family from Node 0.19.0 stays split (`CompletedCheckoutResult`, `ScheduledCheckoutResult`, `HostedCheckoutResult`, `RazorpayCheckoutResult`, `ProcessingCheckoutResult`); the `StripeCheckoutResult` variant is removed, so a Stripe checkout is a `HostedCheckoutResult` (`type: "hosted"`, `url`).
+
+## Node.js 0.19.0 — 2026-10-27
+
+### Added
+
+- `customers.importBillingState(customerId, params, { idempotencyKey })` imports a subscription another system already bills (Core `POST /customers/{customer_id}/billing-state-imports`), and `customers.importCreditBalance(customerId, params, { idempotencyKey })` records its opening credit balance (Engine `POST /customers/{customer_id}/credit-balance-imports`). Both need a secret key and an Idempotency-Key of at most 255 bytes, return the unwrapped import, and throw `NozleApiError` on failure.
+- `margin.forecast(params?)` (`GET /margin/forecast`) and `margin.simulate({ metricCode, newPriceDollars }, range?)` (`POST /margin/simulate`), with typed results.
+- `costIntelligence.report({ from, to, limit })`, `costIntelligence.previewSharedCostAllocation(poolId, { allocationPeriodStart })` and `costIntelligence.allocateSharedCost(poolId, { allocationPeriodStart })` (Engine `/cost-intelligence/*`, secret keys).
+- Root README: a Contributing section (root `npm ci`, how the React tests run).
+
+### Changed (breaking types)
+
+- `CheckoutResult`: the Stripe variant is now `StripeCheckoutResult` and no longer declares `publishable_key`, `stripe_account` or `url`, which Nozle never returns. The `"completed" | "scheduled"` variant is split into `CompletedCheckoutResult` and `ScheduledCheckoutResult`, so narrowing on `type` works. All three are exported. Runtime behaviour is unchanged.
+- Root README install pins now name the current releases (Node 0.19.0, React 0.17.0).
 
 ## Node.js 0.18.0 — 2026-10-27
 

@@ -265,26 +265,45 @@ export type CheckoutResult =
   | RazorpayCheckoutResult
   | ProcessingCheckoutResult
   | HostedCheckoutResult
-  | {
-      type: "completed" | "scheduled";
-      status: string;
-      /** `credits` or `none` on a completed result. */
-      payment_source?: string;
-      subscription_id?: string;
-      plan_code?: string;
-      invoice_id?: string;
-      amount_cents?: number;
-      /** Scheduled result: `upgrade` or `downgrade`. */
-      transition_direction?: string;
-      transition_policy?: string;
-      external_entity_id?: string;
-      external_subscription_id?: string;
-      checkout_id?: string;
-      effective_at?: string;
-      renewal_at?: string | null;
-      amount_due_cents?: number | string;
-      currency?: string;
-    };
+  | CompletedCheckoutResult
+  | ScheduledCheckoutResult;
+
+/** The change is done: paid with credits, or nothing was due. */
+export interface CompletedCheckoutResult {
+  type: "completed";
+  status: string;
+  /** `credits` or `none`. */
+  payment_source?: string;
+  subscription_id?: string;
+  plan_code?: string;
+  invoice_id?: string;
+  amount_cents?: number;
+  currency?: string;
+  external_entity_id?: string;
+  external_subscription_id?: string;
+  checkout_id?: string;
+  /** An immediate configured downgrade carries the settlement fields of a transition result. */
+  transition_direction?: string;
+  transition_policy?: string;
+  effective_at?: string;
+  renewal_at?: string | null;
+  amount_due_cents?: number | string;
+}
+
+/** The change takes effect later; `subscription_id` is the pending subscription. */
+export interface ScheduledCheckoutResult {
+  type: "scheduled";
+  status: string;
+  subscription_id?: string;
+  plan_code?: string;
+  /** `upgrade` or `downgrade`. */
+  transition_direction?: string;
+  transition_policy?: string;
+  effective_at?: string;
+  external_entity_id?: string;
+  external_subscription_id?: string;
+  checkout_id?: string;
+}
 
 export interface EntitySubscriptionPlan {
   code: string;
@@ -822,3 +841,75 @@ export type CoreSubscription = import("./generated/openapi").components["schemas
 
 /** A customer's usage for one billing period (Core `current_usage`, or one `past_usage` period). */
 export type CustomerUsage = import("./generated/openapi").components["schemas"]["CustomerUsageObject"];
+
+type Schemas = import("./generated/openapi").components["schemas"];
+
+/** Margin forecast for the 30 days after the range (`GET /margin/forecast`). */
+export type MarginForecast = Schemas["MarginForecastResponse"];
+
+/** Result of replaying one metric's usage at a new unit price (`POST /margin/simulate`). All amounts are integer cents. */
+export type MarginSimulation = Schemas["MarginSimulationResult"];
+
+export interface MarginSimulateParams {
+  metricCode: string;
+  /** New unit price in dollars, 0 or more. */
+  newPriceDollars: number;
+}
+
+export interface CostIntelligenceReportParams {
+  /** Inclusive start (RFC 3339). Defaults to 30 days before the request. */
+  from?: string;
+  /** Exclusive end (RFC 3339). Defaults to the request time. */
+  to?: string;
+  /** Rows per breakdown and detail list, 1 to 500 (server default 100). */
+  limit?: number;
+}
+
+/** Ledger-backed cost totals, breakdowns and review queues (`GET /cost-intelligence/report`). */
+export type CostIntelligenceReport = Schemas["CostIntelligenceReport"];
+
+export interface SharedCostAllocationParams {
+  /** Start of the allocation period (RFC 3339). */
+  allocationPeriodStart: string;
+}
+
+export type SharedCostAllocationPreview = Schemas["SharedCostAllocationPreview"];
+export type SharedCostAllocationRun = Schemas["SharedCostAllocationRun"];
+
+/** Opening balance of a subscription imported with `importBillingState` (Engine `credit-balance-imports`). */
+export interface CreditBalanceImportParams {
+  externalSubscriptionId: string;
+  creditSystemCode: string;
+  /** Decimal string, more than 0. */
+  grantedAmount: string;
+  /** Decimal string, from 0 to `grantedAmount`. */
+  remainingAmount: string;
+  externalEntityId?: string;
+  /** Validate without writing. */
+  dryRun?: boolean;
+}
+
+export type CreditBalanceImport = Schemas["CreditsBalanceImport"];
+
+/** A subscription another system already bills (Core `billing-state-imports`). */
+export interface BillingStateImportParams {
+  subscription: {
+    planCode: string;
+    status: "active";
+    billingAuthority: "external";
+    externalReference: string;
+    /** RFC 3339; the period must contain the current time and span exactly one plan interval. */
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+  };
+  externalEntityId?: string;
+  /** Validate without writing. */
+  dryRun?: boolean;
+}
+
+export type BillingStateImport = Schemas["BillingStateImport"];
+
+export interface ImportOptions {
+  /** Required, at most 255 bytes. Retry with the same key and an identical body. */
+  idempotencyKey: string;
+}

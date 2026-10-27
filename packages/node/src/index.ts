@@ -3,6 +3,7 @@ export { NozleApiError } from "./errors";
 export { MarginClient } from "./margin";
 export { EventsNamespace } from "./events";
 export { CostEventsNamespace } from "./cost-events";
+export { CostIntelligenceNamespace } from "./cost-intelligence";
 export { createTransactionId, createCostEventId } from "./identifiers";
 export { CreditSystemsNamespace } from "./credit-systems";
 export { CreditsNamespace } from "./credits";
@@ -56,6 +57,8 @@ export type {
   RazorpayCheckoutResult,
   ProcessingCheckoutResult,
   HostedCheckoutResult,
+  CompletedCheckoutResult,
+  ScheduledCheckoutResult,
   SubscribeOptions,
   SubscribeResult,
   CancellationPolicy,
@@ -73,6 +76,19 @@ export type {
   SubscriptionTransitionResult,
   MarginQueryParams,
   TrendParams,
+  MarginForecast,
+  MarginSimulation,
+  MarginSimulateParams,
+  CostIntelligenceReportParams,
+  CostIntelligenceReport,
+  SharedCostAllocationParams,
+  SharedCostAllocationPreview,
+  SharedCostAllocationRun,
+  CreditBalanceImportParams,
+  CreditBalanceImport,
+  BillingStateImportParams,
+  BillingStateImport,
+  ImportOptions,
   PingResult,
   CustomerBillingConfiguration,
   CustomerUpsertParams,
