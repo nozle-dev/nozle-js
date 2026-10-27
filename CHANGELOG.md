@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## Node.js 0.18.0 — 2026-10-27
+
+### Added
+
+- `plans({ includeHidden })` sends `include_hidden`. With a secret key, `includeHidden: false` returns the pricing table view (without plan families and features hidden from the pricing table), as a publishable key gets. Without the option the request is unchanged.
+
+## React 0.17.0 — 2026-10-27
+
+### Added
+
+- `BillingProvider initialSavedAppearance`: the `meta.sdk_appearance` of a `GET /api/v1/plans` response read on your server. It is used until the catalog request answers, so the first paint and server rendering show the saved theme instead of the default one.
+
+### Changed
+
+- `PricingTable` without `defaultInterval` opens on the interval of `currentPlanCode` when that plan is in the catalog (a yearly subscriber sees Annual and the Current Plan badge on their card), else monthly as before.
+
 ## Node.js 0.17.0 — 2026-10-26
 
 ### Added

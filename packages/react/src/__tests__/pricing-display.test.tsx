@@ -461,6 +461,17 @@ describe("PricingTable with plan families", () => {
     expect(within(card("team")).getByText("Billed monthly")).toBeTruthy();
   });
 
+  it("opens on the current plan's interval and marks its card current", () => {
+    const data = catalog();
+    const { rerender } = render(<PricingTable plans={data.plans} families={data.families} currentPlanCode="pro_yearly" onSelect={() => undefined} />);
+    expect(intervalButton(/Annual/).getAttribute("aria-pressed")).toBe("true");
+    expect(card("pro").getAttribute("data-plan-code")).toBe("pro_yearly");
+    expect(within(card("pro")).getByRole("button", { name: "Current Plan" }).hasAttribute("disabled")).toBe(true);
+    // defaultInterval still wins.
+    rerender(<PricingTable plans={data.plans} families={data.families} currentPlanCode="pro_yearly" defaultInterval="monthly" onSelect={() => undefined} />);
+    expect(intervalButton("Monthly").getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("highlights the stored family once with the default badge", () => {
     const data = catalog();
     render(<PricingTable plans={data.plans} families={data.families} />);
