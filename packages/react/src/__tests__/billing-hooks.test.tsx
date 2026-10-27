@@ -46,6 +46,9 @@ function stubFetch() {
     if (route === "entitlement" && url.searchParams.get("feature") === "missing") {
       return Response.json({ code: "feature_not_found" }, { status: 404 });
     }
+    if (route === "entitlement" && url.searchParams.get("feature") === "suspended") {
+      return Response.json({ code: "workspace_suspended" }, { status: 402 });
+    }
     return Response.json(responses[route]);
   });
   vi.stubGlobal("fetch", fetch);
@@ -137,6 +140,15 @@ describe("billing hooks", () => {
     expect(result.current.error).toBeInstanceOf(BillingRequestError);
     expect((result.current.error as BillingRequestError).code).toBe("feature_not_found");
     expect(fetch.mock.calls.filter(([u]) => String(u).includes("missing"))).toHaveLength(1);
+  });
+
+  it("exposes workspace_suspended (402) as the error code and does not retry", async () => {
+    const fetch = stubFetch();
+    const { result } = renderHook(() => useEntitlement("suspended"), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect((result.current.error as BillingRequestError).status).toBe(402);
+    expect((result.current.error as BillingRequestError).code).toBe("workspace_suspended");
+    expect(fetch.mock.calls.filter(([u]) => String(u).includes("suspended"))).toHaveLength(1);
   });
 
   it("uses the app's query client when given and refreshes every billing query", async () => {

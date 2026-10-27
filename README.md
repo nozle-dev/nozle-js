@@ -81,6 +81,11 @@ See the [React package guide](packages/react/README.md) for the complete callbac
 
 Node `0.13.0` adds `captureFetch` and `recordUsage` for any LLM client, `createBillingHandler` for the React billing hooks, webhook verification, invoices, alerts and opt-in retries, and throws `NozleApiError` on every failed call. React `0.11.0` adds billing hooks on TanStack Query, the `appearance` API with predefined themes, `CurrentPlan`, credit and usage components, and pricing components that read the catalog; it has breaking changes to styling and to `PlanCard` and `PlanComparison` props. See each package guide for the full API and the changelog for release history.
 
+## Workspace suspended (402)
+
+When your Nozle workspace is suspended because its Nozle invoices are unpaid, every API call answers HTTP 402 with `code` `workspace_suspended`. `NozleApiError` (Node) and `BillingRequestError` (React) carry `status` 402 and `code` `workspace_suspended`; see the Node and React package guides.
+ Do not retry blindly: the SDK never retries a 402. Pay the Nozle invoices in the dashboard and calls work again at once. Events sent during the suspension are refused, not queued.
+
 ## License
 
 Both packages are licensed under MIT: see [packages/node/LICENSE](packages/node/LICENSE) and [packages/react/LICENSE](packages/react/LICENSE).

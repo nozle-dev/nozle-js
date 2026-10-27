@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## Node.js 0.18.0 and React 0.17.0 — 2026-10-27
+
+### Added
+
+- A suspended workspace (unpaid Nozle invoices) answers every call with HTTP 402 and `code` `workspace_suspended`. In Node it is a `NozleApiError` (`status` 402, `code`) from `can()`, `track()`, `usage.check()` and every other call, never retried and never turned into an allowed or denied result. The billing handler passes the code to the browser, and the React hooks expose it as `BillingRequestError.code` without retrying. Tests and a README note added; no API change.
+
 ## Node.js 0.17.0 — 2026-10-26
 
 ### Added
