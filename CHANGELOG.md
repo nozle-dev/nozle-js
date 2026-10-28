@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## React 0.19.0 — 2026-10-28
+
+### Added
+
+- `NozleCardSetup` component and `mountCardSetup()` helper show the Nozle card page in a frame (`embed=1`) and report `succeeded`, `processing`, `failed`, `ready` and errors. Messages are accepted only from the card page origin and the frame's own window; a missing `ready` within 15 seconds calls `onError({ reason: "timeout" })` and the component falls back to a redirect. `CheckoutButton` still redirects by default. No Stripe dependency.
+
 ## Node.js 0.20.0 and React 0.18.0 — 2026-10-27
 
 ### Added

@@ -271,6 +271,42 @@ complete typed adapters, standalone controls, and the runnable Node/Python integ
 The hosted Nozle backend supports these flows; self-hosted deployments need the matching
 subscription-management endpoints and cancellation-date guard.
 
+## In-app card setup (frame)
+
+`NozleCardSetup` shows the Nozle card form inside your page instead of redirecting. Pass the `url` Nozle returned (a `hosted` checkout result, `customer.checkout_url_generated`, or a manage payment method result). The page runs Stripe.js in a frame; the SDK never sees card data and has no Stripe dependency. `CheckoutButton` and the other hosted-result handling still redirect by default.
+
+```tsx
+import { NozleCardSetup } from "@nozle-js/react";
+
+<NozleCardSetup
+  result={checkoutResult}            // or url={...}
+  onSuccess={() => refreshBilling()}
+  onProcessing={() => showPending()}
+  onFailure={() => showRetry()}
+  onError={({ reason }) => report(reason)} // "timeout" | "load" | "invalid_url"
+  fallback="redirect"                // default; "none" leaves the handling to onError
+/>
+```
+
+Plain JavaScript (the same helper the component uses):
+
+```ts
+import { mountCardSetup } from "@nozle-js/react";
+
+const { unmount } = mountCardSetup({
+  url,
+  container: document.getElementById("card")!,
+  onReady: () => {},
+  onResult: ({ status }) => {}, // "succeeded" | "processing" | "failed"
+  onError: ({ reason }) => window.location.assign(url), // "timeout" | "load"
+  timeoutSeconds: 15,
+});
+```
+
+Security: the URL must be https (http only on localhost) and gets `embed=1`. Only messages whose `origin` equals the card page origin and whose `source` is the frame's own window, with `source: "nozle"` and `type: "card_setup"`, are read; everything else, and unknown statuses, are ignored. Nozle allows framing only from the origin of the return URL you passed when you created the link, so create the link with a `returnUrl` on your app's origin. The frame has `allow="payment"` and no `sandbox` (Stripe's 3DS needs scripts and same-origin). Treat `succeeded` as a UI hint only: confirm through webhooks or by reloading billing state.
+
+If the frame fails to load or sends no `ready` within the timeout, the component redirects to the page (without `embed`) by default. In plain JS, call `window.location.assign(url)` yourself.
+
 ## Workspace suspended or card required (402)
 
 When your Nozle workspace is suspended because its Nozle invoices are unpaid, every API call answers HTTP 402 with `code` `workspace_suspended`. A workspace without a verified card answers 402 with `code` `card_required` the same way. The billing hooks expose a `BillingRequestError` with `status` 402 and `code` `workspace_suspended` in `error`, and do not retry it. Show your own message; the portal and hooks do not crash the app.
