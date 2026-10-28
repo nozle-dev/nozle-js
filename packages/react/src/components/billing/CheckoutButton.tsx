@@ -17,9 +17,17 @@ import {
 } from "./razorpay-checkout.js";
 import { navigateToCheckout } from "./checkout-navigation.js";
 
-export interface CheckoutButtonProps
+/** Sell a plan code, or a plan family's variant for an interval (and `currency`). */
+export type CheckoutButtonProps = CheckoutButtonBaseProps &
+  (
+    | { planCode: string; planFamilyCode?: undefined; interval?: undefined }
+    | { planCode?: undefined; planFamilyCode: string; interval: string }
+  );
+
+export interface CheckoutButtonBaseProps
   extends Omit<RazorpayActions, "verifyCheckout" | "getCheckoutStatus"> {
-  planCode: string;
+  /** ISO code of the currency the customer chose; passed to `createCheckout` as `currency`. */
+  currency?: string;
   /** Where the customer comes back to. Defaults to the current page without its query string or hash. */
   returnUrl?: string;
   /** Where Stripe sends a customer who leaves the hosted page. Defaults to the return URL. */
@@ -43,7 +51,7 @@ export interface CheckoutButtonProps
 export async function handleCheckoutResult(
   result: CheckoutResult,
   options: Pick<
-    CheckoutButtonProps,
+    CheckoutButtonBaseProps,
     | "razorpayKeyId"
     | "onSuccess"
     | "onComplete"
@@ -86,6 +94,9 @@ function currentPageUrl(): string {
 
 export function CheckoutButton({
   planCode,
+  planFamilyCode,
+  interval,
+  currency,
   returnUrl,
   cancelUrl,
   label = "Get Started",
@@ -123,12 +134,18 @@ export function CheckoutButton({
           "BillingProvider createCheckout callback is required for checkout",
         );
       }
-      if (attempt.current?.plan !== planCode)
-        attempt.current = { plan: planCode, key: crypto.randomUUID() };
+      const selection = planFamilyCode !== undefined
+        ? { planFamilyCode, interval: interval! }
+        : { planCode: planCode! };
+      // A new key whenever what is sold changes, so a retry of the same choice stays one checkout.
+      const plan = JSON.stringify([planCode, planFamilyCode, interval, currency]);
+      if (attempt.current?.plan !== plan)
+        attempt.current = { plan, key: crypto.randomUUID() };
       const result = await createCheckout({
         idempotencyKey: attempt.current.key,
         ...(registerMandate !== undefined && { registerMandate }),
-        planCode,
+        ...selection,
+        ...(currency && { currency }),
         returnUrl: returnUrl ?? currentPageUrl(),
         ...(cancelUrl && { cancelUrl }),
       });

@@ -99,6 +99,44 @@ export interface Plan {
   version?: number;
   /** Whether new subscriptions get this version. */
   is_current?: boolean;
+  /** The plan family this plan is a variant of. Absent for a plan without a family. */
+  family?: PlanFamilyRef;
+  /** Every current variant of the family: one price per interval and currency. Absent for a plan without a family. */
+  prices?: PlanPrice[];
+}
+
+/** A plan's family as the catalog returns it: the currencies it is sold in, in order, and the default one. */
+export interface PlanFamilyRef {
+  code: string;
+  currencies: string[];
+  default_currency: string;
+}
+
+/** One variant of a plan family: the plan sold for an interval in a currency. */
+export interface PlanPrice {
+  currency: string;
+  interval: string;
+  plan_code: string;
+  amount_cents: number;
+}
+
+export interface PlansOptions {
+  /** A secret key gets every plan; `false` gets the pricing table view a publishable key gets. */
+  includeHidden?: boolean;
+  /** ISO code to list family plans in. An unknown currency is a 422. */
+  currency?: string;
+  /** Lists the catalog in this customer's locked currency when `currency` is not given. */
+  externalCustomerId?: string;
+}
+
+/**
+ * Sells a plan family's variant instead of a plan code: Core picks the family's current plan for the interval and
+ * currency. Without `currency` it uses the customer's locked currency, else the family's default.
+ */
+export interface PlanFamilySelection {
+  planFamilyCode: string;
+  interval: string;
+  currency?: string;
 }
 
 export interface RazorpayCheckoutResult {

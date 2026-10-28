@@ -45,6 +45,24 @@ export interface PricingPlan {
   entitlements?: PricingEntitlement[];
   credit_grant_rules?: CatalogCreditGrantRule[];
   charges?: CatalogCharge[];
+  /** The family this plan is a variant of, with the currencies it is sold in. Absent without a family. */
+  family?: PricingPlanFamilyRef | null;
+  /** Every current variant of the family: one price per interval and currency. */
+  prices?: PricingPrice[];
+}
+
+export interface PricingPlanFamilyRef {
+  code: string;
+  currencies: string[];
+  default_currency: string;
+}
+
+/** One variant of a plan family: the plan sold for an interval in a currency. */
+export interface PricingPrice {
+  currency: string;
+  interval: PricingInterval | (string & {});
+  plan_code: string;
+  amount_cents: number;
 }
 
 /** Display settings of one feature on a family's pricing card. */
@@ -75,6 +93,11 @@ export interface PricingFamily {
 export interface PricingCatalog {
   plans: PricingPlan[];
   families?: PricingFamily[] | null;
+  /**
+   * Show only plans in this currency. Without it each family card keeps the currency of its first
+   * plan, so a card never mixes currencies.
+   */
+  currency?: string | null;
 }
 
 export interface PricingFeature {
@@ -289,7 +312,9 @@ function hasFamilies(
  * live plan, in API order.
  */
 function getPricingGroups(catalog: PricingCatalog): PricingGroup[] {
-  const plans = catalog.plans ?? [];
+  const plans = (catalog.plans ?? []).filter(
+    (plan) => !catalog.currency || sameCurrency(plan.amount_currency, catalog.currency),
+  );
   if (!hasFamilies(catalog)) {
     return plans
       .filter(isLive)
@@ -317,12 +342,35 @@ function getPricingGroups(catalog: PricingCatalog): PricingGroup[] {
           familyPlans.push(plan);
         }
       }
-      return { key: family.code, family, plans: familyPlans };
+      // One currency per card: savings, intervals and the price compare like with like.
+      const currency = familyPlans[0]?.amount_currency;
+      return {
+        key: family.code,
+        family,
+        plans: familyPlans.filter((plan) => sameCurrency(plan.amount_currency, currency)),
+      };
     })
     .filter((group) => group.plans.length > 0);
 }
 
 // ─── Money ───────────────────────────────────────────────────────────────────
+
+function sameCurrency(a: string | null | undefined, b: string | null | undefined): boolean {
+  return typeof a === "string" && typeof b === "string" && a.toUpperCase() === b.toUpperCase();
+}
+
+/**
+ * Currencies the catalog offers, in the order its families list them: each plan's
+ * `family.currencies`, then the currencies of its `prices`, then its own currency.
+ */
+export function getAvailableCurrencies(catalog: PricingCatalog): string[] {
+  const seen = new Set<string>();
+  for (const plan of catalog.plans ?? []) {
+    const codes = [...(plan.family?.currencies ?? []), ...(plan.prices ?? []).map((price) => price.currency), plan.amount_currency];
+    for (const code of codes) if (typeof code === "string" && code.trim()) seen.add(code.toUpperCase());
+  }
+  return [...seen];
+}
 
 function toMinor(value: number | string): bigint | null {
   const raw = String(value);

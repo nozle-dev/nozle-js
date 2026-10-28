@@ -19,11 +19,13 @@ export const idleQueryClient = new QueryClient();
  * One request for the catalog: the plans, the plan families (null when the API returns no `families`
  * key), whether the components show "Powered by Nozle" and the appearance saved in the dashboard.
  */
-export function catalogQuery(client: NozleClient | undefined) {
+export function catalogQuery(client: NozleClient | undefined, currency?: string | null) {
+  // Without a currency the key stays as before, so this request is shared with usePlans and the branding check.
   return {
-    queryKey: ["nozle", "plans", client?.baseUrl, client?.publishableKey],
+    queryKey: ["nozle", "plans", client?.baseUrl, client?.publishableKey, ...(currency ? [currency] : [])],
     queryFn: async ({ signal }: { signal: AbortSignal }) => {
-      const response = await client!.catalogFetch("/api/v1/plans", { signal });
+      const path = currency ? `/api/v1/plans?currency=${encodeURIComponent(currency)}` : "/api/v1/plans";
+      const response = await client!.catalogFetch(path, { signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = (await response.json()) as {
         plans?: Plan[];

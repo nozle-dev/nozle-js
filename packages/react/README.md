@@ -86,6 +86,7 @@ The interval switch offers the intervals of the visible families (Weekly, Monthl
 - Cards follow the `appearance` theme like the other components: the highlighted family uses `colorHighlight` (default `colorPrimary`) and `highlightStyle`, and a theme's `planCardLayout: "panel"` lays family cards out as panels with the same billing line. The default highlight (`#4f46e5` in the `light` theme) keeps its white text at WCAG AA contrast; if you set your own `colorHighlight`, check that `colorHighlightForeground` on it reaches 4.5:1.
 - `annualDiscountLabel` replaces the computed "Save N%" on the Annual option.
 - `locale` (default `en-US`) formats prices and feature values. Prices are exact in the currency's minor units (`¥1,500` for 1500 JPY), and whole amounts show no decimals (`$20`).
+- `currency` (ISO code) fetches the catalog in that currency (`GET /api/v1/plans?currency=`); with `plans` it shows only plans in it. When the plans' families are sold in two or more currencies (`family.currencies`, `prices[]`), a currency switch above the interval switch refetches in the chosen one; `currencies` sets the offered list. A card never mixes currencies: savings and the upgrade direction are compared within one currency. Checkout then gets `currency` too. Needs Core 11.10.0.
 - Pass `plans` and `families` to render without fetching. With `plans` alone, or with an older API that returns no `families`, each plan is its own card as before, sorted by price (or by `sort`), with its price per its own interval (`$14.99 /quarter`, no per-month price or billing line) and what the plan gives as its features.
 
 For a custom pricing page, use the same rules with `usePlans()`:
@@ -156,6 +157,8 @@ export function Upgrade({ csrfToken }: { csrfToken: string }) {
   );
 }
 ```
+
+`CheckoutButton` also sells a plan family's variant: `<CheckoutButton planFamilyCode="pro" interval="yearly" currency="EUR" />` calls `createCheckout` with `planFamilyCode`, `interval` and `currency` and no `planCode`. Your backend passes `planCode ?? { planFamilyCode, interval, currency }` to `nozle.checkout()`.
 
 After a hosted payment the customer lands on your `returnUrl` (it may contain `{CHECKOUT_SESSION_ID}`, which Stripe fills in); show success from that page by reloading billing status (the subscription or `useEntitlement`), or from the `invoice.payment_succeeded` / subscription webhooks on your backend. A Stripe `checkout_id` is the Stripe session id, not a status id, so `getCheckoutStatus` is never called with it; only a paid upgrade has a status call, keyed by `plan_upgrade_intent_id`. A new-subscription checkout retried while the first attempt is unpaid reopens payment for the same invoice when the plan is the same (or returns `completed` if it was paid meanwhile). For another plan, the unpaid attempt is expired and replaced, or the request gets HTTP 409 `subscription_checkout_in_progress` (`entity_subscription_checkout_in_progress` for an Entity checkout) when it cannot be expired yet. On your backend, keep the body identical for one idempotency key: a different request with the same key gets HTTP 409 `idempotency_key_reused`, including an invoice checkout. Checkout error bodies carry `status`, `error` and `code`.
 

@@ -449,6 +449,17 @@ const checkout = await nozle.checkout(
 const { subscription_id, status } = await nozle.subscribe("cust_123", "pro");
 ```
 
+### Currencies
+
+A plan family can be sold in several currencies, one plan per interval and currency. `plans({ currency })` lists family plans in that currency; `plans({ externalCustomerId })` lists them in the customer's locked currency; without either each family shows its default currency. A family plan carries `family` (`code`, `currencies`, `default_currency`) and `prices` (every variant: `currency`, `interval`, `plan_code`, `amount_cents`). An unknown currency is a 422.
+
+`checkout()` and `subscribe()` take `{ planFamilyCode, interval, currency }` instead of a plan code; Core picks the variant. Without `currency` it uses the customer's locked currency, else the family's default. Needs Core 11.10.0.
+
+```ts
+const eurPlans = await nozle.plans({ currency: "EUR" });
+await nozle.checkout("cust_123", { planFamilyCode: "pro", interval: "yearly", currency: "EUR" }, returnUrl);
+```
+
 ### Plan versions
 
 Changing the price of a plan that customers pay for saves it as the plan's next version: new customers get the new version, and existing subscribers keep the price they bought until you move them. `plans()` returns current versions only; each plan has `version` and `is_current`.
