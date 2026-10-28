@@ -5,13 +5,13 @@ This monorepo contains the Nozle SDK for Node.js backends and the React package 
 | Package | Current release | Use it for |
 | --- | --- | --- |
 | [`@nozle-js/node`](packages/node/README.md) | `0.21.0` | Billing, subscriptions, credits, usage and Cost Events, entitlements, margins, invoices, alerts, webhooks, and LLM usage capture |
-| [`@nozle-js/react`](packages/react/README.md) | `0.19.0` | Public catalog, checkout UI, billing portal, billing hooks, and customer-facing controls |
+| [`@nozle-js/react`](packages/react/README.md) | `0.20.0` | Public catalog, checkout UI, billing portal, billing hooks, and customer-facing controls |
 
 ## Install
 
 ```bash
 npm install @nozle-js/node@0.21.0
-npm install @nozle-js/react@0.19.0 @tanstack/react-query react react-dom
+npm install @nozle-js/react@0.20.0 @tanstack/react-query react react-dom
 ```
 
 Install only the package your application needs. The React package runs in the browser; all customer-scoped writes and reads that need a secret key belong on your backend.

@@ -132,6 +132,16 @@ export type { ManagePaymentMethodButtonProps } from "./components/billing/Manage
 export { CheckoutButton } from "./components/billing/CheckoutButton.js";
 export type { CheckoutButtonProps } from "./components/billing/CheckoutButton.js";
 
+export { NozleCardSetup } from "./components/billing/NozleCardSetup.js";
+export type { NozleCardSetupProps } from "./components/billing/NozleCardSetup.js";
+export { mountCardSetup, cardSetupFrameUrl } from "./core/card-setup.js";
+export type {
+  CardSetupMode,
+  CardSetupStatus,
+  CardSetupErrorReason,
+  MountCardSetupOptions,
+} from "./core/card-setup.js";
+
 export { Checkout, useCheckout } from "./components/billing/Checkout.js";
 export type {
   CheckoutProps,
