@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Nozle } from "../client";
-import { NozleApiError } from "../errors";
+import { NozleApiError, isNoActiveSubscription } from "../errors";
 
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
@@ -65,5 +65,31 @@ describe("every failed request throws NozleApiError", () => {
     fetchMock.mockResolvedValueOnce(failure(429, {}, { "retry-after": "soon" }));
     const bad = (await secret().plans().catch((cause: unknown) => cause)) as NozleApiError;
     expect(bad.retryAfter).toBeUndefined();
+  });
+});
+
+describe("server text, Retry-After and the no-subscription code", () => {
+  it("puts the server error text in the message and keeps the code", async () => {
+    fetchMock.mockResolvedValueOnce(failure(422, { code: "invalid_date_range", error: "from must be before to" }));
+    const error = await new Nozle({ apiKey: "sk_test" }).plans().catch((cause: unknown) => cause as NozleApiError);
+    expect(error.message).toBe("plans failed: 422 Unprocessable Entity: from must be before to");
+    expect(error.code).toBe("invalid_date_range");
+  });
+
+  it("keeps the plain message when the body has no text, and reads `message` as a fallback", async () => {
+    fetchMock.mockResolvedValueOnce(failure(500, {}));
+    const plain = await new Nozle({ apiKey: "sk_test" }).plans().catch((cause: unknown) => cause as Error);
+    expect(plain.message).toBe("plans failed: 500 Unprocessable Entity");
+    fetchMock.mockResolvedValueOnce(failure(400, { message: "bad input" }));
+    const fallback = await new Nozle({ apiKey: "sk_test" }).plans().catch((cause: unknown) => cause as Error);
+    expect(fallback.message).toBe("plans failed: 400 Unprocessable Entity: bad input");
+  });
+
+  it("treats Core's subscription_not_found and the SDK's code as one case", () => {
+    const response = { status: 404, statusText: "Not Found" };
+    expect(isNoActiveSubscription(new NozleApiError("x", response, { code: "subscription_not_found" }))).toBe(true);
+    expect(isNoActiveSubscription(new NozleApiError("x", response, { code: "active_subscription_not_found" }))).toBe(true);
+    expect(isNoActiveSubscription(new NozleApiError("x", response, { code: "other" }))).toBe(false);
+    expect(isNoActiveSubscription(new Error("x"))).toBe(false);
   });
 });

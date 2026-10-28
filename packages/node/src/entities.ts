@@ -1,5 +1,6 @@
 import { request, type RequestPolicy } from "./http";
 import { apiError } from "./errors";
+import { paginate } from "./paginate";
 import type {
   CustomerEntity,
   CustomerEntityBulkMutationResult,
@@ -28,6 +29,11 @@ export class EntitiesNamespace {
     }
     const payload = (await response.json()) as { entity: CustomerEntity };
     return payload.entity;
+  }
+
+  /** Every Entity of the customer, page after page. `query.cursor` sets where to start. */
+  iterate(customerId: string, query: CustomerEntityListQuery = {}) {
+    return paginate((cursor) => this.list(customerId, { ...query, cursor }), (page) => page.entities, query.cursor);
   }
 
   async list(

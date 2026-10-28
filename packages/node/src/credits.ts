@@ -1,5 +1,6 @@
 import { request, type RequestPolicy } from "./http";
 import { apiError } from "./errors";
+import { paginate } from "./paginate";
 import type {
   CreditBalance,
   CreditBalances,
@@ -111,6 +112,16 @@ export class CreditsNamespace {
       throw await apiError(`credits.listEntityBalances`, response);
     }
     return response.json() as Promise<EntityCreditBalances>;
+  }
+
+  /** Every credit operation of the customer, page after page. `query.cursor` sets where to start. */
+  iterateOperations(customerId: string, query: CreditOperationQuery = {}) {
+    return paginate((cursor) => this.listOperations(customerId, { ...query, cursor }), (page) => page.operations, query.cursor);
+  }
+
+  /** Every credit operation of the Entity, page after page. */
+  iterateEntityOperations(customerId: string, entityId: string, query: CreditOperationQuery = {}) {
+    return paginate((cursor) => this.listEntityOperations(customerId, entityId, { ...query, cursor }), (page) => page.operations, query.cursor);
   }
 
   async listEntityOperations(

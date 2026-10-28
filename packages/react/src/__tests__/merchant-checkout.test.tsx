@@ -46,19 +46,23 @@ describe("merchant checkout components", () => {
     expect(createCheckout.mock.calls[0][0]).not.toHaveProperty("customerId");
   });
 
-  it("shows a clear error when CheckoutButton has no merchant callback", async () => {
+  it("shows a friendly error and reports the missing callback to onError", async () => {
+    const onError = vi.fn();
     render(
       <BillingProvider publishableKey="pk_browser">
-        <CheckoutButton planCode="pro" />
+        <CheckoutButton planCode="pro" onError={onError} />
       </BillingProvider>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Get Started" }));
     expect(
       await screen.findByText(
-        "BillingProvider createCheckout callback is required for checkout",
+        "We couldn't start checkout. Please try again.",
       ),
     ).toBeTruthy();
+    expect(onError.mock.calls[0][0].message).toBe(
+      "BillingProvider createCheckout callback is required for checkout",
+    );
   });
 
   it("forwards returnUrl through UpgradeButton and UpgradeModal", async () => {

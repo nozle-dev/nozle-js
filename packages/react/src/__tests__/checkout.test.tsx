@@ -17,7 +17,7 @@ const hosted = {
 
 function stubLocation() {
   const assign = vi.fn();
-  vi.stubGlobal("location", { assign, href: "https://merchant.example/billing" });
+  vi.stubGlobal("location", { assign, href: "https://merchant.example/billing?token=abc#x", origin: "https://merchant.example", pathname: "/billing" });
   return assign;
 }
 
@@ -109,5 +109,35 @@ describe("no embedded Stripe left", () => {
     const peers = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).peerDependencies;
     expect(Object.keys(peers).filter((name) => name.startsWith("@stripe/"))).toEqual([]);
     expect(readFileSync(join(root, "README.md"), "utf8")).not.toMatch(/client_?secret|@stripe\//i);
+  });
+});
+
+describe("CheckoutButton defaults and errors", () => {
+  it("returns to the current page without its query string or hash", async () => {
+    stubLocation();
+    const createCheckout = vi.fn().mockResolvedValue(hosted);
+    const view = render(
+      <BillingProvider publishableKey="pk_test" createCheckout={createCheckout}>
+        <CheckoutButton planCode="pro" />
+      </BillingProvider>,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Get Started" }));
+    await waitFor(() => expect(createCheckout).toHaveBeenCalled());
+    expect(createCheckout.mock.calls[0][0].returnUrl).toBe("https://merchant.example/billing");
+  });
+
+  it("shows a friendly message and hands the raw error to onError", async () => {
+    stubLocation();
+    const raw = new Error("checkout failed: 422 Unprocessable Entity: plan_not_found");
+    const onError = vi.fn();
+    const view = render(
+      <BillingProvider publishableKey="pk_test" createCheckout={vi.fn().mockRejectedValue(raw)}>
+        <CheckoutButton planCode="pro" onError={onError} />
+      </BillingProvider>,
+    );
+    fireEvent.click(view.getByRole("button", { name: "Get Started" }));
+    const alert = await view.findByRole("alert");
+    expect(alert.textContent).toBe("We couldn't start checkout. Please try again.");
+    expect(onError).toHaveBeenCalledWith(raw);
   });
 });

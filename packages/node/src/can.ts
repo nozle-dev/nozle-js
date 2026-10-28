@@ -7,7 +7,7 @@ export async function can(
   apiKey: string,
   customerId: string,
   feature: string,
-  metadata: Record<string, unknown> | undefined,
+  metadata: Record<string, string | number | boolean> | undefined,
   policy: RequestPolicy,
   options: CanOptions = {},
 ): Promise<CanResult> {
