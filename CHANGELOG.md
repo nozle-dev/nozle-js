@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## Node.js 0.21.0 and React 0.20.0 — 2026-10-28
+## Node.js 0.21.0 and React 0.19.0 — 2026-10-28
 
 ### Added
 
