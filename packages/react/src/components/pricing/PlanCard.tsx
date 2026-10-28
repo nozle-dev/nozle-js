@@ -29,6 +29,8 @@ export interface PlanCardProps {
   isUpgrade?: boolean;
   returnUrl?: string;
   onSelect?: (input: CreateCheckoutInput) => void;
+  /** Formats the price and feature lines. Default `en-US`. */
+  locale?: string;
   appearance?: Appearance;
 }
 
@@ -43,13 +45,14 @@ export function PlanCard({
   isUpgrade,
   returnUrl,
   onSelect,
+  locale = "en-US",
   appearance,
 }: PlanCardProps): React.ReactElement {
   const { root, el, planCardLayout } = useAppearance(appearance, 'PlanCard');
   const { code: id, name, description } = plan;
-  const price = formatPlanPrice(plan.amount_cents, plan.amount_currency);
+  const price = formatPlanPrice(plan.amount_cents, plan.amount_currency, locale);
   const interval = intervalLabel(plan.interval);
-  const features = featureOverride ?? planFeatures(plan);
+  const features = featureOverride ?? planFeatures(plan, locale);
 
   const state = planButtonState({ isCurrent, isUpgrade });
   const cta = onSelect && (

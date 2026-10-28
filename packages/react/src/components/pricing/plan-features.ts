@@ -1,3 +1,5 @@
+import { formatMinorAmount } from "../billing/amounts.js";
+
 export interface CatalogPrivilege {
   code: string;
   name: string;
@@ -53,18 +55,19 @@ export interface PlanFeatureSource {
   charges?: CatalogCharge[];
 }
 
-function number(value: number | string): string {
+function number(value: number | string, locale: string): string {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed.toLocaleString("en-US", { maximumFractionDigits: 6 }) : String(value);
+  return Number.isFinite(parsed) ? parsed.toLocaleString(locale, { maximumFractionDigits: 6 }) : String(value);
 }
 
-function money(amount: string, currency: string): string {
+/** A usage price. Catalog charge amounts are decimal strings in major units, so no minor-unit factor applies. */
+function money(amount: string, currency: string, locale: string): string {
   const parsed = Number(amount);
   if (!Number.isFinite(parsed)) return `${amount} ${currency}`;
   try {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 6 }).format(parsed);
+    return new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 6 }).format(parsed);
   } catch {
-    return `${currency} ${number(amount)}`;
+    return `${currency} ${number(amount, locale)}`;
   }
 }
 
@@ -72,7 +75,7 @@ function words(code: string): string {
   return code.replace(/_/g, " ");
 }
 
-function entitlementRows(entitlement: CatalogEntitlement): string[] {
+function entitlementRows(entitlement: CatalogEntitlement, locale: string): string[] {
   if (entitlement.feature_type === "config") {
     return (entitlement.privileges ?? []).flatMap((privilege) => {
       if (privilege.value === null || privilege.value === false) return [];
@@ -81,13 +84,13 @@ function entitlementRows(entitlement: CatalogEntitlement): string[] {
     });
   }
   if (entitlement.feature_type === "metered" && entitlement.usage_limit != null) {
-    return [`${number(entitlement.usage_limit)} ${entitlement.name}`];
+    return [`${number(entitlement.usage_limit, locale)} ${entitlement.name}`];
   }
   return [entitlement.name];
 }
 
-function creditGrantRow(rule: CatalogCreditGrantRule): string {
-  const credits = `${number(rule.amount)} ${words(rule.credit_system_code)}`;
+function creditGrantRow(rule: CatalogCreditGrantRule, locale: string): string {
+  const credits = `${number(rule.amount, locale)} ${words(rule.credit_system_code)}`;
   if (rule.interval === "lifetime") return `${credits} (one time)`;
   const count = rule.interval_count ?? 1;
   return count === 1 ? `${credits} every ${rule.interval}` : `${credits} every ${count} ${rule.interval}s`;
@@ -97,42 +100,42 @@ function isZero(amount?: string): boolean {
   return amount === undefined || Number(amount) === 0;
 }
 
-function rangeLabel(range: CatalogChargeRange, unit: string): string {
-  const from = number(range.from_value);
-  return range.to_value === null ? `${from}+ ${unit}` : `${from} to ${number(range.to_value)} ${unit}`;
+function rangeLabel(range: CatalogChargeRange, unit: string, locale: string): string {
+  const from = number(range.from_value, locale);
+  return range.to_value === null ? `${from}+ ${unit}` : `${from} to ${number(range.to_value, locale)} ${unit}`;
 }
 
-function rangeRows(ranges: CatalogChargeRange[], unit: string, currency: string): string[] {
+function rangeRows(ranges: CatalogChargeRange[], unit: string, currency: string, locale: string): string[] {
   return ranges.map((range) => {
     const parts: string[] = [];
-    if (!isZero(range.flat_amount)) parts.push(`${money(range.flat_amount as string, currency)} flat`);
-    if (!isZero(range.per_unit_amount)) parts.push(`${money(range.per_unit_amount as string, currency)} each`);
-    if (!isZero(range.rate)) parts.push(`${number(range.rate as string)}%`);
-    return `${rangeLabel(range, unit)}: ${parts.length ? parts.join(" + ") : "free"}`;
+    if (!isZero(range.flat_amount)) parts.push(`${money(range.flat_amount as string, currency, locale)} flat`);
+    if (!isZero(range.per_unit_amount)) parts.push(`${money(range.per_unit_amount as string, currency, locale)} each`);
+    if (!isZero(range.rate)) parts.push(`${number(range.rate as string, locale)}%`);
+    return `${rangeLabel(range, unit, locale)}: ${parts.length ? parts.join(" + ") : "free"}`;
   });
 }
 
-function chargeRows(charge: CatalogCharge, currency: string): string[] {
+function chargeRows(charge: CatalogCharge, currency: string, locale: string): string[] {
   const properties = charge.properties ?? {};
   const unit = charge.feature_code ? words(charge.feature_code) : "unit";
   switch (charge.charge_model) {
     case "standard":
-      return properties.amount === undefined ? [] : [`${money(properties.amount, currency)} per ${unit}`];
+      return properties.amount === undefined ? [] : [`${money(properties.amount, currency, locale)} per ${unit}`];
     case "package": {
       if (properties.amount === undefined || !properties.package_size) return [];
-      const free = properties.free_units ? `, first ${number(properties.free_units)} free` : "";
-      return [`${money(properties.amount, currency)} per ${number(properties.package_size)} ${unit}${free}`];
+      const free = properties.free_units ? `, first ${number(properties.free_units, locale)} free` : "";
+      return [`${money(properties.amount, currency, locale)} per ${number(properties.package_size, locale)} ${unit}${free}`];
     }
     case "graduated":
-      return rangeRows(properties.graduated_ranges ?? [], unit, currency);
+      return rangeRows(properties.graduated_ranges ?? [], unit, currency, locale);
     case "volume":
-      return rangeRows(properties.volume_ranges ?? [], unit, currency);
+      return rangeRows(properties.volume_ranges ?? [], unit, currency, locale);
     case "graduated_percentage":
-      return rangeRows(properties.graduated_percentage_ranges ?? [], unit, currency);
+      return rangeRows(properties.graduated_percentage_ranges ?? [], unit, currency, locale);
     case "percentage": {
       if (properties.rate === undefined) return [];
-      const fixed = isZero(properties.fixed_amount) ? "" : ` + ${money(properties.fixed_amount as string, currency)} per ${unit}`;
-      return [`${number(properties.rate)}% of each ${unit}${fixed}`];
+      const fixed = isZero(properties.fixed_amount) ? "" : ` + ${money(properties.fixed_amount as string, currency, locale)} per ${unit}`;
+      return [`${number(properties.rate, locale)}% of each ${unit}${fixed}`];
     }
     default:
       return [];
@@ -142,12 +145,12 @@ function chargeRows(charge: CatalogCharge, currency: string): string[] {
 /**
  * One line per thing a plan gives, built only from the catalog: entitlements, credit grants and usage
  * prices, in the order the catalog returns them. Charges whose price cannot be written as a line
- * (`custom`, `dynamic`) are skipped.
+ * (`custom`, `dynamic`) are skipped. Numbers and prices are formatted for `locale`.
  */
-export function planFeatures(plan: PlanFeatureSource): string[] {
-  const rows = (plan.entitlements ?? []).flatMap(entitlementRows);
-  rows.push(...(plan.credit_grant_rules ?? []).map(creditGrantRow));
-  for (const charge of plan.charges ?? []) rows.push(...chargeRows(charge, plan.amount_currency));
+export function planFeatures(plan: PlanFeatureSource, locale = "en-US"): string[] {
+  const rows = (plan.entitlements ?? []).flatMap((entitlement) => entitlementRows(entitlement, locale));
+  rows.push(...(plan.credit_grant_rules ?? []).map((rule) => creditGrantRow(rule, locale)));
+  for (const charge of plan.charges ?? []) rows.push(...chargeRows(charge, plan.amount_currency, locale));
   return rows;
 }
 
@@ -164,19 +167,12 @@ export function intervalLabel(interval: string): string {
   return INTERVAL_LABELS[interval] ?? interval;
 }
 
-/** A plan's base price in its own currency, for example `$14.99` or `₹999`. */
-export function formatPlanPrice(amountCents: number, currency: string): string {
-  const amount = amountCents / 100;
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${currency} ${amount}`;
-  }
+/**
+ * A plan's base price from its minor units, for example `$14.99`, `₹999` or `¥1,500` (1500 JPY).
+ * Whole amounts show no decimals.
+ */
+export function formatPlanPrice(amountCents: number, currency: string, locale = "en-US"): string {
+  return formatMinorAmount(amountCents, currency, locale, { trimZeroFraction: true });
 }
 
 export interface ComparisonPlan extends PlanFeatureSource {
@@ -189,7 +185,7 @@ export interface ComparisonRow {
   values: Record<string, string | boolean>;
 }
 
-function entitlementValue(entitlement: CatalogEntitlement): string | boolean {
+function entitlementValue(entitlement: CatalogEntitlement, locale: string): string | boolean {
   if (entitlement.feature_type === "config") {
     const values = (entitlement.privileges ?? [])
       .filter((privilege) => privilege.value !== null && privilege.value !== false)
@@ -197,7 +193,7 @@ function entitlementValue(entitlement: CatalogEntitlement): string | boolean {
     return values.length ? values.join(", ") : false;
   }
   if (entitlement.feature_type === "metered" && entitlement.usage_limit != null) {
-    return number(entitlement.usage_limit);
+    return number(entitlement.usage_limit, locale);
   }
   return true;
 }
@@ -205,8 +201,9 @@ function entitlementValue(entitlement: CatalogEntitlement): string | boolean {
 /**
  * One row per entitlement and per granted credit system across the plans, in the order they first
  * appear. A plan that does not have the entitlement gets `false`, so the table shows the real gap.
+ * Numbers are formatted for `locale`.
  */
-export function comparisonRows(plans: ComparisonPlan[]): ComparisonRow[] {
+export function comparisonRows(plans: ComparisonPlan[], locale = "en-US"): ComparisonRow[] {
   const rows = new Map<string, ComparisonRow>();
   const row = (key: string, label: string): ComparisonRow => {
     let existing = rows.get(key);
@@ -218,10 +215,10 @@ export function comparisonRows(plans: ComparisonPlan[]): ComparisonRow[] {
   };
   for (const plan of plans) {
     for (const entitlement of plan.entitlements ?? []) {
-      row(`entitlement:${entitlement.code}`, entitlement.name).values[plan.code] = entitlementValue(entitlement);
+      row(`entitlement:${entitlement.code}`, entitlement.name).values[plan.code] = entitlementValue(entitlement, locale);
     }
     for (const rule of plan.credit_grant_rules ?? []) {
-      row(`credit:${rule.credit_system_code}`, words(rule.credit_system_code)).values[plan.code] = creditGrantRow(rule);
+      row(`credit:${rule.credit_system_code}`, words(rule.credit_system_code)).values[plan.code] = creditGrantRow(rule, locale);
     }
   }
   const all = [...rows.values()];

@@ -28,6 +28,8 @@ export interface PlanComparisonProps {
   features?: ComparisonFeature[];
   /** Optional. Orders the plans. By default they are sorted by base price, cheapest first. */
   sort?: (a: PricingPlan, b: PricingPlan) => number;
+  /** Formats prices and feature values. Default `en-US`. */
+  locale?: string;
   appearance?: Appearance;
 }
 
@@ -39,11 +41,12 @@ export function PlanComparison({
   plans: catalogPlans,
   features: featureOverride,
   sort,
+  locale = "en-US",
   appearance,
 }: PlanComparisonProps): React.ReactElement {
   const { root, el } = useAppearance(appearance, 'PlanComparison');
   const plans = sort ? [...catalogPlans].sort(sort) : sortPlansByPrice(catalogPlans);
-  const features = featureOverride ?? comparisonRows(plans);
+  const features = featureOverride ?? comparisonRows(plans, locale);
   const cell = (style: React.CSSProperties) => el("planComparison__cell", style);
   return (
     <div {...root("planComparison", { minWidth: 0 })}>
@@ -56,7 +59,7 @@ export function PlanComparison({
               <th key={plan.code} {...cell({ ...table.head(), textAlign: "center", padding: "10px 20px" })}>
                 {plan.name}
                 <div style={{ ...text.meta, letterSpacing: "normal", textTransform: "none" }}>
-                  {formatPlanPrice(plan.amount_cents, plan.amount_currency)} / {intervalLabel(plan.interval)}
+                  {formatPlanPrice(plan.amount_cents, plan.amount_currency, locale)} / {intervalLabel(plan.interval)}
                 </div>
               </th>
             ))}

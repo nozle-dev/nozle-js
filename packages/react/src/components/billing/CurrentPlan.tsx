@@ -249,7 +249,7 @@ function CurrentPlanView({
               </span>
             )}
             <span {...el("currentPlan__price", { ...text.secondary, marginLeft: "auto" })}>
-              {formatPlanPrice(Number(current.plan.amount_cents), current.plan.currency)} / {intervalLabel(current.plan.interval)}
+              {formatPlanPrice(Number(current.plan.amount_cents), current.plan.currency, locale)} / {intervalLabel(current.plan.interval)}
             </span>
           </div>
 
