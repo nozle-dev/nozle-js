@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, type ReactNode } from "react";
 import { useAppearance } from "../../appearance/context.js";
 import { NozleBranding } from "../branding/PoweredByNozle.js";
 import { T, buttonStyle, text, type Appearance } from "../../appearance/tokens.js";
@@ -58,6 +58,8 @@ export interface ProviderCheckoutProps {
   getCheckoutStatus?: GetCheckoutStatus;
   onDismiss?: () => void;
   appearance?: Appearance;
+  /** Your own pay UI. Replaces the default button; call `useCheckout()` inside it. */
+  children?: ReactNode;
 }
 
 export type CheckoutProps = ProviderCheckoutProps;
@@ -107,21 +109,23 @@ function ProviderCheckout(props: ProviderCheckoutProps) {
       value={{ confirmPayment: pay, isProcessing: busy, error }}
     >
       <div {...root("checkout", text.body, props.className)}>
-        <button
-          type="button"
-          disabled={busy}
-          aria-busy={busy}
-          onClick={() => void pay()}
-          {...el("checkout__submit", buttonStyle("primary", busy))}
-        >
-          {busy ? "Processing…" : props.submitLabel || "Pay now"}
-        </button>
+        {props.children ?? (
+          <button
+            type="button"
+            disabled={busy}
+            aria-busy={busy}
+            onClick={() => void pay()}
+            {...el("checkout__submit", buttonStyle("primary", busy))}
+          >
+            {busy ? "Processing…" : props.submitLabel || "Pay now"}
+          </button>
+        )}
         {processing && (
           <p role="status">
             Payment is processing. Confirmation may take a little while.
           </p>
         )}
-        {error && (
+        {error && props.children === undefined && (
           <p role="alert" {...el("checkout__error", { color: T.dangerText })}>
             {error.message}
           </p>

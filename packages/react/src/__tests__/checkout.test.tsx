@@ -28,6 +28,20 @@ afterEach(() => {
 
 const noStripeScript = () => expect(document.querySelector('script[src*="stripe"]')).toBeNull();
 
+describe("Checkout children", () => {
+  it("renders children instead of the default button and lets useCheckout start the payment", async () => {
+    const assign = stubLocation();
+    function MyPay() {
+      const { confirmPayment, isProcessing } = useCheckout();
+      return <button onClick={() => void confirmPayment()} disabled={isProcessing}>Custom pay</button>;
+    }
+    const view = render(<Checkout checkout={hosted}><MyPay /></Checkout>);
+    expect(view.queryByRole("button", { name: "Pay now" })).toBeNull();
+    fireEvent.click(view.getByRole("button", { name: "Custom pay" }));
+    await waitFor(() => expect(assign).toHaveBeenCalledExactlyOnceWith(hosted.url));
+  });
+});
+
 describe("hosted Stripe checkout", () => {
   it("Checkout redirects to the hosted url and loads no Stripe script", async () => {
     const assign = stubLocation();
