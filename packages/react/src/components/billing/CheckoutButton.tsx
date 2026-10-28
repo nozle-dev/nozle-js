@@ -21,6 +21,8 @@ export interface CheckoutButtonProps
   extends Omit<RazorpayActions, "verifyCheckout" | "getCheckoutStatus"> {
   planCode: string;
   returnUrl?: string;
+  /** Where Stripe sends a customer who leaves the hosted page. Defaults to the return URL. */
+  cancelUrl?: string;
   label?: string;
   className?: string;
   appearance?: Appearance;
@@ -29,7 +31,6 @@ export interface CheckoutButtonProps
   /** @deprecated The server supplies the public Razorpay key in the checkout response. */
   razorpayKeyId?: string;
   registerMandate?: boolean;
-  onStripeClientSecret?: (clientSecret: string) => void;
   onSuccess?: (paymentId: string) => void;
   onComplete?: (result: CompletedCheckoutResult) => void;
   onScheduled?: (result: ScheduledCheckoutResult) => void;
@@ -40,7 +41,6 @@ export async function handleCheckoutResult(
   options: Pick<
     CheckoutButtonProps,
     | "razorpayKeyId"
-    | "onStripeClientSecret"
     | "onSuccess"
     | "onComplete"
     | "onScheduled"
@@ -65,24 +65,12 @@ export async function handleCheckoutResult(
     return;
   }
   if ("type" in result && result.type === "hosted") {
-    navigateToCheckout(result.payment_url);
+    navigateToCheckout(result.url);
     return;
   }
   if ("url" in result && result.url) {
     navigateToCheckout(result.url);
     return;
-  }
-  if ("type" in result && result.type === "stripe") {
-    const clientSecret = result.clientSecret ?? result.client_secret;
-    if (clientSecret && options.onStripeClientSecret) {
-      options.onStripeClientSecret(clientSecret);
-      return;
-    }
-    if (clientSecret)
-      throw new Error(
-        "onStripeClientSecret is required for embedded Stripe checkout",
-      );
-    throw new Error("Stripe checkout did not include a URL or client secret");
   }
   throw new Error("Unknown checkout response format");
 }
@@ -90,6 +78,7 @@ export async function handleCheckoutResult(
 export function CheckoutButton({
   planCode,
   returnUrl,
+  cancelUrl,
   label = "Get Started",
   className,
   style,
@@ -98,7 +87,6 @@ export function CheckoutButton({
   registerMandate,
   onProcessing,
   onDismiss,
-  onStripeClientSecret,
   onSuccess,
   onComplete,
   onScheduled,
@@ -132,6 +120,7 @@ export function CheckoutButton({
         ...(registerMandate !== undefined && { registerMandate }),
         planCode,
         returnUrl: returnUrl ?? window.location.href,
+        ...(cancelUrl && { cancelUrl }),
       });
       await handleCheckoutResult(result, {
         razorpayKeyId,
@@ -142,8 +131,7 @@ export function CheckoutButton({
           onProcessing?.(status);
         },
         onDismiss,
-        onStripeClientSecret,
-        onSuccess: (id) => {
+              onSuccess: (id) => {
           setProcessing(false);
           onSuccess?.(id);
         },

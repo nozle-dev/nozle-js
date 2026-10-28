@@ -3,7 +3,11 @@ import { navigateToCheckout } from '../components/billing/checkout-navigation.js
 import { useBillingContext, type CheckoutResult } from '../provider.js';
 
 export interface UseCheckoutResult {
-  fetchClientSecret: (planCode: string, returnUrl?: string) => Promise<string | null>;
+  /**
+   * Creates the checkout. A hosted result (Stripe Checkout or a Razorpay link) redirects the page to its
+   * `url`; completed, scheduled, Razorpay and processing results come back in `checkout` for you to handle.
+   */
+  startCheckout: (planCode: string, returnUrl?: string) => Promise<void>;
   checkout: CheckoutResult | null;
   isLoading: boolean;
   error: Error | null;
@@ -15,8 +19,8 @@ export function useCheckout(): UseCheckoutResult {
   const [error, setError] = useState<Error | null>(null);
   const [checkout, setCheckout] = useState<CheckoutResult | null>(null);
 
-  const fetchClientSecret = useCallback(
-    async (planCode: string, returnUrl?: string): Promise<string | null> => {
+  const startCheckout = useCallback(
+    async (planCode: string, returnUrl?: string): Promise<void> => {
       setIsLoading(true);
       setError(null);
       try {
@@ -29,20 +33,12 @@ export function useCheckout(): UseCheckoutResult {
         });
         setCheckout(result);
 
-        if ('client_secret' in result || 'clientSecret' in result) {
-          const clientSecret = result.client_secret ?? result.clientSecret;
-          if (clientSecret) return clientSecret;
-        }
         if ('url' in result && result.url) {
           navigateToCheckout(result.url);
-          return null;
-        }
-        if ('type' in result && result.type === 'hosted') {
-          navigateToCheckout(result.payment_url);
-          return null;
+          return;
         }
         if ('type' in result && ['completed', 'scheduled', 'razorpay', 'processing'].includes(result.type)) {
-          return null;
+          return;
         }
         throw new Error('Checkout response did not include a supported result type');
       } catch (cause) {
@@ -56,5 +52,5 @@ export function useCheckout(): UseCheckoutResult {
     [createCheckout],
   );
 
-  return { fetchClientSecret, checkout, isLoading, error };
+  return { startCheckout, checkout, isLoading, error };
 }

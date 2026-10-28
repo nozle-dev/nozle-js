@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## Node.js 0.20.0 and React 0.18.0 — 2026-10-27
+
+### Added
+
+- A suspended workspace (unpaid Nozle invoices) answers every call with HTTP 402 and `code` `workspace_suspended`. In Node it is a `NozleApiError` (`status` 402, `code`) from `can()`, `track()`, `usage.check()` and every other call, never retried and never turned into an allowed or denied result. The billing handler passes the code to the browser, and the React hooks expose it as `BillingRequestError.code` without retrying. Tests and a README note added.
+- `checkout()` and `checkoutInvoice()` accept `cancelUrl` (sent as `cancel_url`): where Stripe sends a customer who leaves the hosted page, validated like `returnUrl`. A return URL may contain `{CHECKOUT_SESSION_ID}`. React: `CheckoutButton` `cancelUrl` and `CreateCheckoutInput.cancelUrl`.
+
+### Changed
+
+- **Breaking:** Stripe checkout is hosted only (Core 11.4.0, Engine 2.12.0). A Stripe `checkout()`, `checkoutInvoice()`, plan change or Entity checkout returns `{ type: "hosted", url, payment_url, checkout_id, ... }`: redirect the customer to `url`. Only a paid upgrade has a status call (`checkoutStatus(plan_upgrade_intent_id, scope)`); a Stripe `checkout_id` is the session id, not a status id, so confirm a new subscription or invoice through webhooks or by reloading billing state. The `type: "stripe"` result and every `client_secret` / `clientSecret` are removed, including on `entitySubscriptions.checkoutMany()` (now `type` `hosted` with `url`). `HostedCheckoutResult` gains `url`.
+- **Breaking (React):** the embedded Stripe component is removed. `Checkout` takes only `checkout={result}` and redirects to the hosted page or opens the Razorpay modal; the `clientSecret` / `publishableKey` props, `StripeCheckoutProps`, `toStripeAppearance` and every `onStripeClientSecret` prop (`CheckoutButton`, `UpgradeButton`, `UpgradeModal`, `PricingTable`) are gone. `useCheckoutSession().fetchClientSecret` is now `startCheckout`, which redirects. `@stripe/stripe-js` and `@stripe/react-stripe-js` are no longer peer dependencies.
+- The billing portal example no longer reads `STRIPE_PUBLISHABLE_KEY`.
+- The `CheckoutResult` family from Node 0.19.0 stays split (`CompletedCheckoutResult`, `ScheduledCheckoutResult`, `HostedCheckoutResult`, `RazorpayCheckoutResult`, `ProcessingCheckoutResult`); the `StripeCheckoutResult` variant is removed, so a Stripe checkout is a `HostedCheckoutResult` (`type: "hosted"`, `url`).
+
 ## Node.js 0.19.0 — 2026-10-27
 
 ### Added

@@ -501,20 +501,31 @@ describe("Nozle", () => {
   describe("checkout", () => {
     it("creates checkout session", async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse({ client_secret: "cs_test", session_id: "sess_1", plan_code: "pro" }),
+        jsonResponse({
+          type: "hosted",
+          url: "https://checkout.stripe.com/c/pay/cs_test",
+          payment_url: "https://checkout.stripe.com/c/pay/cs_test",
+          checkout_id: "cs_test",
+          invoice_id: "inv_1",
+          amount_cents: 1000,
+          currency: "USD",
+        }),
       );
       const client = new Nozle({ apiKey: "sk_test" });
       const result = await client.checkout(
         "cust_1",
         "pro",
-        "https://merchant.example/billing/complete",
+        "https://merchant.example/billing/complete?session={CHECKOUT_SESSION_ID}",
+        { cancelUrl: "https://merchant.example/pricing" },
       );
 
-      expect(result).toMatchObject({ client_secret: "cs_test" });
+      expect(result).toMatchObject({ type: "hosted", url: "https://checkout.stripe.com/c/pay/cs_test" });
+      expect(JSON.stringify(result)).not.toContain("client_secret");
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.cancel_url).toBe("https://merchant.example/pricing");
+      expect(body.return_url).toContain("{CHECKOUT_SESSION_ID}");
       expect(body.plan_code).toBe("pro");
       expect(body.customer_id).toBe("cust_1");
-      expect(body.return_url).toBe("https://merchant.example/billing/complete");
     });
 
     it("rejects publishable-key checkout before network I/O", async () => {
@@ -1342,8 +1353,8 @@ describe("Nozle", () => {
         .mockResolvedValueOnce(jsonResponse({ entity_subscription: entitySubscription }))
         .mockResolvedValueOnce(
           jsonResponse({
-            type: "stripe",
-            client_secret: "cs_entity",
+            type: "hosted",
+            url: "https://checkout.stripe.com/c/pay/cs_entity",
             external_entity_id: "user/42",
             external_subscription_id: "entity-sub-1",
           }),
@@ -1405,9 +1416,9 @@ describe("Nozle", () => {
         jsonResponse({
           entity_subscription_checkout: {
             id: "batch-1",
-            type: "stripe",
+            type: "hosted",
             status: "open",
-            client_secret: "cs_bulk",
+            url: "https://checkout.stripe.com/c/pay/cs_bulk",
             invoice_id: "invoice-1",
             amount_cents: 4498,
             currency: "USD",
@@ -1433,7 +1444,7 @@ describe("Nozle", () => {
         items: [{ externalEntityId: "seat-pro-1", planCode: "pro" }],
       });
 
-      expect(result.client_secret).toBe("cs_bulk");
+      expect(result.url).toBe("https://checkout.stripe.com/c/pay/cs_bulk");
       expect(fetchMock.mock.calls[0][0]).toBe(
         "https://api.example/core/api/v1/customers/workspace%2F1/entity-subscriptions/checkout",
       );

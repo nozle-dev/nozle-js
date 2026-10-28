@@ -97,13 +97,11 @@ export function createBillingService({
   store,
   createPortalSession,
   returnOrigin = "http://localhost:4242",
-  stripePublishableKey,
 }) {
   const plans = createPlanService({
     sdk,
     store,
     returnOrigin,
-    stripePublishableKey,
   });
   return async function dispatch(customerId, path, body) {
     if (path.startsWith("/api/billing/plans/"))
@@ -321,7 +319,6 @@ if (
   const dispatch = createBillingService({
     sdk,
     returnOrigin: origin,
-    stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
     store: new ActionStore(
       process.env.ACTION_STORE_PATH ?? ".billing-portal/actions.json",
     ),

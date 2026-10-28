@@ -57,7 +57,6 @@ export type {
   RazorpayCheckoutResult,
   ProcessingCheckoutResult,
   HostedCheckoutResult,
-  StripeCheckoutResult,
   CompletedCheckoutResult,
   ScheduledCheckoutResult,
   SubscribeOptions,

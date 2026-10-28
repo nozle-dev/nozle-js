@@ -3234,7 +3234,7 @@ export interface paths {
         put?: never;
         /**
          * Create a checkout
-         * @description Creates a payment-gated plan checkout, an invoice checkout (`invoice_id`), or an Entity checkout (`external_entity_id`). Requires `payment:write`. Engine validates the body and the `return_url` origin, then forwards to Core `POST /checkout_sessions` (renaming `subscription_id` to `external_subscription_id`). Core decides the result type from the plan, the current subscription and its transition policy: a provider checkout when money is due, `completed` when nothing external is due, `scheduled` for an end-of-period change. An unpaid plan or single Entity checkout expires after 23 hours (the Stripe Checkout Session and Razorpay order too): the subscription is canceled with `cancelation_reason: timeout` and a `subscription.canceled` webhook, the invoice is closed, and the coupons, credit-note credits and wallet credits it used are returned. They are also returned when the checkout payment fails. Checking out the same plan again reopens an abandoned checkout; another plan replaces it. With Stripe, an invoice has at most one payable Checkout Session: checking out the same invoice again returns the open session (same `client_secret`), and while a payment of the last session is processing or has succeeded the call answers `422` with `base: [payment_already_processing]`. A second successful payment for an invoice that is already paid is refunded in full and reported with the `invoice.payment_failure` webhook (`duplicate_payment_refunded`). A customer without a subscription choosing a plan that needs no up-front payment gets `422 checkout_not_required`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
+         * @description Creates a payment-gated plan checkout, an invoice checkout (`invoice_id`), or an Entity checkout (`external_entity_id`). Requires `payment:write`. Engine validates the body and the `return_url` origin, then forwards to Core `POST /checkout_sessions` (renaming `subscription_id` to `external_subscription_id`). Core decides the result type from the plan, the current subscription and its transition policy: a provider checkout when money is due, `completed` when nothing external is due, `scheduled` for an end-of-period change. An unpaid plan or single Entity checkout expires after 23 hours (the Stripe Checkout Session and Razorpay order too): the subscription is canceled with `cancelation_reason: timeout` and a `subscription.canceled` webhook, the invoice is closed, and the coupons, credit-note credits and wallet credits it used are returned. They are also returned when the checkout payment fails. Checking out the same plan again reopens an abandoned checkout; another plan replaces it. With Stripe, an invoice has at most one payable Checkout Session: checking out the same invoice again returns the open session (same `url`), and while a payment of the last session is processing or has succeeded the call answers `422` with `base: [payment_already_processing]`. A second successful payment for an invoice that is already paid is refunded in full and reported with the `invoice.payment_failure` webhook (`duplicate_payment_refunded`). A customer without a subscription choosing a plan that needs no up-front payment gets `422 checkout_not_required`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
          */
         post: operations["engineCreateCheckout"];
         delete?: never;
@@ -16502,6 +16502,11 @@ export interface components {
              * @description Backward-compatible alias for `return_url`.
              */
             success_url?: string;
+            /**
+             * Format: uri
+             * @description Where the hosted payment page sends a customer who leaves it. Validated like `return_url`; defaults to the return URL. A return URL may contain the literal `{CHECKOUT_SESSION_ID}`.
+             */
+            cancel_url?: string;
             /** @description Nozle invoice to collect payment for instead of starting a plan checkout. Cannot be combined with `subscription_id`. */
             invoice_id?: string;
             /** @description Customer Entity whose own subscription is checked out. Cannot be combined with `subscription_id`. */
@@ -16516,16 +16521,17 @@ export interface components {
             /** @description Opaque signed quote from `POST /subscriptions/preview`. Core requires `subscription_id` and an `Idempotency-Key` with it. */
             quote_id?: string;
         };
-        /** @description Result of a checkout. The fields present depend on `type`. `stripe`: `client_secret`, `clientSecret`, `amount_cents`, `currency`, and `invoice_id` or `plan_upgrade_intent_id`. `razorpay`: `checkout_id`, `key_id`, `order_id`, `amount_cents`, `currency`, `expires_at`, and `invoice_id` or `plan_upgrade_intent_id` (mandate checkouts add `customer_id`, `recurring`, `mandate_max_amount_cents`). `processing`: `checkout_id` and `status`. `completed`: `status`, `payment_source`, `subscription_id`, `plan_code`, `invoice_id`, `amount_cents`, `currency` (an immediate configured downgrade instead carries the settlement fields of a transition result). `scheduled`: `status`, `subscription_id` (the pending subscription), `plan_code`, `transition_direction`, `transition_policy`, `effective_at`. Entity checkouts add `external_entity_id` and `external_subscription_id`. `hosted` (with `payment_url`) is produced only by Razorpay payment links, which plan checkout does not create. */
+        /** @description Result of a checkout. The fields present depend on `type`. `hosted` (Stripe Checkout page or Razorpay payment link): `url`, `payment_url` (same address), `checkout_id`, `amount_cents`, `currency`, `expires_at`, and `invoice_id` or `plan_upgrade_intent_id`; redirect the customer to `url`. `razorpay`: `checkout_id`, `key_id`, `order_id`, `amount_cents`, `currency`, `expires_at`, and `invoice_id` or `plan_upgrade_intent_id` (mandate checkouts add `customer_id`, `recurring`, `mandate_max_amount_cents`). `processing`: `checkout_id` and `status`. `completed`: `status`, `payment_source`, `subscription_id`, `plan_code`, `invoice_id`, `amount_cents`, `currency` (an immediate configured downgrade instead carries the settlement fields of a transition result). `scheduled`: `status`, `subscription_id` (the pending subscription), `plan_code`, `transition_direction`, `transition_policy`, `effective_at`. Entity checkouts add `external_entity_id` and `external_subscription_id`. */
         BillingCheckoutResult: {
             /** @enum {string} */
-            type: "stripe" | "razorpay" | "processing" | "completed" | "scheduled" | "hosted";
+            type: "razorpay" | "processing" | "completed" | "scheduled" | "hosted";
             /** @description `succeeded` for `completed`; the pending subscription status for `scheduled`; the internal operation status for `processing`. */
             status?: string;
-            /** @description Stripe embedded Checkout Session secret (`cs_...`). */
-            client_secret?: string | null;
-            /** @description Camel-case alias of `client_secret`. */
-            clientSecret?: string | null;
+            /**
+             * Format: uri
+             * @description Hosted result: the page to redirect the customer to.
+             */
+            url?: string;
             /**
              * Format: uuid
              * @description Razorpay operation ID; use with `GET /checkout/{id}` and `POST /checkout/{id}/verify`.
@@ -17134,17 +17140,19 @@ export interface components {
             /** Format: uuid */
             id: string;
             /**
-             * @description Razorpay results override the default `stripe` type with the Razorpay checkout's own `type` and fields.
+             * @description Razorpay results override the default `hosted` type with the Razorpay checkout's own `type` and fields.
              * @enum {string}
              */
-            type: "stripe" | "razorpay" | "processing" | "completed";
+            type: "hosted" | "razorpay" | "processing" | "completed";
             /**
              * @description Batch status.
              * @enum {string}
              */
             status: "pending" | "open" | "completed" | "failed" | "expired";
-            client_secret?: string | null;
-            clientSecret?: string | null;
+            /** Format: uri */
+            url?: string;
+            /** Format: uri */
+            payment_url?: string;
             /** Format: uuid */
             invoice_id?: string | null;
             amount_cents?: number;
@@ -27167,10 +27175,10 @@ export interface operations {
                      * @example {
                      *       "entity_subscription_checkout": {
                      *         "id": "checkout_batch_uuid",
-                     *         "type": "stripe",
+                     *         "type": "hosted",
                      *         "status": "open",
-                     *         "client_secret": "cs_...",
-                     *         "clientSecret": "cs_...",
+                     *         "url": "https://checkout.stripe.com/c/pay/cs_...",
+                     *         "payment_url": "https://checkout.stripe.com/c/pay/cs_...",
                      *         "invoice_id": "invoice_uuid",
                      *         "amount_cents": 4498,
                      *         "currency": "USD",

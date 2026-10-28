@@ -57,17 +57,7 @@ export function createPlanService({
   sdk,
   store,
   returnOrigin,
-  stripePublishableKey,
 }) {
-  if (stripePublishableKey && !/^pk_(test|live)_/.test(stripePublishableKey))
-    throw new Error("STRIPE_PUBLISHABLE_KEY must be a Stripe publishable key");
-  const payment = (result) =>
-    result?.type === "stripe" &&
-    !result.url &&
-    !result.publishable_key &&
-    stripePublishableKey
-      ? { ...result, publishable_key: stripePublishableKey }
-      : result;
   async function load(customerId, subscriptionId) {
     const options = await sdk.subscriptionOptions(customerId, subscriptionId);
     let status = options.checkout
@@ -81,7 +71,7 @@ export function createPlanService({
       });
       status = checkoutStatus(current.status);
       if (["awaiting_payment", "processing"].includes(status))
-        checkout = payment(current.checkout) ?? null;
+        checkout = current.checkout ?? null;
     }
     if (!supportedStatuses.has(status)) status = "needs_review";
     return {
@@ -238,13 +228,11 @@ export function createPlanService({
                 currency: changed.currency,
               };
             }
-            return payment(
-              await sdk.checkout(customerId, targetPlanCode, returnUrl.href, {
-                subscriptionId,
-                quoteId,
-                idempotencyKey: key,
-              }),
-            );
+            return sdk.checkout(customerId, targetPlanCode, returnUrl.href, {
+              subscriptionId,
+              quoteId,
+              idempotencyKey: key,
+            });
           },
         );
       }

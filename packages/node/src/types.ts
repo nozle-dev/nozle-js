@@ -136,9 +136,15 @@ export interface ProcessingCheckoutResult {
   plan_upgrade_intent_id?: string;
 }
 
-/** A Razorpay payment link. Redirect the customer to `payment_url`. */
+/**
+ * A hosted payment page: the Stripe Checkout page or a Razorpay payment link. Redirect the customer to `url`
+ * (`payment_url` is the same address). For a paid upgrade poll `checkoutStatus(plan_upgrade_intent_id, scope)` after they return.
+ * A new subscription or invoice checkout has no status call: confirm through webhooks or by reloading billing state.
+ * A Stripe `checkout_id` is the Stripe session id, not a status id.
+ */
 export interface HostedCheckoutResult {
   type: "hosted";
+  url: string;
   payment_url: string;
   checkout_id?: string;
   amount_cents?: number;
@@ -146,6 +152,8 @@ export interface HostedCheckoutResult {
   expires_at?: string;
   invoice_id?: string;
   plan_upgrade_intent_id?: string;
+  external_entity_id?: string;
+  external_subscription_id?: string;
 }
 
 /**
@@ -166,6 +174,8 @@ export interface CheckoutOptions {
   subscriptionId?: string;
   /** Opaque quote from previewSubscriptionChange; never reformat or inspect it. */
   quoteId?: string;
+  /** Where the hosted page sends a customer who leaves it. Validated like `returnUrl`; defaults to the return URL. A return URL may contain `{CHECKOUT_SESSION_ID}`. */
+  cancelUrl?: string;
 }
 
 export interface SubscriptionCheckoutScope {
@@ -255,25 +265,8 @@ export type CheckoutResult =
   | RazorpayCheckoutResult
   | ProcessingCheckoutResult
   | HostedCheckoutResult
-  | StripeCheckoutResult
   | CompletedCheckoutResult
   | ScheduledCheckoutResult;
-
-/** Stripe embedded checkout: mount `client_secret` with your own Stripe publishable key. */
-export interface StripeCheckoutResult {
-  type: "stripe";
-  /** Embedded Checkout Session secret (`cs_...`). Same value as `clientSecret`. */
-  client_secret?: string;
-  clientSecret?: string;
-  invoice_id?: string;
-  /** Set instead of `invoice_id` for a paid upgrade; poll it with `checkoutStatus`. */
-  plan_upgrade_intent_id?: string;
-  amount_cents?: number;
-  currency?: string;
-  external_entity_id?: string;
-  external_subscription_id?: string;
-  checkout_id?: string;
-}
 
 /** The change is done: paid with credits, or nothing was due. */
 export interface CompletedCheckoutResult {
@@ -374,13 +367,14 @@ export interface EntitySubscriptionCheckoutItemResult {
 
 export interface EntitySubscriptionCheckoutManyResult {
   id: string;
-  type: "stripe" | "razorpay" | "processing" | "completed";
+  type: "hosted" | "razorpay" | "processing" | "completed";
   checkout_id?: string;
   key_id?: string;
   order_id?: string;
   status: string;
-  client_secret: string | null;
-  clientSecret?: string | null;
+  /** Hosted result: redirect the customer here. */
+  url?: string;
+  payment_url?: string;
   invoice_id: string;
   amount_cents: number;
   currency: string;

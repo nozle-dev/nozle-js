@@ -167,6 +167,7 @@ export class Nozle {
         ...(options.subscriptionId && { subscription_id: options.subscriptionId }),
         ...(options.quoteId && { quote_id: options.quoteId }),
         ...(returnUrl && { return_url: returnUrl }),
+        ...(options.cancelUrl && { cancel_url: options.cancelUrl }),
         ...(options.registerMandate !== undefined && {
           register_mandate: options.registerMandate,
         }),
@@ -192,6 +193,7 @@ export class Nozle {
       "",
       {
         invoice_id: invoiceId,
+        ...(options.cancelUrl && { cancel_url: options.cancelUrl }),
         ...(options.registerMandate !== undefined && {
           register_mandate: options.registerMandate,
         }),
@@ -251,6 +253,11 @@ export class Nozle {
     return status;
   }
 
+  /**
+   * Status of a paid upgrade (pass its `plan_upgrade_intent_id` with the customer and subscription scope) or of a
+   * Razorpay operation. Not a Stripe `checkout_id` (`cs_...`): a new-subscription or invoice Stripe checkout has no
+   * status call, so confirm it through webhooks or by reloading billing state.
+   */
   async checkoutStatus(checkoutId: string, scope?: SubscriptionCheckoutScope): Promise<CheckoutStatus> {
     if (!checkoutId.trim())
       throw new Error("checkoutStatus requires checkoutId");

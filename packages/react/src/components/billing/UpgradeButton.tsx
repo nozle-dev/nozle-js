@@ -16,7 +16,6 @@ export interface UpgradeButtonProps {
   className?: string;
   appearance?: Appearance;
   style?: React.CSSProperties;
-  onStripeClientSecret?: (clientSecret: string) => void;
   onCheckoutStarted?: () => void;
   onDowngradeScheduled?: () => void;
   onUpgraded?: () => void;
@@ -33,7 +32,6 @@ export function UpgradeButton({
   label = "Upgrade",
   className,
   style,
-  onStripeClientSecret,
   onCheckoutStarted,
   onDowngradeScheduled,
   onUpgraded,
@@ -62,7 +60,6 @@ export function UpgradeButton({
         quoteId={quoteId}
         idempotencyKey={idempotencyKey}
         preview={preview}
-        onStripeClientSecret={onStripeClientSecret}
         onCheckoutStarted={() => {
           setIsOpen(false);
           onCheckoutStarted?.();

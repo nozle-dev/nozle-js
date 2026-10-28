@@ -348,8 +348,8 @@ const checkout = await nozle.entitySubscriptions.checkoutMany("workspace_123", {
 });
 ```
 
-Return the result to your frontend and mount `checkout.client_secret` with the
-`Checkout` component from `@nozle-js/react`. Never expose the secret Nozle key
+For Stripe the result is `type: "hosted"`: redirect the customer to `checkout.url`. After they return, confirm the outcome as described under
+"Payment providers" below (a Stripe `checkout_id` is not a status id). Never expose the secret Nozle key
 to the browser.
 
 Allocation and deallocation preserve exact decimal strings, source provenance, and expiry. They are backend-only operations and may also be disabled by the Engine's exact organization/Credit System rollout gate.
@@ -374,6 +374,22 @@ await nozle.usage.track(
 ```
 
 Keep the same idempotency key when retrying an uncertain mutation result. Never convert credit amounts to JavaScript numbers.
+
+## Workspace suspended or card required (402)
+
+When your Nozle workspace is suspended because its Nozle invoices are unpaid, every API call answers HTTP 402 with `code` `workspace_suspended`. A workspace without a verified card answers 402 with `code` `card_required` the same way. `NozleApiError` has `status` 402 and `code` `workspace_suspended`, from `can()`, `track()`, `usage.check()` and every other call; `can()` throws it instead of returning `allowed: false`. `createBillingHandler` passes the code to the browser.
+
+```ts
+try {
+  await nozle.can("cust_123", "code_completion");
+} catch (error) {
+  if (error instanceof NozleApiError && error.code === "workspace_suspended") {
+    // Tell your team to pay the Nozle invoices; do not treat this as allowed or denied.
+  }
+}
+```
+
+Never retry blindly: the SDK does not retry a 402. Add a card in the Nozle dashboard (`card_required`) or pay the Nozle invoices (`workspace_suspended`) and calls work again at once. Events sent during the suspension are refused, not queued.
 
 ## Health Check
 
@@ -459,13 +475,12 @@ Nozle collects through the payment provider connected to your organization and a
 
 | `type` | Provider | Next step |
 | --- | --- | --- |
-| `stripe` | Stripe | Send `client_secret` (a `cs_` embedded Checkout Session secret) to the browser |
+| `hosted` | Stripe, Razorpay link | Redirect the customer to `url` (the Stripe Checkout page; `payment_url` is the same address), then confirm as described below (Stripe: `checkout_id` is the Stripe session id, not a status id) |
 | `razorpay` | Razorpay | Open the Razorpay modal with `key_id`, `order_id`, `amount_cents` and `currency`, then verify |
-| `hosted` | Razorpay | Declared in the result types; `POST /checkout` does not return it for Razorpay. Invoice payment URLs and credit top-ups return a `payment_url` (an rzp.io payment link) with no checkout id to poll |
 | `processing` | Razorpay or Stripe | Recover with `checkoutStatus(checkout_id)` instead of starting another checkout. Razorpay returns it while the order is not ready; Stripe returns it when a quoted upgrade is replayed while its webhook is still pending |
 | `completed`, `scheduled` | Either | No payment is due now. Credits covered it, or the change takes effect later |
 
-**Stripe.** Plan and invoice checkout always create an embedded Checkout Session. They never return a Stripe-hosted URL or your Stripe publishable key, so the browser needs the `pk_` key for the Stripe account connected in Nozle (the React `Checkout` component takes it as `publishableKey`). Credit top-up purchases are different: they return a Stripe-hosted `payment_url` (`checkout.stripe.com`, valid for 24 hours).
+**Stripe.** Every Stripe checkout is the Stripe-hosted Checkout page; there is no embedded form. `checkout_id` of a Stripe result is the Stripe session id (`cs_...`); `checkoutStatus` does not accept it. An upgrade session lasts 35 minutes, an Entity batch 23 hours. Redirect the customer to `url`. Pass `cancelUrl` in the options to choose where Stripe sends a customer who leaves the page (validated like `returnUrl`, defaults to it). A return URL may contain the literal `{CHECKOUT_SESSION_ID}`, which Stripe replaces with the Checkout Session id. Credit top-up purchases also return a Stripe-hosted `payment_url` (valid for 24 hours).
 
 ```ts
 import { Nozle } from "@nozle-js/node";
@@ -473,12 +488,17 @@ import { Nozle } from "@nozle-js/node";
 const nozle = new Nozle({ apiKey: process.env.NOZLE_SECRET_KEY! });
 const returnUrl = "https://app.example.com/settings/billing";
 
-const result = await nozle.checkout("cust_123", "pro_monthly", returnUrl);
-if (result.type === "stripe") {
-  // Return the secret to the browser and mount Stripe Embedded Checkout with it.
-  const clientSecret = result.client_secret ?? result.clientSecret;
-  // A new subscription has no checkout ID to poll: reload the subscription after
-  // Embedded Checkout completes. A paid upgrade carries plan_upgrade_intent_id.
+const result = await nozle.checkout("cust_123", "pro_monthly", returnUrl, {
+  cancelUrl: "https://app.example.com/pricing",
+});
+if (result.type === "hosted") {
+  // Redirect the customer to result.url.
+  // Paid upgrade (result.plan_upgrade_intent_id): after they return, poll
+  //   nozle.checkoutStatus(result.plan_upgrade_intent_id, { customerId, subscriptionId });
+  //   status is awaiting_payment (hosted nested), processing, succeeded or expired.
+  // New subscription or invoice (result.invoice_id): there is no status call. The customer
+  //   returns to your return URL; confirm with the invoice.payment_succeeded or subscription
+  //   webhook, or by reloading billing state (can() or the subscription read).
 }
 ```
 

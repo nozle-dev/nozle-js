@@ -80,16 +80,19 @@ export interface ProcessingCheckoutResult {
   plan_upgrade_intent_id?: string;
 }
 
-/** A Razorpay payment link. The customer is redirected to `payment_url`. */
+/** A hosted payment page (Stripe Checkout or a Razorpay payment link). The customer is redirected to `url`. */
 export interface HostedCheckoutResult {
   type: "hosted";
-  payment_url: string;
+  url: string;
+  payment_url?: string;
   checkout_id?: string;
   amount_cents?: number;
   currency?: string;
   expires_at?: string;
   invoice_id?: string;
   plan_upgrade_intent_id?: string;
+  external_entity_id?: string;
+  external_subscription_id?: string;
 }
 
 export interface RazorpayVerification {
@@ -123,26 +126,6 @@ export type VerifyCheckout = (
 export type GetCheckoutStatus = (checkoutId: string) => Promise<CheckoutStatus>;
 
 export type CheckoutResult =
-  | {
-      type: "stripe";
-      /** Not returned by plan and invoice checkout, which never issue a Stripe-hosted URL. */
-      url?: string;
-      /** Embedded Checkout Session secret (`cs_...`). */
-      clientSecret?: string;
-      client_secret?: string;
-      /** Not returned by Nozle. Pass your Stripe publishable key to `Checkout`. */
-      publishable_key?: string;
-      /** Not returned by Nozle. */
-      stripe_account?: string;
-      checkout_id?: string;
-      invoice_id?: string;
-      /** Set instead of `invoice_id` for a paid upgrade. */
-      plan_upgrade_intent_id?: string;
-      amount_cents?: number;
-      currency?: string;
-      external_entity_id?: string;
-      external_subscription_id?: string;
-    }
   | RazorpayCheckoutResult
   | ProcessingCheckoutResult
   | HostedCheckoutResult
@@ -153,6 +136,8 @@ export type CheckoutResult =
 export interface CreateCheckoutInput {
   planCode: string;
   returnUrl: string;
+  /** Where the hosted page sends a customer who leaves it. Pass it on to `nozle.checkout()` as `cancelUrl`. */
+  cancelUrl?: string;
   idempotencyKey?: string;
   registerMandate?: boolean;
   /** Select the customer's external subscription for a plan change. */

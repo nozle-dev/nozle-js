@@ -14,7 +14,7 @@ export default defineConfig({
   sourcemap: true,
   minify: false,
   outDir: "dist",
-  external: ["react", "react-dom", "react/jsx-runtime", "@stripe/stripe-js", "@stripe/react-stripe-js"],
+  external: ["react", "react-dom", "react/jsx-runtime"],
   // Bundling drops the source files' "use client", so Next.js server components could not render
   // the components. Mark the main entry as client code; themes and the preset stay server-safe.
   // Prepended on the same line so the source maps keep their line numbers.

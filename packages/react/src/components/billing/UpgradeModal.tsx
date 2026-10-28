@@ -33,7 +33,6 @@ export interface UpgradeModalProps {
   children?: React.ReactNode;
   /** Authenticated merchant action. Allows the same confirmation UI without BillingProvider. */
   onSubmit?: () => Promise<void>;
-  onStripeClientSecret?: (clientSecret: string) => void;
   onCheckoutStarted?: () => void;
   onCompleted?: () => void;
   onScheduled?: () => void;
@@ -100,6 +99,8 @@ export function UpgradeModal(
           ...(props.quoteId && { quoteId: props.quoteId }),
           ...(props.idempotencyKey && { idempotencyKey: props.idempotencyKey }),
         });
+        // A hosted result redirects the page, so tell the caller first.
+        if ("type" in result && result.type === "hosted") props.onCheckoutStarted?.();
         await handleCheckoutResult(result, {
           verifyCheckout: billing.verifyCheckout,
           getCheckoutStatus: billing.getCheckoutStatus,
@@ -108,10 +109,6 @@ export function UpgradeModal(
             props.onCompleted?.();
           },
           onProcessing: () => setProcessing(true),
-          onStripeClientSecret: (secret) => {
-            props.onStripeClientSecret?.(secret);
-            props.onCheckoutStarted?.();
-          },
           onComplete: () => {
             setProcessing(false);
             props.onCompleted?.();
