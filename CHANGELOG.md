@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## React 0.22.0 — 2026-10-29
+
+### Fixed
+
+- Prices use each currency's minor units as Core's Money table defines them, not hundredths for every currency. `PlanCard`, `PlanComparison` and `CurrentPlan` showed JPY 100 times too low and mis-scaled three-decimal currencies (KWD, BHD, JOD, OMR, TND, IQD, LYD); `formatMinorAmount`, the pricing table, the billing portal and the usage components took digits from Intl, which differs from Core for HUF (0 decimals in Core) and MRO (5 minor units). CLF uses 4 decimals; every other currency stays at 100.
+- `PlanCard` and `PlanComparison` take a `locale` prop (default `en-US`) for prices and feature values, and usage prices in feature lines follow the pricing table's `locale` instead of always `en-US`. `planFeatures()` and `comparisonRows()` take an optional `locale`.
+
 ## React 0.21.0 — 2026-10-29
 
 ### Added

@@ -1,3 +1,5 @@
+import { formatMinorAmount } from "../billing/amounts.js";
+
 /** One charge's usage in a period, as returned by Core's `current_usage` and `past_usage`. */
 export interface ChargeUsageData {
   /** Decimal string, for example `"1200.0"`. */
@@ -23,12 +25,7 @@ export interface CustomerUsageData {
 }
 
 export function formatAmount(amountCents: number, currency: string): string {
-  const amount = amountCents / 100;
-  try {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
+  return formatMinorAmount(amountCents, currency);
 }
 
 export function formatDay(value: string): string {

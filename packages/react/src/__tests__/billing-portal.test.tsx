@@ -513,10 +513,13 @@ describe("native BillingPortal", () => {
 
 describe("portal credential boundary", () => {
   it("compares wallet amounts at decimal limits without floating-point drift", () => {
-    expect(walletAmountCents("0.29", 1, 2)).toBe("29");
-    expect(walletAmountCents("10000000", 1e-7, 2)).toBe("100.00000");
-    expect(walletAmountCents("-1", 1, 2)).toBeNull();
-    expect(walletAmountCents("1", Infinity, 2)).toBeNull();
+    expect(walletAmountCents("0.29", 1, 100)).toBe("29");
+    expect(walletAmountCents("10000000", 1e-7, 100)).toBe("100.00000");
+    expect(walletAmountCents("1.5", 1, 1)).toBe("1.5");
+    expect(walletAmountCents("1.5", 1, 1000)).toBe("1500");
+    expect(walletAmountCents("1.2", 1, 5)).toBe("6.0");
+    expect(walletAmountCents("-1", 1, 100)).toBeNull();
+    expect(walletAmountCents("1", Infinity, 100)).toBeNull();
   });
   it("rejects secret keys and insecure endpoints before fetching", () => {
     const fetchMock = vi.fn();

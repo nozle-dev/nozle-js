@@ -2,7 +2,7 @@
 export function walletAmountCents(
   credits: string,
   rate: number,
-  currencyDigits: number,
+  currencyFactor: number,
 ): string | null {
   if (
     !/^\d{1,30}(\.\d{1,5})?$/.test(credits) ||
@@ -19,8 +19,15 @@ export function walletAmountCents(
   };
   const left = decimal(credits),
     right = decimal(String(rate));
-  const coefficient = left.value * right.value;
-  const scale = left.scale + right.scale - currencyDigits;
+  // Split the factor into multiplier * 10^digits (MRO's factor is 5).
+  let multiplier = currencyFactor,
+    digits = 0;
+  while (multiplier >= 10 && multiplier % 10 === 0) {
+    multiplier /= 10;
+    digits += 1;
+  }
+  const coefficient = left.value * right.value * BigInt(multiplier);
+  const scale = left.scale + right.scale - digits;
   if (scale <= 0) return String(coefficient * 10n ** BigInt(-scale));
   const padded = String(coefficient).padStart(scale + 1, "0");
   return `${padded.slice(0, -scale)}.${padded.slice(-scale)}`;

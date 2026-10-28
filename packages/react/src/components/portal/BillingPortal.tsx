@@ -43,6 +43,7 @@ import { portalStyles } from "./styles.js";
 import { portalTimezones } from "./timezones.js";
 import { compareDecimalStrings } from "../../core/decimal.js";
 import { walletAmountCents } from "./amounts.js";
+import { currencyDigits, currencyFactor } from "../billing/amounts.js";
 import {
   CancellationControl,
   type CancellationActions,
@@ -295,12 +296,13 @@ function Failure({
   );
 }
 function money(cents: Cents, currency: string, locale: string) {
-  const formatter = new Intl.NumberFormat(locale, {
+  const digits = currencyDigits(currency);
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
-  });
-  const digits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
-  return formatter.format(Number(cents) / 10 ** digits);
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Number(cents) / currencyFactor(currency));
 }
 function date(value: string | null, locale: string, timeZone?: string) {
   if (!value) return "—";
@@ -1045,12 +1047,11 @@ function WalletTopUp({
 }: SectionProps & { wallet: Wallet; onCreated: () => void }) {
   const [credits, setCredits] = useState("");
   const action = useAction(onError);
-  const digits =
-    new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: wallet.currency,
-    }).resolvedOptions().maximumFractionDigits ?? 2;
-  const amountCents = walletAmountCents(credits, wallet.rateAmount, digits);
+  const amountCents = walletAmountCents(
+    credits,
+    wallet.rateAmount,
+    currencyFactor(wallet.currency),
+  );
   const valid =
     amountCents !== null &&
     compareDecimalStrings(credits, "0") > 0 &&

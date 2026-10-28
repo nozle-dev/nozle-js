@@ -551,8 +551,8 @@ function familyFeatures(
  * Features of a plan card on an older API: what the plan gives (entitlements,
  * credit grants and usage prices), as `planFeatures` lists it.
  */
-function planCardFeatures(plan: PricingPlan): PricingFeature[] {
-  return catalogPlanFeatures(plan).map((label) => ({ label }));
+function planCardFeatures(plan: PricingPlan, locale: string): PricingFeature[] {
+  return catalogPlanFeatures(plan, locale).map((label) => ({ label }));
 }
 
 function normalizeFeatures(items: Array<string | PricingFeature>): PricingFeature[] {
@@ -703,7 +703,7 @@ export function getPricingCards(
     const highlighted = highlightedKey !== undefined && highlightedKey === group.key;
     const features =
       overrideFeatures(options.features, group, plan, cardIndex) ??
-      (family ? familyFeatures(family, plan, locale) : planCardFeatures(plan));
+      (family ? familyFeatures(family, plan, locale) : planCardFeatures(plan, locale));
     return {
       key: group.key,
       family,
