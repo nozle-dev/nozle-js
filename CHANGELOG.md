@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## React 0.21.0 — 2026-10-29
+
+### Added
+
+- `Checkout` accepts `children`: your own pay UI replaces the default button, and `useCheckout()` (`confirmPayment`, `isProcessing`, `error`) now works inside it. Without children nothing changes.
+
 ## React 0.20.0 — 2026-10-28
 
 ### Added
