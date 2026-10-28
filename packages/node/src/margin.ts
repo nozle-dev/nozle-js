@@ -1,6 +1,6 @@
 import { request, type RequestPolicy } from "./http";
 import { apiError } from "./errors";
-import type { MarginForecast, MarginQueryParams, MarginSimulateParams, MarginSimulation, TrendParams } from "./types";
+import type { MarginByCustomer, MarginByMetric, MarginByModel, MarginByPlan, MarginForecast, MarginSummary, MarginTrend, MarginQueryParams, MarginSimulateParams, MarginSimulation, TrendParams } from "./types";
 
 export class MarginClient {
   private readonly base: string;
@@ -33,28 +33,28 @@ export class MarginClient {
   }
 
   summary(params?: MarginQueryParams) {
-    return this.get("/summary", params);
+    return this.get<MarginSummary>("/summary", params);
   }
 
   byCustomer(params?: MarginQueryParams) {
-    return this.get("/customers", params);
+    return this.get<MarginByCustomer>("/customers", params);
   }
 
   byMetric(params?: MarginQueryParams) {
-    return this.get("/metrics", params);
+    return this.get<MarginByMetric>("/metrics", params);
   }
 
   byPlan(params?: MarginQueryParams) {
-    return this.get("/plans", params);
+    return this.get<MarginByPlan>("/plans", params);
   }
 
   byModel(params?: MarginQueryParams) {
-    return this.get("/models", params);
+    return this.get<MarginByModel>("/models", params);
   }
 
   trend(params?: TrendParams) {
     const { granularity = "day", ...rest } = params ?? {};
-    return this.get("/trend", { granularity, ...rest });
+    return this.get<MarginTrend>("/trend", { granularity, ...rest });
   }
 
   /** Daily revenue, cost and margin projected for the 30 days after the range (default: the last month). */

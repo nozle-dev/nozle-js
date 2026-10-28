@@ -1,5 +1,5 @@
 import type { Nozle } from "./client";
-import { NozleApiError } from "./errors";
+import { NO_ACTIVE_SUBSCRIPTION, NozleApiError } from "./errors";
 
 export interface BillingHandlerOptions {
   /**
@@ -86,7 +86,7 @@ const routes: Record<string, Route> = {
   },
   async preview(nozle, customerId, query) {
     const subscription = await activeSubscription(nozle, customerId);
-    if (!subscription) throw new RouteError(404, "subscription_not_found", "customer has no active subscription");
+    if (!subscription) throw new RouteError(404, NO_ACTIVE_SUBSCRIPTION, "customer has no active subscription");
     return nozle.previewSubscriptionChange(customerId, subscription.external_id, required(query, "plan"));
   },
   // Finalized invoices only: drafts can still change and are not the customer's to see.

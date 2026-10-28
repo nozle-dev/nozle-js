@@ -1,5 +1,6 @@
 export { Nozle } from "./client";
-export { NozleApiError } from "./errors";
+export { NozleApiError, NO_ACTIVE_SUBSCRIPTION, isNoActiveSubscription } from "./errors";
+export { paginate } from "./paginate";
 export { MarginClient } from "./margin";
 export { EventsNamespace } from "./events";
 export { CostEventsNamespace } from "./cost-events";
@@ -77,6 +78,12 @@ export type {
   MarginQueryParams,
   TrendParams,
   MarginForecast,
+  MarginSummary,
+  MarginByCustomer,
+  MarginByMetric,
+  MarginByPlan,
+  MarginByModel,
+  MarginTrend,
   MarginSimulation,
   MarginSimulateParams,
   CostIntelligenceReportParams,

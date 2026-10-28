@@ -1,6 +1,7 @@
 /**
- * Error thrown when a call returns a non-2xx response. The message keeps the
- * `<operation> failed: <status> <statusText>` form; `code` and `errorDetails` carry what Nozle returned.
+ * Error thrown when a call returns a non-2xx response. The message is
+ * `<operation> failed: <status> <statusText>`, followed by `: <server message>` when Nozle sent one;
+ * `code` and `errorDetails` carry the rest of what Nozle returned.
  */
 export class NozleApiError extends Error {
   readonly status: number;
@@ -20,7 +21,7 @@ export class NozleApiError extends Error {
     response: { status: number; statusText: string; headers?: Pick<Headers, "get"> },
     body?: unknown,
   ) {
-    super(`${operation} failed: ${response.status} ${response.statusText}`);
+    super(`${operation} failed: ${response.status} ${response.statusText}${serverText(body)}`);
     this.name = "NozleApiError";
     this.status = response.status;
     const requestId = response.headers?.get("x-request-id");
@@ -36,11 +37,20 @@ export class NozleApiError extends Error {
 
   /** True when `code` equals the value, or the value is listed in `errorDetails` (for example `razorpay_requires_inr`). */
   hasCode(code: string): boolean {
+    if (code === NO_ACTIVE_SUBSCRIPTION && this.code === "subscription_not_found") return true;
     if (this.code === code) return true;
     return Object.values(this.errorDetails ?? {}).some(
       (value) => value === code || (Array.isArray(value) && value.includes(code)),
     );
   }
+}
+
+/** The one code for a customer with no active subscription. Core's `subscription_not_found` counts as the same case in {@link NozleApiError.hasCode}. */
+export const NO_ACTIVE_SUBSCRIPTION = "active_subscription_not_found";
+
+/** True when the error means the customer has no active subscription, whichever service or SDK path raised it. */
+export function isNoActiveSubscription(error: unknown): boolean {
+  return error instanceof NozleApiError && error.hasCode(NO_ACTIVE_SUBSCRIPTION);
 }
 
 /** The error for a customer with no, or several, active subscriptions, with the code the Engine uses for the same case. */
@@ -58,7 +68,16 @@ export async function apiError(operation: string, response: Response): Promise<N
   return new NozleApiError(operation, response, body);
 }
 
-function parseRetryAfter(value: string | null | undefined): number | undefined {
+/** `: <text>` from the response body's `error` or `message` string, or an empty string. */
+function serverText(body: unknown): string {
+  if (!body || typeof body !== "object") return "";
+  const { error, message } = body as Record<string, unknown>;
+  const text = [error, message].find((value) => typeof value === "string" && value.trim());
+  return text ? `: ${(text as string).trim().slice(0, 500)}` : "";
+}
+
+/** Seconds from a `Retry-After` value: delta-seconds or an HTTP-date. */
+export function parseRetryAfter(value: string | null | undefined): number | undefined {
   if (!value) return undefined;
   const seconds = Number(value);
   if (Number.isFinite(seconds) && seconds >= 0) return seconds;

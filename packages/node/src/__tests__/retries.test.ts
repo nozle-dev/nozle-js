@@ -83,3 +83,26 @@ describe("opt-in retries", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
+
+describe("Retry-After as an HTTP-date", () => {
+  it("waits for the date, capped, and retries", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-28T10:00:00Z"));
+    fetchMock.mockResolvedValueOnce(fail(429, { "retry-after": "Wed, 28 Oct 2026 10:00:02 GMT" })).mockResolvedValueOnce(ok());
+    const result = client(1).plans();
+    await vi.advanceTimersByTimeAsync(1_900);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(200);
+    await expect(result).resolves.toEqual([]);
+    vi.useRealTimers();
+  });
+
+  it("exposes the date as retryAfter seconds on the error", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-28T10:00:00Z"));
+    fetchMock.mockResolvedValueOnce(fail(429, { "retry-after": "Wed, 28 Oct 2026 10:00:07 GMT" }));
+    const error = await client().plans().catch((cause: unknown) => cause as NozleApiError);
+    expect(error.retryAfter).toBe(7);
+    vi.useRealTimers();
+  });
+});
