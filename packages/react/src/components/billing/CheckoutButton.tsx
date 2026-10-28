@@ -20,6 +20,7 @@ import { navigateToCheckout } from "./checkout-navigation.js";
 export interface CheckoutButtonProps
   extends Omit<RazorpayActions, "verifyCheckout" | "getCheckoutStatus"> {
   planCode: string;
+  /** Where the customer comes back to. Defaults to the current page without its query string or hash. */
   returnUrl?: string;
   /** Where Stripe sends a customer who leaves the hosted page. Defaults to the return URL. */
   cancelUrl?: string;
@@ -27,7 +28,10 @@ export interface CheckoutButtonProps
   className?: string;
   appearance?: Appearance;
   style?: React.CSSProperties;
+  /** Receives the raw error (an SDK or billing-route error); the button itself shows `errorMessage`. */
   onError?: (error: Error) => void;
+  /** Shown under the button when checkout fails. Defaults to a generic retry message. */
+  errorMessage?: string;
   /** @deprecated The server supplies the public Razorpay key in the checkout response. */
   razorpayKeyId?: string;
   registerMandate?: boolean;
@@ -75,6 +79,11 @@ export async function handleCheckoutResult(
   throw new Error("Unknown checkout response format");
 }
 
+function currentPageUrl(): string {
+  const { origin, pathname } = window.location;
+  return origin && pathname ? `${origin}${pathname}` : window.location.href;
+}
+
 export function CheckoutButton({
   planCode,
   returnUrl,
@@ -83,6 +92,7 @@ export function CheckoutButton({
   className,
   style,
   onError,
+  errorMessage = "We couldn't start checkout. Please try again.",
   razorpayKeyId,
   registerMandate,
   onProcessing,
@@ -119,7 +129,7 @@ export function CheckoutButton({
         idempotencyKey: attempt.current.key,
         ...(registerMandate !== undefined && { registerMandate }),
         planCode,
-        returnUrl: returnUrl ?? window.location.href,
+        returnUrl: returnUrl ?? currentPageUrl(),
         ...(cancelUrl && { cancelUrl }),
       });
       await handleCheckoutResult(result, {
@@ -168,7 +178,7 @@ export function CheckoutButton({
           Payment is processing. Confirmation may take a little while.
         </span>
       )}
-      {error && <span role="alert" style={{ ...vars, ...text.body, color: T.dangerText }}>{error.message}</span>}
+      {error && <span role="alert" style={{ ...vars, ...text.body, color: T.dangerText }}>{errorMessage}</span>}
     </>
   );
 }

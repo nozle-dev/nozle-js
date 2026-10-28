@@ -1,3 +1,5 @@
+import { parseRetryAfter } from "./errors";
+
 export interface RequestPolicy {
   /** Per-attempt timeout in milliseconds. */
   timeout: number;
@@ -15,9 +17,8 @@ function wait(ms: number): Promise<void> {
 }
 
 function delayFor(policy: RequestPolicy, attempt: number, response?: Response): number {
-  const retryAfter = response?.headers?.get("retry-after");
-  const seconds = retryAfter ? Number(retryAfter) : Number.NaN;
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, MAX_RETRY_AFTER_MS);
+  const seconds = parseRetryAfter(response?.headers?.get("retry-after"));
+  if (seconds !== undefined) return Math.min(seconds * 1000, MAX_RETRY_AFTER_MS);
   const base = Math.min(policy.retryDelayMs * 2 ** attempt, MAX_DELAY_MS);
   return base * (0.5 + Math.random() * 0.5);
 }

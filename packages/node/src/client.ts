@@ -7,7 +7,7 @@ import { CostIntelligenceNamespace } from "./cost-intelligence";
 import { CreditSystemsNamespace } from "./credit-systems";
 import { EntitiesNamespace } from "./entities";
 import { EntitySubscriptionsNamespace } from "./entity-subscriptions";
-import { apiError, subscriptionError } from "./errors";
+import { apiError, NO_ACTIVE_SUBSCRIPTION, subscriptionError } from "./errors";
 import { EventsNamespace } from "./events";
 import { MarginClient } from "./margin";
 import { recordUsage as _recordUsage, type RecordUsageParams } from "./provider-usage";
@@ -128,7 +128,7 @@ export class Nozle {
     return _track(this.baseUrl, this.apiKey, customerId, event, metadata, opts, this.policy);
   }
 
-  async can(customerId: string, feature: string, metadata?: Record<string, string>, options?: CanOptions): Promise<CanResult> {
+  async can(customerId: string, feature: string, metadata?: Record<string, string | number | boolean>, options?: CanOptions): Promise<CanResult> {
     return _can(this.baseUrl, this.apiKey, customerId, feature, metadata, this.policy, options);
   }
 
@@ -610,7 +610,7 @@ export class Nozle {
     const subs = data.subscriptions ?? [];
 
     if (subs.length === 0) {
-      throw subscriptionError("active_subscription_not_found", `No active subscription for customer '${customerId}'`);
+      throw subscriptionError(NO_ACTIVE_SUBSCRIPTION, `No active subscription for customer '${customerId}'`);
     }
     if (subs.length > 1) {
       throw subscriptionError(

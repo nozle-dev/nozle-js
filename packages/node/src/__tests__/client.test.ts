@@ -772,7 +772,7 @@ describe("Nozle", () => {
         .summary({ from: "2026-10-10", to: "2026-10-01" })
         .catch((e: unknown) => e)) as NozleApiError;
       expect(error).toBeInstanceOf(NozleApiError);
-      expect(error.message).toBe("margin/summary failed: 400 Bad Request");
+      expect(error.message).toBe("margin/summary failed: 400 Bad Request: the end of the range must be after its start");
       expect(error.status).toBe(400);
       expect(error.code).toBe("invalid_date_range");
       expect(error.hasCode("invalid_date_range")).toBe(true);

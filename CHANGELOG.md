@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## Node.js 0.21.0 and React 0.19.0 — 2026-10-28
+
+### Added
+
+- Node: `NozleApiError.message` now ends with the server's `error` (or `message`) text, for example `margin/summary failed: 400 Bad Request: <server text>`; the `<operation> failed: <status> <statusText>` prefix is unchanged.
+- Node: `NO_ACTIVE_SUBSCRIPTION` and `isNoActiveSubscription(error)`. The SDK's lookup error, the billing handler's 404 and Core's `subscription_not_found` are one case: `error.hasCode("active_subscription_not_found")` is true for all of them.
+- Node: `credits.iterateOperations()`, `credits.iterateEntityOperations()`, `entities.iterate()` and the generic `paginate()` follow `next_cursor` page by page as an async iterator. Invoices are not paginated yet.
+- Node: typed margin results `MarginSummary`, `MarginByCustomer`, `MarginByMetric`, `MarginByPlan`, `MarginByModel`, `MarginTrend` (from the Engine OpenAPI schemas).
+
+### Changed
+
+- Node: `retryAfter` and the retry delay read an HTTP-date `Retry-After` as well as delta-seconds (the delay stays capped at 30 seconds).
+- Node: `can()` metadata accepts string, number and boolean values (the Engine accepts any JSON object).
+- Billing handler: the no-subscription 404 `code` is `active_subscription_not_found` (was `subscription_not_found`).
+- React: `CheckoutButton` returns to the current page without its query string or hash by default (was the full URL), and shows `errorMessage` (default "We couldn't start checkout. Please try again.") instead of the raw error. `onError` still receives the raw error.
+
 ## Node.js 0.20.0 and React 0.18.0 — 2026-10-27
 
 ### Added

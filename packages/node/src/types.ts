@@ -845,6 +845,19 @@ export type CustomerUsage = import("./generated/openapi").components["schemas"][
 type Schemas = import("./generated/openapi").components["schemas"];
 
 /** Margin forecast for the 30 days after the range (`GET /margin/forecast`). */
+/** `GET /margin/summary`. Amounts are integer cents. */
+export type MarginSummary = Schemas["MarginSummary"];
+/** `GET /margin/customers`; `customers` is null when there are none. */
+export type MarginByCustomer = Schemas["MarginByCustomerResponse"];
+/** `GET /margin/metrics`; `metrics` is null when there are none. */
+export type MarginByMetric = Schemas["MarginByMetricResponse"];
+/** `GET /margin/plans`; `plans` is null when there are none. */
+export type MarginByPlan = Schemas["MarginByPlanResponse"];
+/** `GET /margin/models`; `models` is null when there are none. */
+export type MarginByModel = Schemas["MarginByModelResponse"];
+/** `GET /margin/trend`; `trend` is null when the range has no events. */
+export type MarginTrend = Schemas["MarginTrendResponse"];
+
 export type MarginForecast = Schemas["MarginForecastResponse"];
 
 /** Result of replaying one metric's usage at a new unit price (`POST /margin/simulate`). All amounts are integer cents. */
