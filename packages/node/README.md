@@ -391,6 +391,28 @@ try {
 
 Never retry blindly: the SDK does not retry a 402. Add a card in the Nozle dashboard (`card_required`) or pay the Nozle invoices (`workspace_suspended`) and calls work again at once. Events sent during the suspension are refused, not queued.
 
+## Customer payment overdue (402)
+
+When one of your customers leaves invoices unpaid past the plan's grace (your dunning settings), Nozle refuses that customer's usage with HTTP 402 and `code` `customer_payment_overdue` until the invoices are paid. Other customers are not affected.
+
+- `can()` returns `{ allowed: false, reason: "customer_payment_overdue", used: 0, limit: null, remaining: null }` instead of throwing. Show the customer that a payment is overdue and link to your billing page.
+- `track()`, `usage.check()` and `usage.track()` throw `NozleApiError` with `status` 402; `error.hasCode(CUSTOMER_PAYMENT_OVERDUE)` is true. Nothing is recorded.
+- `/events/batch` stores the other customers' events and answers 200 with `error_details` keyed by the index of each refused event (`EventBatchResponse`); `refusedEventIndexes(body.error_details, CUSTOMER_PAYMENT_OVERDUE)` lists them. When every event is refused it answers 402 and stores nothing; `error.refusedEventIndexes(CUSTOMER_PAYMENT_OVERDUE)` lists them on the `NozleApiError`.
+- The LLM proxy answers 402 with `code` `customer_payment_overdue` for the `X-Nozle-Customer-Id` customer before the provider is called. `isCustomerPaymentOverdue(error)` is true for that error from the Anthropic SDK (it keeps the body in `error`) and for a `NozleApiError`. The OpenAI SDK drops a top-level `code`; with it, call `can()` before the request to read the reason.
+
+```ts
+import { CUSTOMER_PAYMENT_OVERDUE, refusedEventIndexes, type EventBatchResponse } from "@nozle-js/node";
+
+const { allowed, reason } = await nozle.can("cust_123", "code_completion");
+if (reason === CUSTOMER_PAYMENT_OVERDUE) {
+  // Ask the customer to pay the open invoice.
+}
+
+const res = await fetch(`${nozleUrl}/api/v1/events/batch`, { method: "POST", headers, body: JSON.stringify({ events }) });
+const body = (await res.json()) as EventBatchResponse;
+const refused = refusedEventIndexes(body.error_details, CUSTOMER_PAYMENT_OVERDUE); // stored: every other event
+```
+
 ## Health Check
 
 ```ts

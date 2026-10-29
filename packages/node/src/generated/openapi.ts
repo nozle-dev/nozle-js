@@ -4284,6 +4284,8 @@ export interface paths {
          *     | `usage_limit_exceeded` | Usage reached a hard limit. A soft limit never denies; it sets `overage: true`. |
          *     | `economic_policy_denied` | A margin policy decided `deny`. The `policy` object has the detail. |
          *
+         *     A customer whose unpaid invoices are past the plan's grace gets `402` with `allowed: false`, `reason` and `code` `customer_payment_overdue`, until the invoices are paid.
+         *
          *     A subscription on an override plan (a plan made from a catalog plan for one customer, for example a negotiated price or a subscription created from a quote) gets the entitlements and usage limits of the catalog plan it was made from. Its usage is still priced with the override plan's own charges.
          *
          *     **Subscription.** Plan, entitlements, limits and usage come from one subscription that is current now (started, not ended). With `subscription_id`, that subscription is evaluated. With `entity_id`, the Entity's own subscription is evaluated, else the customer's own (not Entity-owned) one. Without either, the customer's only current subscription is evaluated; with several, the customer's own one when there is exactly one, otherwise the answer is `subscription_required`. The newest subscription is never picked.
@@ -18296,7 +18298,7 @@ export interface components {
              * @description Denial code. Present only when `allowed` is `false`.
              * @enum {string}
              */
-            reason?: "feature_not_found" | "no_subscription" | "subscription_required" | "no_entitlement" | "usage_limit_exceeded" | "economic_policy_denied";
+            reason?: "feature_not_found" | "no_subscription" | "subscription_required" | "no_entitlement" | "usage_limit_exceeded" | "economic_policy_denied" | "customer_payment_overdue";
             /** @description Feature type, such as `boolean`, `config` or `metered`. Absent when the feature or subscription is missing, and when a metered feature has neither an entitlement nor a charge. */
             feature_type?: string;
             /** @description Configuration values granted by the plan for a non-metered feature. Absent when there are none. */
@@ -21279,18 +21281,44 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Event received */
+            /** @description Events received. Events of a customer whose unpaid invoices are past the plan's grace are refused and listed by their position in `error_details`, for example `{"2": {"external_customer_id": ["customer_payment_overdue"]}}`; the other events are stored and returned in `events`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EventsCreated"];
+                    "application/json": components["schemas"]["EventsCreated"] & {
+                        error_details?: {
+                            [index: string]: {
+                                [field: string]: string[];
+                            };
+                        };
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            /** @description Every event belongs to a customer whose unpaid invoices are past the plan's grace; nothing was stored. `code` is `customer_payment_overdue` and `error_details` lists every event by position. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 402 */
+                        status: number;
+                        error: string;
+                        /** @example customer_payment_overdue */
+                        code: string;
+                        error_details: {
+                            [index: string]: {
+                                [field: string]: string[];
+                            };
+                        };
+                    };
+                };
+            };
             /** @description The batch was not stored. `code` is `validation_errors` and `error_details` is keyed by the position of each failing event, with the same field errors as a single event, for example `{"0": {"external_customer_id": ["active_subscription_not_found"]}}`. An empty batch returns `events: [no_events]`, more than 100 events `events: [too_many_events]`. On the standard (PostgreSQL) event store, the same `transaction_id` twice in the batch, or one already used by an event with a different payload, fails that event with `transaction_id: [value_already_exist]`; the high-volume (ClickHouse) event store accepts repeats. */
             422: {
                 headers: {
@@ -29641,6 +29669,15 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             401: components["responses"]["EngineUnauthorized"];
             403: components["responses"]["EngineForbidden"];
+            /** @description The customer's unpaid invoices are past the plan's grace: `allowed: false`, `reason` and `code` `customer_payment_overdue`. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformCanResponse"] & components["schemas"]["EngineError"];
+                };
+            };
             /** @description A dependency is unavailable. With `code: usage_unavailable` the usage counter could not be read; retry after the `Retry-After` seconds and quote `request_id` to support. Subscription access and API key verification failures return an `error` without a `code`. */
             503: {
                 headers: {

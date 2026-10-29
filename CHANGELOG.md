@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## Node.js 0.23.0 — 2026-10-29
+
+Needs Engine 2.22.0 (customers blocked by dunning). With an older Engine nothing changes.
+
+### Added
+
+- `can()` returns `{ allowed: false, reason: "customer_payment_overdue", used: 0, limit: null, remaining: null }` when the Engine answers 402 `customer_payment_overdue` (the customer's unpaid invoices are past the plan's grace) instead of throwing. Other 402s (`workspace_suspended`, `card_required`) still throw. `createBillingHandler`'s entitlement route, and so React `useEntitlement`, returns this denial as data.
+- `CUSTOMER_PAYMENT_OVERDUE` constant. `track()`, `usage.check()` and `usage.track()` throw `NozleApiError` with this code for a blocked customer.
+- `/events/batch` for a blocked customer: a partial batch is a 200 that stores the other events and lists the refused ones by index in `error_details`. `refusedEventIndexes(details, code)` and the `EventBatchResponse` / `EventBatchErrorDetails` types read it. A batch whose events are all refused is a 402; `NozleApiError.refusedEventIndexes(code)` lists them.
+- `isCustomerPaymentOverdue(error)` is true for a `NozleApiError` with the code and for the LLM proxy's 402 surfaced by a provider SDK that keeps the body (`status` 402 with `code` or `error.code`).
+- `checkoutInvoice(invoiceId, { returnUrl })` sends `return_url`, so a customer who pays an invoice returns to your page instead of staying on the provider's page. `checkout()`, `managePaymentMethod()` and the React checkout components already send it (React defaults to the current page).
+- Generated OpenAPI types: the 402 on `/can` and `/events/batch`, `error_details` on the `/events/batch` 200, and `customer_payment_overdue` in `PlatformCanResponse.reason`.
+
+## React 0.24.0 — 2026-10-29
+
+### Changed
+
+- `PaymentMethodDisplay` opens the hosted card page by default. Its update button calls `onUpdatePaymentMethod` when given; otherwise, inside a `BillingProvider` with `createManagePaymentMethod`, it runs `useManagePaymentMethod()`, shows "Loading..." while the request runs and the error message if it fails; otherwise it navigates to `updateHref` as before. Outside a `BillingProvider` nothing changes.
+- `useManagePaymentMethod()` no longer throws at render outside a `BillingProvider`; `managePaymentMethod()` rejects with the missing `createManagePaymentMethod` error instead.
+
 ## Node.js 0.22.0 and React 0.23.0 — 2026-10-29
 
 Needs Core 11.10.0 (one plan family sold in several currencies).

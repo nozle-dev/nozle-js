@@ -61,6 +61,19 @@ describe("Razorpay server checkout", () => {
     expect(await client.checkoutStatus("checkout-1")).toEqual(status);
     expect(fetch.mock.calls[3][0]).toBe(`${expectedBase}/api/v1/checkout/checkout-1`);
   });
+  it("checkoutInvoice sends return_url and cancel_url when given", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => checkout });
+    vi.stubGlobal("fetch", fetch);
+    await new Nozle({ apiKey: "sk_test" }).checkoutInvoice("invoice-1", {
+      returnUrl: "https://app.example/billing",
+      cancelUrl: "https://app.example/billing?cancelled=1",
+    });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      invoice_id: "invoice-1",
+      return_url: "https://app.example/billing",
+      cancel_url: "https://app.example/billing?cancelled=1",
+    });
+  });
   it("keeps all collection endpoints server-only", async () => {
     const client = new Nozle({ apiKey: "pk_browser" });
     await expect(client.checkoutInvoice("invoice")).rejects.toThrow(

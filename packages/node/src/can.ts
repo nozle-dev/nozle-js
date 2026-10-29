@@ -1,5 +1,5 @@
 import { request, type RequestPolicy } from "./http";
-import { apiError } from "./errors";
+import { apiError, CUSTOMER_PAYMENT_OVERDUE } from "./errors";
 import type { CanOptions, CanResult } from "./types";
 
 export async function can(
@@ -26,7 +26,12 @@ export async function can(
   });
 
   if (!res.ok) {
-    throw await apiError(`can check`, res);
+    const error = await apiError(`can check`, res);
+    // A blocked customer is a denial, not a failure; other 402s (workspace_suspended, card_required) still throw.
+    if (error.status === 402 && error.code === CUSTOMER_PAYMENT_OVERDUE) {
+      return { allowed: false, reason: CUSTOMER_PAYMENT_OVERDUE, used: 0, limit: null, remaining: null };
+    }
+    throw error;
   }
 
   return res.json();

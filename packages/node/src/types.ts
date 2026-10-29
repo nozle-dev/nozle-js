@@ -50,6 +50,11 @@ export interface CanOptions {
 
 export interface CanResult {
   allowed: boolean;
+  /**
+   * Denial code when `allowed` is `false`: `feature_not_found`, `no_subscription`, `subscription_required`,
+   * `no_entitlement`, `usage_limit_exceeded`, `economic_policy_denied`, or `customer_payment_overdue` (the
+   * customer's unpaid invoices are past the plan's grace; `used` is `0` and `limit`/`remaining` are `null`).
+   */
   reason?: string;
   feature_type?: string;
   configuration?: Record<string, string>;

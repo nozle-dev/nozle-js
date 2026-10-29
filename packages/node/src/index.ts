@@ -1,5 +1,13 @@
 export { Nozle } from "./client";
-export { NozleApiError, NO_ACTIVE_SUBSCRIPTION, isNoActiveSubscription } from "./errors";
+export {
+  NozleApiError,
+  NO_ACTIVE_SUBSCRIPTION,
+  CUSTOMER_PAYMENT_OVERDUE,
+  isNoActiveSubscription,
+  isCustomerPaymentOverdue,
+  refusedEventIndexes,
+} from "./errors";
+export type { EventBatchErrorDetails, EventBatchResponse } from "./errors";
 export { paginate } from "./paginate";
 export { MarginClient } from "./margin";
 export { EventsNamespace } from "./events";
