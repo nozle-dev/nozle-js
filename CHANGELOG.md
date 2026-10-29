@@ -10,8 +10,9 @@ Needs Engine 2.22.0 (customers blocked by dunning). With an older Engine nothing
 
 - `can()` returns `{ allowed: false, reason: "customer_payment_overdue", used: 0, limit: null, remaining: null }` when the Engine answers 402 `customer_payment_overdue` (the customer's unpaid invoices are past the plan's grace) instead of throwing. Other 402s (`workspace_suspended`, `card_required`) still throw. `createBillingHandler`'s entitlement route, and so React `useEntitlement`, returns this denial as data.
 - `CUSTOMER_PAYMENT_OVERDUE` constant. `track()`, `usage.check()` and `usage.track()` throw `NozleApiError` with this code for a blocked customer.
-- `NozleApiError.refusedEventIndexes(code)` lists the event positions a refused `/events/batch` names in `error_details` (keyed by index), so the other events can be sent again.
-- Generated OpenAPI types: the 402 on `/can` and `/events/batch`, and `customer_payment_overdue` in `PlatformCanResponse.reason`.
+- `/events/batch` for a blocked customer: a partial batch is a 200 that stores the other events and lists the refused ones by index in `error_details`. `refusedEventIndexes(details, code)` and the `EventBatchResponse` / `EventBatchErrorDetails` types read it. A batch whose events are all refused is a 402; `NozleApiError.refusedEventIndexes(code)` lists them.
+- `isCustomerPaymentOverdue(error)` is true for a `NozleApiError` with the code and for the LLM proxy's 402 surfaced by a provider SDK that keeps the body (`status` 402 with `code` or `error.code`).
+- Generated OpenAPI types: the 402 on `/can` and `/events/batch`, `error_details` on the `/events/batch` 200, and `customer_payment_overdue` in `PlatformCanResponse.reason`.
 
 ## React 0.24.0 — 2026-10-29
 

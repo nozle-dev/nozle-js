@@ -397,10 +397,11 @@ When one of your customers leaves invoices unpaid past the plan's grace (your du
 
 - `can()` returns `{ allowed: false, reason: "customer_payment_overdue", used: 0, limit: null, remaining: null }` instead of throwing. Show the customer that a payment is overdue and link to your billing page.
 - `track()`, `usage.check()` and `usage.track()` throw `NozleApiError` with `status` 402; `error.hasCode(CUSTOMER_PAYMENT_OVERDUE)` is true. Nothing is recorded.
-- A `/events/batch` with events of a blocked customer stores none of the batch. `error_details` is keyed by event index, and `error.refusedEventIndexes(CUSTOMER_PAYMENT_OVERDUE)` lists the refused positions; send the other events again.
+- `/events/batch` stores the other customers' events and answers 200 with `error_details` keyed by the index of each refused event (`EventBatchResponse`); `refusedEventIndexes(body.error_details, CUSTOMER_PAYMENT_OVERDUE)` lists them. When every event is refused it answers 402 and stores nothing; `error.refusedEventIndexes(CUSTOMER_PAYMENT_OVERDUE)` lists them on the `NozleApiError`.
+- The LLM proxy answers 402 with `code` `customer_payment_overdue` for the `X-Nozle-Customer-Id` customer before the provider is called. `isCustomerPaymentOverdue(error)` is true for that error from the Anthropic SDK (it keeps the body in `error`) and for a `NozleApiError`. The OpenAI SDK drops a top-level `code`; with it, call `can()` before the request to read the reason.
 
 ```ts
-import { CUSTOMER_PAYMENT_OVERDUE, NozleApiError } from "@nozle-js/node";
+import { CUSTOMER_PAYMENT_OVERDUE, refusedEventIndexes, type EventBatchResponse } from "@nozle-js/node";
 
 const { allowed, reason } = await nozle.can("cust_123", "code_completion");
 if (reason === CUSTOMER_PAYMENT_OVERDUE) {
@@ -408,11 +409,8 @@ if (reason === CUSTOMER_PAYMENT_OVERDUE) {
 }
 
 const res = await fetch(`${nozleUrl}/api/v1/events/batch`, { method: "POST", headers, body: JSON.stringify({ events }) });
-if (!res.ok) {
-  const error = new NozleApiError("events batch", res, await res.json().catch(() => undefined));
-  const refused = new Set(error.refusedEventIndexes(CUSTOMER_PAYMENT_OVERDUE));
-  const retry = events.filter((_, index) => !refused.has(index));
-}
+const body = (await res.json()) as EventBatchResponse;
+const refused = refusedEventIndexes(body.error_details, CUSTOMER_PAYMENT_OVERDUE); // stored: every other event
 ```
 
 ## Health Check

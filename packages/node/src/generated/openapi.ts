@@ -21281,19 +21281,25 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Event received */
+            /** @description Events received. Events of a customer whose unpaid invoices are past the plan's grace are refused and listed by their position in `error_details`, for example `{"2": {"external_customer_id": ["customer_payment_overdue"]}}`; the other events are stored and returned in `events`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EventsCreated"];
+                    "application/json": components["schemas"]["EventsCreated"] & {
+                        error_details?: {
+                            [index: string]: {
+                                [field: string]: string[];
+                            };
+                        };
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            /** @description The batch was not stored: events of a customer whose unpaid invoices are past the plan's grace. `code` is `customer_payment_overdue` and `error_details` is keyed by the position of each refused event, for example `{"2": {"external_customer_id": ["customer_payment_overdue"]}}`. Send the other events again. */
+            /** @description Every event belongs to a customer whose unpaid invoices are past the plan's grace; nothing was stored. `code` is `customer_payment_overdue` and `error_details` lists every event by position. */
             402: {
                 headers: {
                     [name: string]: unknown;

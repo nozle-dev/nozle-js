@@ -45,23 +45,48 @@ export class NozleApiError extends Error {
   }
 
   /**
-   * Positions of the events a refused `/events/batch` lists with this code, ascending. The batch's `error_details`
-   * is keyed by event index, for example `{ "2": { external_customer_id: ["customer_payment_overdue"] } }`.
-   * The batch stored nothing; send the events not listed again.
+   * Positions of the events a `/events/batch` refused with this code, when every event was refused (402, nothing
+   * stored). A partial batch is a 200; read it with {@link refusedEventIndexes}.
    */
   refusedEventIndexes(code: string): number[] {
-    return Object.entries(this.errorDetails ?? {})
-      .filter(([index, fields]) =>
-        /^\d+$/.test(index) && !!fields && typeof fields === "object" &&
-        Object.values(fields).some((codes) => Array.isArray(codes) && codes.includes(code)))
-      .map(([index]) => Number(index));
+    return refusedEventIndexes(this.errorDetails, code);
   }
 }
 
+/** `error_details` of a `/events/batch` answer: field errors keyed by the event's index in the request. */
+export type EventBatchErrorDetails = Record<string, Record<string, string[]>>;
+
+/** A `/events/batch` 200: the stored events, and `error_details` for the events refused by index (the others were stored). */
+export interface EventBatchResponse<Event = Record<string, unknown>> {
+  events: Event[];
+  error_details?: EventBatchErrorDetails;
+}
+
 /**
- * The code for a customer whose unpaid invoices are past the plan's grace: `can()` returns `allowed: false` with
- * this `reason`, and usage and events for the customer are refused with a 402 `NozleApiError`, until the invoices are paid.
+ * Positions, ascending, that `error_details` of a `/events/batch` answer lists with this code, for example
+ * `[2]` for `{ "2": { external_customer_id: ["customer_payment_overdue"] } }`. Pass a 200 body's `error_details`.
  */
+export function refusedEventIndexes(details: unknown, code: string): number[] {
+  if (!details || typeof details !== "object") return [];
+  return Object.entries(details)
+    .filter(([index, fields]) =>
+      /^\d+$/.test(index) && !!fields && typeof fields === "object" &&
+      Object.values(fields).some((codes) => Array.isArray(codes) && codes.includes(code)))
+    .map(([index]) => Number(index));
+}
+
+/**
+ * True for a `customer_payment_overdue` refusal: a `NozleApiError` with the code, or a provider SDK error from the
+ * LLM proxy with `status` 402 and the code in `code` or in the parsed body `error.code` (the Anthropic SDK keeps
+ * the body there). Reads codes only.
+ */
+export function isCustomerPaymentOverdue(error: unknown): boolean {
+  if (error instanceof NozleApiError) return error.hasCode(CUSTOMER_PAYMENT_OVERDUE);
+  if (!error || typeof error !== "object") return false;
+  const { status, code, error: body } = error as { status?: unknown; code?: unknown; error?: { code?: unknown } | null };
+  return status === 402 && (code === CUSTOMER_PAYMENT_OVERDUE || (typeof body === "object" && body?.code === CUSTOMER_PAYMENT_OVERDUE));
+}
+
 export const CUSTOMER_PAYMENT_OVERDUE = "customer_payment_overdue";
 
 /** The one code for a customer with no active subscription. Core's `subscription_not_found` counts as the same case in {@link NozleApiError.hasCode}. */

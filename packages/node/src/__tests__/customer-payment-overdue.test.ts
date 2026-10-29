@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Nozle } from "../client";
-import { CUSTOMER_PAYMENT_OVERDUE, NozleApiError } from "../index";
+import { CUSTOMER_PAYMENT_OVERDUE, NozleApiError, isCustomerPaymentOverdue, refusedEventIndexes, type EventBatchResponse } from "../index";
 
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
@@ -41,19 +41,40 @@ describe("customer_payment_overdue (402)", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("refusedEventIndexes lists the refused events of a batch", () => {
+  it("a partial batch (200) lists the refused events; the others were stored", () => {
+    const body: EventBatchResponse = {
+      events: [{ transaction_id: "t0" }, { transaction_id: "t2" }],
+      error_details: {
+        "3": { external_customer_id: [CUSTOMER_PAYMENT_OVERDUE] },
+        "1": { external_customer_id: [CUSTOMER_PAYMENT_OVERDUE] },
+      },
+    };
+    expect(refusedEventIndexes(body.error_details, CUSTOMER_PAYMENT_OVERDUE)).toEqual([1, 3]);
+    expect(refusedEventIndexes(undefined, CUSTOMER_PAYMENT_OVERDUE)).toEqual([]);
+  });
+
+  it("an all-refused batch (402) lists every event on the error", () => {
     const error = new NozleApiError("events batch", { status: 402, statusText: "Payment Required" }, {
       status: 402,
       code: CUSTOMER_PAYMENT_OVERDUE,
       error: "payment overdue",
       error_details: {
-        "3": { external_customer_id: [CUSTOMER_PAYMENT_OVERDUE] },
+        "1": { external_customer_id: [CUSTOMER_PAYMENT_OVERDUE] },
         "0": { external_customer_id: [CUSTOMER_PAYMENT_OVERDUE] },
-        "1": { code: ["value_is_mandatory"] },
       },
     });
     expect(error.hasCode(CUSTOMER_PAYMENT_OVERDUE)).toBe(true);
-    expect(error.refusedEventIndexes(CUSTOMER_PAYMENT_OVERDUE)).toEqual([0, 3]);
-    expect(new NozleApiError("track", { status: 402, statusText: "Payment Required" }, {}).refusedEventIndexes(CUSTOMER_PAYMENT_OVERDUE)).toEqual([]);
+    expect(isCustomerPaymentOverdue(error)).toBe(true);
+    expect(error.refusedEventIndexes(CUSTOMER_PAYMENT_OVERDUE)).toEqual([0, 1]);
+  });
+
+  it("isCustomerPaymentOverdue reads an LLM proxy 402 from a provider SDK error by code", () => {
+    const body = { code: CUSTOMER_PAYMENT_OVERDUE, error: "payment overdue" };
+    // The Anthropic SDK keeps the parsed body in `error`.
+    expect(isCustomerPaymentOverdue({ status: 402, error: body })).toBe(true);
+    expect(isCustomerPaymentOverdue({ status: 402, code: CUSTOMER_PAYMENT_OVERDUE })).toBe(true);
+    expect(isCustomerPaymentOverdue({ status: 402, error: { code: "workspace_suspended" } })).toBe(false);
+    expect(isCustomerPaymentOverdue({ status: 400, code: CUSTOMER_PAYMENT_OVERDUE })).toBe(false);
+    expect(isCustomerPaymentOverdue(new NozleApiError("proxy", { status: 402, statusText: "Payment Required" }, { code: "card_required" }))).toBe(false);
   });
 });
