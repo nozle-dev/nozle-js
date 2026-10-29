@@ -13,9 +13,21 @@ const client = (maxRetries?: number) =>
   new Nozle({ apiKey: "sk_test", maxRetries, retryDelayMs: 1 });
 
 describe("opt-in retries", () => {
-  it("never retries by default", async () => {
+  it("retries a safe call twice by default", async () => {
     fetchMock.mockResolvedValue(fail(503));
     await expect(client().plans()).rejects.toBeInstanceOf(NozleApiError);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("an explicit maxRetries: 0 disables retries", async () => {
+    fetchMock.mockResolvedValue(fail(503));
+    await expect(client(0).plans()).rejects.toBeInstanceOf(NozleApiError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry an unsafe call (POST without an idempotency key) by default", async () => {
+    fetchMock.mockResolvedValue(fail(503));
+    await expect(client().subscribe("cust_1", "pro")).rejects.toBeInstanceOf(NozleApiError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -101,7 +113,7 @@ describe("Retry-After as an HTTP-date", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-28T10:00:00Z"));
     fetchMock.mockResolvedValueOnce(fail(429, { "retry-after": "Wed, 28 Oct 2026 10:00:07 GMT" }));
-    const error = await client().plans().catch((cause: unknown) => cause as NozleApiError);
+    const error = await client(0).plans().catch((cause: unknown) => cause as NozleApiError);
     expect(error.retryAfter).toBe(7);
     vi.useRealTimers();
   });

@@ -163,7 +163,7 @@ describe("margin.forecast and margin.simulate", () => {
     const error = await rejection(client().margin.forecast({ from: "2026-10-02", to: "2026-10-01" }));
     expect([error.status, error.code]).toEqual([400, "invalid_date_range"]);
     fetchMock.mockResolvedValueOnce(json({ code: "analytics_unavailable", error: "down" }, 503));
-    expect((await rejection(client().margin.simulate({ metricCode: "m", newPriceDollars: 0 }))).code).toBe("analytics_unavailable");
+    expect((await rejection(new Nozle({ apiKey: "sk_test", maxRetries: 0 }).margin.simulate({ metricCode: "m", newPriceDollars: 0 }))).code).toBe("analytics_unavailable");
     fetchMock.mockReset();
     await expect(client().margin.simulate({ metricCode: " ", newPriceDollars: 1 })).rejects.toThrow("metricCode");
     await expect(client().margin.simulate({ metricCode: "m", newPriceDollars: -1 })).rejects.toThrow("newPriceDollars");

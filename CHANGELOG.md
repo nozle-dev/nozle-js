@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## Node.js 0.24.0 — 2026-10-29
+
+### Changed
+
+- `track()` no longer looks up the customer's subscription (`GET /api/v1/subscriptions`, cached forever). It sends `external_customer_id` and your `subscriptionId` if you pass one; Engine resolves the customer's one active subscription, so a plan change is seen at once. For a customer with several or no active subscriptions, Engine's 422 `active_subscription_ambiguous` / `active_subscription_not_found` is thrown as a `NozleApiError` with that `code`. `currentUsage()` and `pastUsage()` still look the subscription up; that cache now expires after 60 seconds.
+- `maxRetries` defaults to 2 (was 0). Only safe calls are retried: GET, HEAD, `track()` (its transaction ID makes a repeat safe) and calls with an `Idempotency-Key`. Pass `maxRetries: 0` to keep the old behaviour.
+- `wrapOpenAI`, `wrapAnthropic` and `captureFetch` emit a `NozleTrackingWarning` (`process.emitWarning`) when recording usage fails and no `onError` is set. The provider response is unaffected; where `process` does not exist nothing is emitted.
+
 ## Node.js 0.23.0 — 2026-10-29
 
 Needs Engine 2.22.0 (customers blocked by dunning). With an older Engine nothing changes.

@@ -3,6 +3,7 @@ import {
   captureProviderUsage,
   detectUsage,
   StreamUsageCollector,
+  warnTrackingFailure,
   type DetectedUsage,
 } from "./provider-usage";
 
@@ -33,7 +34,8 @@ export interface CaptureFetchOptions {
   includeStreamUsage?: boolean;
   /**
    * Called when usage could not be read or recorded, and once per event code when no Feature has
-   * that code (`code: "feature_not_found"`). The provider response is never affected.
+   * that code (`code: "feature_not_found"`). Without it, failures are emitted as a `NozleTrackingWarning`
+   * process warning. The provider response is never affected.
    */
   onError?: (error: unknown) => void;
 }
@@ -56,7 +58,7 @@ export function captureFetch(
   if (typeof fetchImpl !== "function") throw new Error("captureFetch requires a fetch implementation");
   const report = (error: unknown) => {
     try {
-      options.onError?.(error);
+      (options.onError ?? warnTrackingFailure)(error);
     } catch {
       // The provider response must not depend on the error callback.
     }
