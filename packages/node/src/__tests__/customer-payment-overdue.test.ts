@@ -78,3 +78,15 @@ describe("customer_payment_overdue (402)", () => {
     expect(isCustomerPaymentOverdue(new NozleApiError("proxy", { status: 402, statusText: "Payment Required" }, { code: "card_required" }))).toBe(false);
   });
 });
+
+describe("NozleApiError message from an LLM proxy refusal", () => {
+  it("reads the nested error.message of the provider-shaped body", () => {
+    const error = new NozleApiError("proxy", { status: 402, statusText: "Payment Required" }, {
+      code: "customer_payment_overdue",
+      error: { message: "Payment overdue", type: "payment_required", code: "customer_payment_overdue" },
+    });
+
+    expect(error.message).toBe("proxy failed: 402 Payment Required: Payment overdue");
+    expect(error.hasCode("customer_payment_overdue")).toBe(true);
+  });
+});

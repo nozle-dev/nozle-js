@@ -112,11 +112,12 @@ export async function apiError(operation: string, response: Response): Promise<N
   return new NozleApiError(operation, response, body);
 }
 
-/** `: <text>` from the response body's `error` or `message` string, or an empty string. */
+/** `: <text>` from the response body's `error` or `message` string (or the LLM proxy's `error.message`), or an empty string. */
 function serverText(body: unknown): string {
   if (!body || typeof body !== "object") return "";
   const { error, message } = body as Record<string, unknown>;
-  const text = [error, message].find((value) => typeof value === "string" && value.trim());
+  const nested = error && typeof error === "object" ? (error as Record<string, unknown>).message : undefined;
+  const text = [error, nested, message].find((value) => typeof value === "string" && value.trim());
   return text ? `: ${(text as string).trim().slice(0, 500)}` : "";
 }
 
