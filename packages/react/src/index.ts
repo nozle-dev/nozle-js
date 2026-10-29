@@ -52,6 +52,7 @@ export type {
   CheckoutSubscriptionResult,
   CreateCheckout,
   CreateCheckoutInput,
+  CreateCheckoutInputBase,
   CreateManagePaymentMethod,
   ManagePaymentMethodResult,
   NozleClient,
@@ -88,6 +89,7 @@ export type { UseCheckoutResult as UseCheckoutSessionResult } from "./hooks/use-
 export { PricingTable } from "./components/pricing/PricingTable.js";
 export type { PricingTableProps } from "./components/pricing/PricingTable.js";
 export {
+  getAvailableCurrencies,
   getAvailableIntervals,
   getDefaultInterval,
   getPricingCards,
@@ -105,6 +107,8 @@ export type {
   PricingInterval,
   PricingIntervalOption,
   PricingPlan,
+  PricingPlanFamilyRef,
+  PricingPrice,
   PricingPrivilege,
 } from "./components/pricing/catalog.js";
 
@@ -130,7 +134,7 @@ export type { ComparisonRow } from "./components/pricing/plan-features.js";
 export { ManagePaymentMethodButton } from "./components/billing/ManagePaymentMethodButton.js";
 export type { ManagePaymentMethodButtonProps } from "./components/billing/ManagePaymentMethodButton.js";
 export { CheckoutButton } from "./components/billing/CheckoutButton.js";
-export type { CheckoutButtonProps } from "./components/billing/CheckoutButton.js";
+export type { CheckoutButtonBaseProps, CheckoutButtonProps } from "./components/billing/CheckoutButton.js";
 
 export { NozleCardSetup } from "./components/billing/NozleCardSetup.js";
 export type { NozleCardSetupProps } from "./components/billing/NozleCardSetup.js";

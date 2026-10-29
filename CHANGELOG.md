@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## Node.js 0.22.0 and React 0.23.0 — 2026-10-29
+
+Needs Core 11.10.0 (one plan family sold in several currencies).
+
+### Added
+
+- Node: `plans({ currency, externalCustomerId })` sends `currency` and `external_customer_id`. With a secret key and neither, every plan is listed in every currency; `currency` keeps that currency, and `externalCustomerId` the customer's locked currency (ignored when the organization allows several currencies per customer). A publishable key without `currency` gets each family's default-currency plans. A family plan carries `family` (`PlanFamilyRef`: `code`, `currencies`, `default_currency`) and `prices` (`PlanPrice[]`: `currency`, `interval`, `plan_code`, `amount_cents`).
+- Node: `checkout()` and `subscribe()` take `{ planFamilyCode, interval, currency? }` (`PlanFamilySelection`) instead of a plan code and send `plan_family_code`, `interval` and `currency`.
+- React: `PricingTable` `currency` and `currencies` props and a currency switch, shown when the plans' families are sold in two or more currencies. Choosing a currency refetches the catalog with `currency`; checkout gets `currency` too. A card never mixes currencies, and savings and the upgrade direction compare plans of one currency only. `PricingPlan` gains `family` and `prices`; `PricingCatalog` gains `currency`; `getAvailableCurrencies(catalog)` lists the offered currencies.
+- React: `CheckoutButton` takes `currency`, and `planFamilyCode` with `interval` instead of `planCode`.
+
+### Changed
+
+- React: `CreateCheckoutInput` has either `planCode` or `planFamilyCode` with `interval`, plus optional `currency`. A backend that reads `planCode` passes `planCode ?? { planFamilyCode, interval, currency }` to `nozle.checkout()`.
+
 ## React 0.22.0 — 2026-10-29
 
 ### Fixed

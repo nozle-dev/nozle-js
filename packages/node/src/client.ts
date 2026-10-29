@@ -25,6 +25,8 @@ import type {
   CustomerUsage,
   TrackOptions,
   Plan,
+  PlanFamilySelection,
+  PlansOptions,
   CheckoutResult,
   CheckoutOptions,
   ManagePaymentMethodResult,
@@ -58,6 +60,18 @@ function trimTrailingSlashes(url: string): string {
   let end = url.length;
   while (end > 0 && url.charCodeAt(end - 1) === 47) end -= 1;
   return url.slice(0, end);
+}
+
+/** The request fields naming what to sell: `plan_code`, or `plan_family_code` + `interval` (+ `currency`). */
+function planParams(operation: string, plan: string | PlanFamilySelection): Record<string, string> {
+  if (typeof plan === "string") return { plan_code: plan };
+  if (!plan?.planFamilyCode?.trim() || !plan.interval?.trim())
+    throw new Error(`${operation} requires planFamilyCode and interval`);
+  return {
+    plan_family_code: plan.planFamilyCode,
+    interval: plan.interval,
+    ...(plan.currency && { currency: plan.currency }),
+  };
 }
 
 export class Nozle {
@@ -135,10 +149,15 @@ export class Nozle {
   /**
    * Current plan versions. A secret key gets every plan, including families hidden from the
    * pricing table; `includeHidden: false` gets the pricing table view a publishable key gets.
+   * Without `currency` a secret key gets every plan in every currency; `currency` keeps that currency only, and
+   * `externalCustomerId` the customer's locked currency (ignored when the organization allows several currencies per
+   * customer). A publishable key without `currency` gets each family's default-currency plans.
    */
-  async plans(options: { includeHidden?: boolean } = {}): Promise<Plan[]> {
+  async plans(options: PlansOptions = {}): Promise<Plan[]> {
     const url = new URL(`${this.baseUrl}/api/v1/plans`);
     if (options.includeHidden !== undefined) url.searchParams.set("include_hidden", String(options.includeHidden));
+    if (options.currency) url.searchParams.set("currency", options.currency);
+    if (options.externalCustomerId) url.searchParams.set("external_customer_id", options.externalCustomerId);
     const res = await request(this.policy, url.toString(), {
       headers: { Authorization: `Bearer ${this.apiKey}` },
     });
@@ -147,9 +166,10 @@ export class Nozle {
     return data.plans ?? [];
   }
 
+  /** `plan` is a plan code, or a family, interval and optional currency for Core to resolve to the plan. */
   async checkout(
     customerId: string,
-    planCode: string,
+    plan: string | PlanFamilySelection,
     returnUrl?: string,
     options: CheckoutOptions = {},
   ): Promise<CheckoutResult> {
@@ -162,7 +182,7 @@ export class Nozle {
       "POST",
       "",
       {
-        plan_code: planCode,
+        ...planParams("checkout", plan),
         customer_id: customerId,
         ...(options.subscriptionId && { subscription_id: options.subscriptionId }),
         ...(options.quoteId && { quote_id: options.quoteId }),
@@ -338,9 +358,10 @@ export class Nozle {
 
   /**
    * Subscribes the customer to the current version of the plan, or to `options.planVersion` (for example to keep
-   * selling an older price). The same customer and code again keep the subscription's own version.
+   * selling an older price). The same customer and code again keep the subscription's own version. `plan` may be a
+   * family, interval and optional currency instead of a plan code.
    */
-  async subscribe(customerId: string, planCode: string, options: SubscribeOptions = {}): Promise<SubscribeResult> {
+  async subscribe(customerId: string, plan: string | PlanFamilySelection, options: SubscribeOptions = {}): Promise<SubscribeResult> {
     if (!this.apiKey.startsWith("sk_")) {
       throw new Error("subscribe requires a secret key");
     }
@@ -355,7 +376,7 @@ export class Nozle {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        plan_code: planCode,
+        ...planParams("subscribe", plan),
         customer_id: customerId,
         ...(planVersion !== undefined && { plan_version: planVersion }),
       }),

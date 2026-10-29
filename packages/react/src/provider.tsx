@@ -133,8 +133,19 @@ export type CheckoutResult =
   | ScheduledCheckoutResult
   | { url: string };
 
-export interface CreateCheckoutInput {
-  planCode: string;
+/**
+ * What a checkout sells: a plan code, or a plan family with an interval for the server to resolve
+ * (pass `input.planCode ?? { planFamilyCode, interval, currency }` to `nozle.checkout()`).
+ */
+export type CreateCheckoutInput = CreateCheckoutInputBase &
+  (
+    | { planCode: string; planFamilyCode?: undefined; interval?: undefined }
+    | { planCode?: undefined; planFamilyCode: string; interval: string }
+  );
+
+export interface CreateCheckoutInputBase {
+  /** The currency the customer chose (ISO code). With a family it picks the variant; without one it is the plan's currency. */
+  currency?: string;
   returnUrl: string;
   /** Where the hosted page sends a customer who leaves it. Pass it on to `nozle.checkout()` as `cancelUrl`. */
   cancelUrl?: string;

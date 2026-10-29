@@ -7,6 +7,7 @@ import {
 } from '../../provider.js';
 import { handleCheckoutResult } from '../billing/CheckoutButton.js';
 import {
+  getAvailableCurrencies,
   getAvailableIntervals,
   getDefaultInterval,
   getPricingCards,
@@ -25,7 +26,7 @@ import { useAppearance, useSavedPricingTable, type UseAppearance } from '../../a
 import { PanelPlanCard } from './PanelPlanCard.js';
 import { currentButtonStyle, planButtonState } from './button-state.js';
 import { NozleBranding } from '../branding/PoweredByNozle.js';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { catalogQuery, idleQueryClient } from '../../hooks/use-plans.js';
 import { T, border, primaryButtonBorder, buttonStyle, text as role, type Appearance, type ButtonVariant } from '../../appearance/tokens.js';
 
@@ -99,6 +100,16 @@ export interface PricingTableProps {
   annualDiscountLabel?: string;
   /** Locale for prices and feature values. Defaults to `en-US`. */
   locale?: string;
+  /**
+   * Currency shown first (ISO code). The catalog is fetched in it; with `plans` only plans in it are
+   * shown. Without it each family shows its default-currency plans.
+   */
+  currency?: string;
+  /**
+   * Currencies offered in the currency switch, which shows when there are two or more. Defaults to
+   * the currencies the plans' families are sold in.
+   */
+  currencies?: string[];
   appearance?: Appearance;
 }
 
@@ -112,7 +123,62 @@ function Check(): React.ReactElement {
   );
 }
 
-// ─── Interval switch ─────────────────────────────────────────────────────────
+// ─── Switches ────────────────────────────────────────────────────────────────
+
+const switchPill: CSSProperties = {
+  display: 'inline-flex',
+  flexWrap: 'wrap',
+  justifyContent: 'center',
+  borderRadius: '9999px',
+  padding: '4px',
+  background: T.muted,
+  gap: '2px',
+};
+
+function switchTab(active: boolean): CSSProperties {
+  return {
+    padding: '8px 20px',
+    borderRadius: '9999px',
+    border: 'none',
+    background: active ? T.card : 'transparent',
+    ...role.action,
+    color: active ? T.foreground : T.mutedForeground,
+    cursor: 'pointer',
+    boxShadow: active ? T.shadow : 'none',
+    transition: 'all 0.15s ease',
+  };
+}
+
+function CurrencySwitch({
+  currencies,
+  selected,
+  onChange,
+  el,
+}: {
+  currencies: string[];
+  selected: string | null;
+  onChange: (currency: string) => void;
+  el: UseAppearance['el'];
+}) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+      <div role="group" aria-label="Currency" {...el('pricingTable__toggle', switchPill)}>
+        {currencies.map((currency) => (
+          <button
+            key={currency}
+            type="button"
+            data-currency={currency}
+            onClick={() => onChange(currency)}
+            {...el('pricingTable__toggleButton', switchTab(currency === selected))}
+            aria-pressed={currency === selected}
+          >
+            {currency}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function IntervalSwitch({
   options,
@@ -127,30 +193,9 @@ function IntervalSwitch({
   annualDiscountLabel?: string;
   el: UseAppearance['el'];
 }) {
-  const pill: CSSProperties = {
-    display: 'inline-flex',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    borderRadius: '9999px',
-    padding: '4px',
-    background: T.muted,
-    gap: '2px',
-  };
-  const tab = (active: boolean): CSSProperties => ({
-    padding: '8px 20px',
-    borderRadius: '9999px',
-    border: 'none',
-    background: active ? T.card : 'transparent',
-    ...role.action,
-    color: active ? T.foreground : T.mutedForeground,
-    cursor: 'pointer',
-    boxShadow: active ? T.shadow : 'none',
-    transition: 'all 0.15s ease',
-  });
-
   return (
     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2.5rem' }}>
-      <div role="group" aria-label="Billing interval" {...el('pricingTable__toggle', pill)}>
+      <div role="group" aria-label="Billing interval" {...el('pricingTable__toggle', switchPill)}>
         {options.map((option) => {
           const active = option.interval === selected;
           const note = option.interval === 'yearly' && annualDiscountLabel
@@ -164,7 +209,7 @@ function IntervalSwitch({
               type="button"
               data-interval={option.interval}
               onClick={() => onChange(option.interval)}
-              {...el('pricingTable__toggleButton', tab(active))}
+              {...el('pricingTable__toggleButton', switchTab(active))}
               aria-pressed={active}
               aria-label={note ? `${option.label}, ${note.replace(/^Save /, 'save ')}` : undefined}
             >
@@ -517,6 +562,8 @@ export function PricingTable({
   enterpriseEmail,
   annualDiscountLabel: annualDiscountLabelProp,
   locale: localeProp,
+  currency: currencyProp,
+  currencies: currenciesProp,
   appearance,
 }: PricingTableProps): React.ReactElement {
   const { root, el, planCardLayout } = useAppearance(appearance, 'PricingTable');
@@ -531,14 +578,21 @@ export function PricingTable({
   const locale = resolvePricingLocale(localeProp);
   const billing = useOptionalBillingContext();
   const client = billing?.client;
-  // One cached catalog request, shared with usePlans and the "Powered by Nozle" check.
+  const [selectedCurrency, setSelectedCurrency] = useState<string | null>(currencyProp?.toUpperCase() || null);
+  useEffect(() => {
+    if (currencyProp !== undefined) setSelectedCurrency(currencyProp.toUpperCase() || null);
+  }, [currencyProp]);
+  // One cached catalog request per currency, shared with usePlans and the "Powered by Nozle" check. The
+  // previous currency's cards stay up while another currency loads.
   const fetched = useQuery(
-    { ...catalogQuery(client), enabled: !propPlans && Boolean(client) },
+    { ...catalogQuery(client, selectedCurrency), enabled: !propPlans && Boolean(client), placeholderData: keepPreviousData },
     billing?.queryClient ?? idleQueryClient,
   );
+  // Core lists a fetched catalog in the requested currency already; `plans` from props may hold every currency.
   const catalog: PricingCatalog = propPlans
-    ? { plans: propPlans, families: Array.isArray(propFamilies) ? propFamilies : null }
+    ? { plans: propPlans, families: Array.isArray(propFamilies) ? propFamilies : null, currency: selectedCurrency }
     : { plans: fetched.data?.plans ?? [], families: fetched.data?.families ?? null };
+  const offeredCurrencies = currenciesProp?.map((code) => code.toUpperCase()) ?? getAvailableCurrencies(catalog);
   const loading = !propPlans && Boolean(client) && fetched.isPending;
   const loadError = propPlans
     ? null
@@ -570,6 +624,7 @@ export function PricingTable({
       }
       const result = await billing.createCheckout({
         planCode: plan.code,
+        ...(selectedCurrency && { currency: plan.amount_currency }),
         returnUrl: returnUrl ?? window.location.href,
       });
       onCheckoutResult?.(result);
@@ -618,8 +673,14 @@ export function PricingTable({
   const rootProps = root('pricingTable', role.body, className);
   if (loading) return <Skeleton rootProps={rootProps} />;
 
+  const cardCurrencies = new Set(cards.map((card) => card.plan.amount_currency?.toUpperCase()));
+  const shownCurrency = selectedCurrency ?? (cardCurrencies.size === 1 ? [...cardCurrencies][0] : null);
+
   return (
     <div {...rootProps}>
+      {offeredCurrencies.length > 1 && (
+        <CurrencySwitch currencies={offeredCurrencies} selected={shownCurrency} onChange={setSelectedCurrency} el={el} />
+      )}
       {switchVisible && interval !== null && (
         <IntervalSwitch
           options={getPricingIntervalOptions(catalog)}
