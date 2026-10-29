@@ -2,11 +2,16 @@
 
 /**
  * PaymentMethodDisplay — shows saved payment method details.
- * Displays last4, brand, expiry. "Update Payment Method" button opens checkout.
+ * Displays last4, brand, expiry. The "Update Payment Method" button calls
+ * `onUpdatePaymentMethod` when given; otherwise, inside a `BillingProvider` with
+ * `createManagePaymentMethod`, it opens the hosted card page through
+ * `useManagePaymentMethod()`; otherwise it navigates to `updateHref`.
  */
 
 import { useAppearance } from "../../appearance/context.js";
 import { T, border, buttonRadius, buttonStyle, surface, text, type Appearance } from "../../appearance/tokens.js";
+import { useManagePaymentMethod } from "../../hooks/use-manage-payment-method.js";
+import { useOptionalBillingContext } from "../../provider.js";
 
 export interface PaymentMethod {
   last4: string;
@@ -39,9 +44,14 @@ export function PaymentMethodDisplay({
   appearance,
 }: PaymentMethodDisplayProps) {
   const { root } = useAppearance(appearance, 'PaymentMethodDisplay');
+  const hasManageFlow = Boolean(useOptionalBillingContext()?.createManagePaymentMethod);
+  const { managePaymentMethod, isLoading, error } = useManagePaymentMethod();
   const handleUpdate = () => {
     if (onUpdatePaymentMethod) {
       onUpdatePaymentMethod();
+    } else if (hasManageFlow) {
+      // The hook keeps the failure in `error`, shown below.
+      void managePaymentMethod().catch(() => undefined);
     } else {
       window.location.href = updateHref;
     }
@@ -77,15 +87,18 @@ export function PaymentMethodDisplay({
       )}
       <button type="button"
         onClick={handleUpdate}
+        disabled={isLoading}
+        aria-busy={isLoading}
         style={{
-          ...buttonStyle("outline"),
+          ...buttonStyle("outline", isLoading),
           alignSelf: "flex-start",
           padding: "0.375rem 0.875rem",
           borderRadius: buttonRadius(`calc(${T.radius} / 2)`),
         }}
       >
-        Update Payment Method
+        {isLoading ? "Loading..." : "Update Payment Method"}
       </button>
+      {error && <p role="alert" style={{ ...text.body, color: T.dangerText, margin: 0 }}>{error.message}</p>}
     </div>
   );
 }

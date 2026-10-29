@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## React 0.24.0 — 2026-10-29
+
+### Changed
+
+- `PaymentMethodDisplay` opens the hosted card page by default. Its update button calls `onUpdatePaymentMethod` when given; otherwise, inside a `BillingProvider` with `createManagePaymentMethod`, it runs `useManagePaymentMethod()`, shows "Loading..." while the request runs and the error message if it fails; otherwise it navigates to `updateHref` as before. Outside a `BillingProvider` nothing changes.
+- `useManagePaymentMethod()` no longer throws at render outside a `BillingProvider`; `managePaymentMethod()` rejects with the missing `createManagePaymentMethod` error instead.
+
 ## Node.js 0.22.0 and React 0.23.0 — 2026-10-29
 
 Needs Core 11.10.0 (one plan family sold in several currencies).

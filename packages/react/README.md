@@ -170,7 +170,7 @@ After a hosted payment the customer lands on your `returnUrl` (it may contain `{
 - `CheckoutButton`, `UpgradeButton`, `UpgradeModal`, and the default `PricingTable` CTA call the merchant's `createCheckout` callback.
 - `Checkout` renders provider checkout results and accepts merchant verification/status callbacks directly.
 - `BillingPortal`, `CancellationControl`, and `PlanChangeControl` provide customer subscription management through authenticated merchant adapters.
-- Gates, usage displays, `PlanBadge`, and `PaymentMethodDisplay` are presentational and consume caller-supplied data.
+- Gates, usage displays, and `PlanBadge` are presentational and consume caller-supplied data. `PaymentMethodDisplay` shows the caller-supplied card; its update button calls `onUpdatePaymentMethod` when given, otherwise opens the hosted card page through `BillingProvider`'s `createManagePaymentMethod` when set, otherwise navigates to `updateHref` (default `/billing/update-payment`).
 
 Authenticate portal sessions and management actions on your merchant backend. Return customer-scoped portal tokens at runtime; never embed an `sk_`, master key, or portal token in a static browser bundle.
 

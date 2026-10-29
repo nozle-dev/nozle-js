@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { navigateToCheckout } from '../components/billing/checkout-navigation.js';
-import { useBillingContext } from '../provider.js';
+import { useOptionalBillingContext } from '../provider.js';
 
 export interface UseManagePaymentMethodResult {
   /**
@@ -13,7 +13,8 @@ export interface UseManagePaymentMethodResult {
 }
 
 export function useManagePaymentMethod(): UseManagePaymentMethodResult {
-  const { createManagePaymentMethod } = useBillingContext();
+  // Optional context: outside a BillingProvider the call fails with the error below instead of the render.
+  const createManagePaymentMethod = useOptionalBillingContext()?.createManagePaymentMethod;
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
