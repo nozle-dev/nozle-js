@@ -391,6 +391,30 @@ try {
 
 Never retry blindly: the SDK does not retry a 402. Add a card in the Nozle dashboard (`card_required`) or pay the Nozle invoices (`workspace_suspended`) and calls work again at once. Events sent during the suspension are refused, not queued.
 
+## Customer payment overdue (402)
+
+When one of your customers leaves invoices unpaid past the plan's grace (your dunning settings), Nozle refuses that customer's usage with HTTP 402 and `code` `customer_payment_overdue` until the invoices are paid. Other customers are not affected.
+
+- `can()` returns `{ allowed: false, reason: "customer_payment_overdue", used: 0, limit: null, remaining: null }` instead of throwing. Show the customer that a payment is overdue and link to your billing page.
+- `track()`, `usage.check()` and `usage.track()` throw `NozleApiError` with `status` 402; `error.hasCode(CUSTOMER_PAYMENT_OVERDUE)` is true. Nothing is recorded.
+- A `/events/batch` with events of a blocked customer stores none of the batch. `error_details` is keyed by event index, and `error.refusedEventIndexes(CUSTOMER_PAYMENT_OVERDUE)` lists the refused positions; send the other events again.
+
+```ts
+import { CUSTOMER_PAYMENT_OVERDUE, NozleApiError } from "@nozle-js/node";
+
+const { allowed, reason } = await nozle.can("cust_123", "code_completion");
+if (reason === CUSTOMER_PAYMENT_OVERDUE) {
+  // Ask the customer to pay the open invoice.
+}
+
+const res = await fetch(`${nozleUrl}/api/v1/events/batch`, { method: "POST", headers, body: JSON.stringify({ events }) });
+if (!res.ok) {
+  const error = new NozleApiError("events batch", res, await res.json().catch(() => undefined));
+  const refused = new Set(error.refusedEventIndexes(CUSTOMER_PAYMENT_OVERDUE));
+  const retry = events.filter((_, index) => !refused.has(index));
+}
+```
+
 ## Health Check
 
 ```ts

@@ -43,7 +43,26 @@ export class NozleApiError extends Error {
       (value) => value === code || (Array.isArray(value) && value.includes(code)),
     );
   }
+
+  /**
+   * Positions of the events a refused `/events/batch` lists with this code, ascending. The batch's `error_details`
+   * is keyed by event index, for example `{ "2": { external_customer_id: ["customer_payment_overdue"] } }`.
+   * The batch stored nothing; send the events not listed again.
+   */
+  refusedEventIndexes(code: string): number[] {
+    return Object.entries(this.errorDetails ?? {})
+      .filter(([index, fields]) =>
+        /^\d+$/.test(index) && !!fields && typeof fields === "object" &&
+        Object.values(fields).some((codes) => Array.isArray(codes) && codes.includes(code)))
+      .map(([index]) => Number(index));
+  }
 }
+
+/**
+ * The code for a customer whose unpaid invoices are past the plan's grace: `can()` returns `allowed: false` with
+ * this `reason`, and usage and events for the customer are refused with a 402 `NozleApiError`, until the invoices are paid.
+ */
+export const CUSTOMER_PAYMENT_OVERDUE = "customer_payment_overdue";
 
 /** The one code for a customer with no active subscription. Core's `subscription_not_found` counts as the same case in {@link NozleApiError.hasCode}. */
 export const NO_ACTIVE_SUBSCRIPTION = "active_subscription_not_found";

@@ -33,6 +33,7 @@ export interface EntitlementResult {
   used?: number;
   limit: number | null;
   remaining: number | null;
+  /** Denial code when `allowed` is `false`, for example `usage_limit_exceeded`, or `customer_payment_overdue` (show "Payment overdue" and link to the billing page). */
   reason?: string;
 }
 
