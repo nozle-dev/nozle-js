@@ -123,9 +123,12 @@ export interface PlanPrice {
 export interface PlansOptions {
   /** A secret key gets every plan; `false` gets the pricing table view a publishable key gets. */
   includeHidden?: boolean;
-  /** ISO code to list family plans in. An unknown currency is a 422. */
+  /** Lists only plans in this ISO currency. An unknown currency is a 422. */
   currency?: string;
-  /** Lists the catalog in this customer's locked currency when `currency` is not given. */
+  /**
+   * Secret key only: lists only plans in this customer's locked currency when `currency` is not given. Ignored when
+   * the organization allows several currencies per customer.
+   */
   externalCustomerId?: string;
 }
 

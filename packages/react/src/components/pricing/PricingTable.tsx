@@ -102,7 +102,7 @@ export interface PricingTableProps {
   locale?: string;
   /**
    * Currency shown first (ISO code). The catalog is fetched in it; with `plans` only plans in it are
-   * shown. Without it the catalog's own currency is used (the customer's, else each family's default).
+   * shown. Without it each family shows its default-currency plans.
    */
   currency?: string;
   /**

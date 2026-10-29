@@ -149,8 +149,9 @@ export class Nozle {
   /**
    * Current plan versions. A secret key gets every plan, including families hidden from the
    * pricing table; `includeHidden: false` gets the pricing table view a publishable key gets.
-   * Family plans are listed in `currency`, else the customer's locked currency (`externalCustomerId`), else each
-   * family's default currency.
+   * Without `currency` a secret key gets every plan in every currency; `currency` keeps that currency only, and
+   * `externalCustomerId` the customer's locked currency (ignored when the organization allows several currencies per
+   * customer). A publishable key without `currency` gets each family's default-currency plans.
    */
   async plans(options: PlansOptions = {}): Promise<Plan[]> {
     const url = new URL(`${this.baseUrl}/api/v1/plans`);

@@ -451,7 +451,7 @@ const { subscription_id, status } = await nozle.subscribe("cust_123", "pro");
 
 ### Currencies
 
-A plan family can be sold in several currencies, one plan per interval and currency. `plans({ currency })` lists family plans in that currency; `plans({ externalCustomerId })` lists them in the customer's locked currency; without either each family shows its default currency. A family plan carries `family` (`code`, `currencies`, `default_currency`) and `prices` (every variant: `currency`, `interval`, `plan_code`, `amount_cents`). An unknown currency is a 422.
+A plan family can be sold in several currencies, one plan per interval and currency. With a secret key, `plans()` lists every plan in every currency; `plans({ currency })` lists only that currency, and `plans({ externalCustomerId })` only the customer's locked currency (ignored when your organization allows several currencies per customer). A publishable key without `currency` gets each family's default-currency plans, as the React pricing table shows them. A family plan carries `family` (`code`, `currencies`, `default_currency`) and `prices` (every variant: `currency`, `interval`, `plan_code`, `amount_cents`). An unknown currency is a 422.
 
 `checkout()` and `subscribe()` take `{ planFamilyCode, interval, currency }` instead of a plan code; Core picks the variant. Without `currency` it uses the customer's locked currency, else the family's default. Needs Core 11.10.0.
 
