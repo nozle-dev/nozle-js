@@ -201,9 +201,10 @@ export class Nozle {
     return result;
   }
 
+  /** `returnUrl` is where the hosted payment page sends the customer after paying; without it the provider's own page is shown. */
   async checkoutInvoice(
     invoiceId: string,
-    options: CheckoutOptions = {},
+    options: CheckoutOptions & { returnUrl?: string } = {},
   ): Promise<CheckoutResult> {
     if (!invoiceId.trim())
       throw new Error("checkoutInvoice requires invoiceId");
@@ -213,6 +214,7 @@ export class Nozle {
       "",
       {
         invoice_id: invoiceId,
+        ...(options.returnUrl && { return_url: options.returnUrl }),
         ...(options.cancelUrl && { cancel_url: options.cancelUrl }),
         ...(options.registerMandate !== undefined && {
           register_mandate: options.registerMandate,

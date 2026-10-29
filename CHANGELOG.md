@@ -12,6 +12,7 @@ Needs Engine 2.22.0 (customers blocked by dunning). With an older Engine nothing
 - `CUSTOMER_PAYMENT_OVERDUE` constant. `track()`, `usage.check()` and `usage.track()` throw `NozleApiError` with this code for a blocked customer.
 - `/events/batch` for a blocked customer: a partial batch is a 200 that stores the other events and lists the refused ones by index in `error_details`. `refusedEventIndexes(details, code)` and the `EventBatchResponse` / `EventBatchErrorDetails` types read it. A batch whose events are all refused is a 402; `NozleApiError.refusedEventIndexes(code)` lists them.
 - `isCustomerPaymentOverdue(error)` is true for a `NozleApiError` with the code and for the LLM proxy's 402 surfaced by a provider SDK that keeps the body (`status` 402 with `code` or `error.code`).
+- `checkoutInvoice(invoiceId, { returnUrl })` sends `return_url`, so a customer who pays an invoice returns to your page instead of staying on the provider's page. `checkout()`, `managePaymentMethod()` and the React checkout components already send it (React defaults to the current page).
 - Generated OpenAPI types: the 402 on `/can` and `/events/batch`, `error_details` on the `/events/batch` 200, and `customer_payment_overdue` in `PlatformCanResponse.reason`.
 
 ## React 0.24.0 — 2026-10-29
