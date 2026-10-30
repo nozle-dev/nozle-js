@@ -1199,7 +1199,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a payment method
-         * @description This endpoint deletes a specific payment method for a customer.
+         * @description This endpoint deletes a Razorpay payment method, which cancels the mandate. For a Stripe or other card provider it answers 410 `payment_method_managed_by_provider`: removing a card here only hid it in Nozle while it stayed attached at the provider, so the customer manages it at the provider's page (see Manage a customer payment method). Nozle stores no card display data.
          */
         delete: operations["destroyPaymentMethod"];
         options?: never;
@@ -1218,7 +1218,7 @@ export interface paths {
         put?: never;
         /**
          * Manage a customer payment method
-         * @description Returns the Stripe Billing Portal `url` where a customer adds or changes their payment method. Stripe only. Razorpay customers pay each invoice by payment link and get 422 razorpay_pays_by_link. Nozle stores no card data. Secret key only, publishable keys are refused with 403.
+         * @description Returns the `url` where a customer adds or changes their payment method. Stripe customers get the Stripe Billing Portal. Razorpay customers whose connection has auto-pay (recurring payments) on get Nozle's auto-pay setup page, valid for 24 hours, where they pick an enabled method (UPI, card or bank debit) and are sent to a Razorpay registration link; the confirmed mandate becomes their default payment method. With auto-pay off, Razorpay customers pay each invoice by payment link and get 422 razorpay_pays_by_link with auto_pay_not_enabled. Nozle stores no card data. Secret key only, publishable keys are refused with 403.
          */
         post: operations["manageCustomerPaymentMethod"];
         delete?: never;
@@ -1427,48 +1427,6 @@ export interface paths {
         get: operations["getCostIntelligenceReport"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/cost-intelligence/replay-source": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Replay an uncosted source
-         * @description Retries rating for an uncosted Feature Event or an uncosted or pending Cost Event.
-         *     A source that already produced ledger entries is rejected so replay cannot duplicate money.
-         *     Operator only: accepts only Nozle's internal service token. Organization secret (`sk_`) and publishable (`pk_`) keys get `403` with `internal service authentication required`.
-         */
-        post: operations["replayCostIntelligenceSource"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/cost-intelligence/replay-projection": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Requeue a cost-ledger projection
-         * @description Clears the delivery state for one existing PostgreSQL ledger entry so the outbox relay projects it to ClickHouse again. Operator only; accepts only Nozle's internal service token. Organization secret (`sk_`) and publishable (`pk_`) keys get `403` with `internal service authentication required`.
-         */
-        post: operations["replayCostIntelligenceProjection"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1714,6 +1672,12 @@ export interface paths {
         /**
          * Generate a payment URL
          * @description This endpoint generates a checkout link for a specific invoice. An invoice that is paid, voided, draft, closed, failed or has nothing due returns `422 validation_errors` with `error_details.base` `invalid_invoice_status_or_payment_status`.
+         *
+         *     From Core 11.16.0, `422 validation_errors` with `error_details.base`:
+         *     - `payment_already_processing` while an automatic debit of the invoice is waiting for the bank to settle (paying meanwhile would charge twice).
+         *     - `invoice_carried_forward` when the amount due is below the payment provider's minimum charge: it was carried to the customer's next invoice and this invoice is settled. See [Amounts below the provider minimum](/guides/billing/invoices#amounts-below-the-provider-minimum).
+         *
+         *     An unexpired pay link keeps the return URL it was created with.
          */
         post: operations["invoicePaymentUrl"];
         delete?: never;
@@ -1755,7 +1719,7 @@ export interface paths {
         put?: never;
         /**
          * Retry an invoice payment
-         * @description This endpoint resends an invoice for collection and retry a payment.
+         * @description This endpoint resends an invoice for collection and retry a payment. For a Stripe invoice whose saved card cannot be charged, the answer is a hosted result (`type` `hosted`) with the `url` of a Stripe-hosted Checkout page to send the customer to.
          */
         post: operations["retryPayment"];
         delete?: never;
@@ -1866,6 +1830,8 @@ export interface paths {
          * Create a payment request
          * @description This endpoint is used to create a payment request to collect payments of overdue invoices of a given customer. `payment_method` is used when given.
          *
+         *     From Core 11.16.0, invoices whose amount due is below the payment provider's minimum charge (Stripe's minimum per currency, Razorpay INR 1) are carried to the customer's next invoice instead of being requested: the request asks for the others. When none is left, the call returns `422` with `code` `invoices_carried_forward` and nothing is created. See [Amounts below the provider minimum](/guides/billing/invoices#amounts-below-the-provider-minimum).
+         *
          *     For a customer who pays through Razorpay, the request reaches the customer only as a payment link sent by email. When the customer's billing entity has no email, the call returns `422` with `billing_entity: [billing_entity_email_missing]`, and without a recipient `email`, `email: [email_missing]`. Nothing is created in either case. Add an email to the billing entity first.
          */
         post: operations["createPaymentRequest"];
@@ -1965,6 +1931,8 @@ export interface paths {
          *     - The Engine host serves this list at `https://api.nozle.app/engine/api/v1/plans` with the same body. Engine forwards `page` and `per_page` to Core.
          *     - A publishable key, or a secret key with `include_hidden=false`, does not receive the plans of plan families hidden from the pricing table, and `families[].features` leaves out hidden features. Hiding is a listing setting only: every plan carries all its entitlements and charges, including those of hidden features.
          *
+         *     - **Currencies** (Core 11.10.0). With `currency`, or a secret key's `external_customer_id`, only plans in that currency are listed. Without either, a secret key lists every plan, all currency variants included, and a publishable key lists each plan family's `default_currency` plans (plans without a family are all listed). Every plan of a family carries `family` and `prices`. See [Multi-currency pricing](/guides/billing/multi-currency-pricing).
+         *
          *     Because a publishable key ships in browsers, anything stored on a plan is readable by anyone who has the key. See [Public plan catalog](/api/list-plans).
          */
         get: operations["findAllPlans"];
@@ -1998,7 +1966,7 @@ export interface paths {
          *
          *     This endpoint also returns a plan with a trial or pay-in-arrears billing, and, to a secret key, a plan that is pending deletion (`pending_deletion: true`). An unknown code, the code of a per-customer override plan, or a plan pending deletion read with a publishable key returns `404` with the code `plan_not_found`.
          *
-         *     A publishable key receives a plan of a family hidden from the pricing table, or whose family was deleted, so the SDK can describe a subscriber's own plan. The plan carries all its entitlements and charges, including those of features hidden from the pricing table.
+         *     A publishable key receives a plan of a family hidden from the pricing table, or whose family was deleted, so the SDK can describe a subscriber's own plan. The plan carries all its entitlements and charges, including those of features hidden from the pricing table. From Core 11.10.0, such a plan comes without `family` and `prices` for a publishable key, so the codes of the hidden family's other plans are not revealed.
          *
          *     The Engine host also serves this path at `https://api.nozle.app/engine/api/v1/plans/{code}` and returns Core's body unchanged.
          *
@@ -2010,6 +1978,8 @@ export interface paths {
          * @description This endpoint updates a specific plan with subscription and usage-based charges. It supports flexible billing cadence (in-advance or in-arrears) and allows for both recurring and metered charges. Usage thresholds (`usage_thresholds`) need progressive billing, which comes with the Growth, Scale and Enterprise Nozle plans, so without it a non-empty list is refused with `422` with `feature_not_available` in `error_details.usage_thresholds`, and nothing is saved. An empty list is accepted and changes nothing.
          *
          *     **Plan versioning.** When the plan has active subscriptions and the change alters what it bills or grants, Nozle saves the change as the plan's next version (same code) and returns that new, current version: the existing subscriptions stay on the version they are on until a version migration moves them, and new subscriptions get the new version. Name, description and invoice name are shared by every version and never create one. `disable_version: true` changes the current version in place instead. Only the current version can be edited: an edit of an older version (for example a form opened before another save) is refused with `409` and `plan_version_not_current`. See [Plan versioning](/guides/billing/plan-versions).
+         *
+         *     **Plan families sold in several currencies** (Core 11.10.0). A change to the structure of this plan is copied, in the same transaction, to the family's other plans of the same interval; a money-only change affects this plan only. Money is never copied between currencies: send the other currencies' new amounts in `currency_amounts`, or the edit is refused with `422` and `plan_family: [plan_family_variant_prices_missing]`. A plan of the family with active, pending or incomplete subscriptions always gets the change as a new version. See [Multi-currency pricing](/guides/billing/multi-currency-pricing).
          */
         put: operations["updatePlan"];
         post?: never;
@@ -2049,7 +2019,7 @@ export interface paths {
         head?: never;
         /**
          * Partial update of an entitlement
-         * @description This accepts a list of entitlements to update. If the feature isn't part of the plan yet, it's added with all the privileges from the payload. If the feature is already part of the plan, the privilege and values are updated or added. All privileges must be valid for the feature. All features  and privileges not part of the payload are left untouched. For a feature that is already part of the plan, the metered settings the payload leaves out (`usage_limit`, `hard_limit`, `min_margin_percent`, `margin_enforcement_mode`, `enforce_plan_margin`) keep their current values, so sending only `hard_limit` set to false keeps the usage limit, and sending only `usage_limit` keeps a soft limit soft. POST replaces the whole entitlement and applies the defaults. To remove privileges or features, use the DELETE endpoints. In a plan family, features and privileges are written to every plan of the family, but `usage_limit` and `hard_limit` are set on the plan in the path only, so each billing interval keeps its own limits, because usage is counted per billing period. A plan of the family that gets a metered feature for the first time this way has no limit until one is set on it.
+         * @description This accepts a list of entitlements to update. If the feature isn't part of the plan yet, it's added with all the privileges from the payload. If the feature is already part of the plan, the privilege and values are updated or added. All privileges must be valid for the feature. All features  and privileges not part of the payload are left untouched. For a feature that is already part of the plan, the metered settings the payload leaves out (`usage_limit`, `hard_limit`) keep their current values, so sending only `hard_limit` set to false keeps the usage limit, and sending only `usage_limit` keeps a soft limit soft. POST replaces the whole entitlement and applies the defaults. To remove privileges or features, use the DELETE endpoints. In a plan family, features and privileges are written to every plan of the family, but `usage_limit` and `hard_limit` are set on the plan in the path only, so each billing interval keeps its own limits, because usage is counted per billing period. A plan of the family that gets a metered feature for the first time this way has no limit until one is set on it.
          */
         patch: operations["updateEntitlement"];
         trace?: never;
@@ -2774,7 +2744,7 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Send the `nozle_eu_<rest>` code for the EU taxes Nozle creates; an old EU code no longer resolves. */
                 code: string;
             };
             cookie?: never;
@@ -3028,7 +2998,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/webhooks/public_key": {
+    "/webhook_endpoints/{id}/rotate_secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Unique identifier of the webhook endpoint. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate the secret of a webhook endpoint
+         * @description Creates a new `whsec_` secret. The previous secret stays valid for 24 hours, `previous_secret_expires_at` says until when, and both signatures are sent in `webhook-signature` meanwhile. Send an empty body. Needs the `webhook_endpoint` write permission.
+         */
+        post: operations["rotateWebhookEndpointSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhook_endpoints/{id}/recover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Unique identifier of the webhook endpoint. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recover failed webhooks of an endpoint
+         * @description Sends again the failed webhooks of this endpoint created at or after `since`, up to 10,000 of them and at most 14 days back. Each keeps its `webhook-id` and gets a new timestamp and signature. A `422` has `error_details.since` set to `invalid_date`, `too_old` or `in_the_future`, or the code `webhook_endpoint_disabled` for a disabled endpoint. Needs the `webhook_endpoint` write permission.
+         */
+        post: operations["recoverWebhookEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhook_endpoints/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Unique identifier of the webhook endpoint. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test event to a webhook endpoint
+         * @description Creates a `webhook_endpoint.test` webhook for the endpoint, whatever its event-type filter, and sends it asynchronously. The response has status `pending`. The payload carries no secret. A disabled endpoint answers `422` with the code `webhook_endpoint_disabled`. Send an empty body. Needs the `webhook_endpoint` write permission.
+         */
+        post: operations["testWebhookEndpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks": {
         parameters: {
             query?: never;
             header?: never;
@@ -3036,10 +3075,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Retrieve webhook public key
-         * @description This endpoint is used to retrieve the public key used to verify the webhooks signature
+         * List webhooks
+         * @description Lists the webhooks Nozle created for your endpoints. Needs the `webhook_endpoint` read permission. An unknown `status` is rejected with `422`.
          */
-        get: operations["fetchPublicKey"];
+        get: operations["findAllWebhooks"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3048,20 +3087,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/webhooks/json_public_key": {
+    "/webhooks/{id}/retry": {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description Unique identifier of the webhook (its `webhook-id`). */
+                id: string;
+            };
             cookie?: never;
         };
-        /**
-         * Retrieve webhook public key as JSON
-         * @description This endpoint retrieves the public key used to verify webhook signatures, wrapped in a JSON object. Prefer it over the deprecated plain-text public-key endpoint.
-         */
-        get: operations["fetchJsonPublicKey"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Send a webhook again
+         * @description Sends one webhook again, with its original `webhook-id` and a new timestamp and signature. A webhook that already succeeded answers `422` `is_succeeded`. A disabled endpoint receives nothing, manual retries included. Needs the `webhook_endpoint` write permission.
+         */
+        post: operations["retryWebhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3194,7 +3236,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a plan change
-         * @description Returns a signed quote for changing the customer's subscription to `plan_code`. Engine checks that the plan exists and, when `subscription_id` is sent, that the subscription belongs to the customer, then forwards to Core `POST /checkout_sessions/preview`. Requires `invoice:read` (not `subscription`). Changing between two plans needs a plan transition policy for the pair, except free to paid. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
+         * @description Returns a signed quote for changing the customer's subscription to `plan_code`. Engine checks that the plan exists and, when `subscription_id` is sent, that the subscription belongs to the customer, then forwards to Core `POST /checkout_sessions/preview`. Requires `invoice:read` (not `subscription`). Changing between two plans needs a plan transition policy for the pair, except free to paid. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}`) can appear in addition to Engine's own `{error, code?}` errors.
          */
         post: operations["enginePreviewSubscriptionChange"];
         delete?: never;
@@ -3214,7 +3256,7 @@ export interface paths {
         put?: never;
         /**
          * Create a subscription
-         * @description Creates a subscription without checkout. Requires an organization secret key (`sk_`) with `subscription:write`; trusted internal authentication is refused. Engine first reads the customer from Core and returns `404 customer_not_found` when it does not exist (Core would otherwise create an empty customer). It then calls Core `POST /subscriptions` with external ID `sub-<customer_id>-<plan_code>`, and on success adds `subscription_id` and `status` to Core's response. Core's status code is kept; Core errors are forwarded unchanged.
+         * @description Creates a subscription without checkout. Requires an organization secret key (`sk_`) with `subscription:write`; trusted internal authentication is refused. Engine first reads the customer from Core and returns `404 customer_not_found` when it does not exist (Core would otherwise create an empty customer). It then calls Core `POST /subscriptions` with external ID `sub-<customer_id>-<plan_code>` (`sub-<customer_id>-<plan_family_code>` for a subscription by family, Engine 2.21.0), and on success adds `subscription_id` and `status` to Core's response. Core's status code is kept; Core errors are forwarded unchanged.
          */
         post: operations["engineCreateSubscription"];
         delete?: never;
@@ -3234,7 +3276,7 @@ export interface paths {
         put?: never;
         /**
          * Create a checkout
-         * @description Creates a payment-gated plan checkout, an invoice checkout (`invoice_id`), or an Entity checkout (`external_entity_id`). Requires `payment:write`. Engine validates the body and the `return_url` origin, then forwards to Core `POST /checkout_sessions` (renaming `subscription_id` to `external_subscription_id`). Core decides the result type from the plan, the current subscription and its transition policy: a provider checkout when money is due, `completed` when nothing external is due, `scheduled` for an end-of-period change. An unpaid plan or single Entity checkout expires after 23 hours (the Stripe Checkout Session and Razorpay order too): the subscription is canceled with `cancelation_reason: timeout` and a `subscription.canceled` webhook, the invoice is closed, and the coupons, credit-note credits and wallet credits it used are returned. They are also returned when the checkout payment fails. Checking out the same plan again reopens an abandoned checkout; another plan replaces it. With Stripe, an invoice has at most one payable Checkout Session: checking out the same invoice again returns the open session (same `url`), and while a payment of the last session is processing or has succeeded the call answers `422` with `base: [payment_already_processing]`. A second successful payment for an invoice that is already paid is refunded in full and reported with the `invoice.payment_failure` webhook (`duplicate_payment_refunded`). A customer without a subscription choosing a plan that needs no up-front payment gets `422 checkout_not_required`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
+         * @description Creates a payment-gated plan checkout, an invoice checkout (`invoice_id`), or an Entity checkout (`external_entity_id`). Requires `payment:write`. Engine validates the body, then forwards to Core `POST /checkout_sessions` (renaming `subscription_id` to `external_subscription_id`). Core decides the result type from the plan, the current subscription and its transition policy: a provider checkout when money is due, `completed` when nothing external is due, `scheduled` for an end-of-period change. An unpaid plan or single Entity checkout expires after 23 hours (the Stripe Checkout Session and Razorpay order too): the subscription is canceled with `cancelation_reason: timeout` and a `subscription.canceled` webhook, the invoice is closed, and the coupons, credit-note credits and wallet credits it used are returned. They are also returned when the checkout payment fails. Checking out the same plan again reopens an abandoned checkout; another plan replaces it. With Stripe, every checkout is a Stripe-hosted Checkout Session returned as `type: hosted` with a `url` to redirect the customer to (a saved card is charged first, and then no page opens). An invoice has at most one payable Checkout Session: checking out the same invoice again returns the open session (same `url`), and while a payment of the last session is processing or has succeeded the call answers `422` with `base: [payment_already_processing]`. A second successful payment for an invoice that is already paid is refunded in full and reported with the `invoice.payment_failure` webhook (`duplicate_payment_refunded`). A customer without a subscription choosing a plan that needs no up-front payment gets `422 checkout_not_required`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}`) can appear in addition to Engine's own `{error, code?}` errors.
          */
         post: operations["engineCreateCheckout"];
         delete?: never;
@@ -3252,7 +3294,7 @@ export interface paths {
         };
         /**
          * Get checkout status
-         * @description Returns the payment and fulfillment status of a checkout, with a resumable `checkout` when payment can still be completed. With `customer_id` and `subscription_id`, Core first looks for a paid upgrade of that subscription with this ID, then for a Razorpay checkout whose owner matches the scope. Without them, only a Razorpay checkout of the organization is found. Requires `payment:read`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
+         * @description Returns the payment and fulfillment status of a checkout, with a resumable `checkout` when payment can still be completed. With `customer_id` and `subscription_id`, Core first looks for a paid upgrade of that subscription with this ID, then for a Razorpay checkout whose owner matches the scope. Without them, only a Razorpay checkout of the organization is found. Requires `payment:read`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}`) can appear in addition to Engine's own `{error, code?}` errors.
          */
         get: operations["engineGetCheckoutStatus"];
         put?: never;
@@ -3274,7 +3316,7 @@ export interface paths {
         put?: never;
         /**
          * Verify a Razorpay checkout
-         * @description Forwards the Razorpay browser handler fields to Core `POST /checkout_sessions/{id}/verify`, which checks the signature and settles the payment, then returns the checkout status. A successful verification is not proof of fulfillment; check `fulfillment_status`. Requires `payment:write`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
+         * @description Forwards the Razorpay browser handler fields to Core `POST /checkout_sessions/{id}/verify`, which checks the signature and settles the payment, then returns the checkout status. A successful verification is not proof of fulfillment; check `fulfillment_status`. Requires `payment:write`. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}`) can appear in addition to Engine's own `{error, code?}` errors.
          */
         post: operations["engineVerifyCheckout"];
         delete?: never;
@@ -3294,7 +3336,7 @@ export interface paths {
         put?: never;
         /**
          * Change plan without checkout
-         * @description Changes the plan of the customer's active subscription without checkout, from a trusted backend. Requires a secret key with `subscription:write`. Engine loads the target plan, the customer's current subscription and its plan. With several current subscriptions it uses the customer's own (not Entity-owned) subscription when there is exactly one, and otherwise answers `409` with `code: subscription_required`. When the target plan's yearly amount is above zero and at least the current plan's yearly amount, Engine returns `422` with `code: payment_checkout_required` and changes nothing. Otherwise it calls Core `POST /subscriptions` with the subscription's external ID and the new plan code, and returns Core's status and body unchanged.
+         * @description Changes the plan of the customer's current subscription without checkout, from a trusted backend. Requires a secret key with `subscription:write`. Engine loads the target plan and the subscription: the one named by `subscription_id` or `entity_id`, else the customer's only current subscription, else the customer's own (not Entity-owned) one when there is exactly one; otherwise `409` with `code: subscription_required`. A target whose yearly amount is below the current plan's (a downgrade, including paid to free), or the paid plan the subscription is already on, goes to Core `POST /subscription_transitions` with `operation: downgrade` and the Idempotency-Key, so the merchant's plan transition policy and Core's guards apply; Core's status and body are returned unchanged. A paid target at or above the current yearly amount returns `422` with `code: payment_checkout_required` and changes nothing. A free to free change calls Core `POST /subscriptions` and returns Core's `{"subscription": {...}}`. For new integrations, prefer `POST /subscriptions/transitions` and `POST /checkout`.
          */
         post: operations["engineUpgradeSubscription"];
         delete?: never;
@@ -3314,7 +3356,7 @@ export interface paths {
         put?: never;
         /**
          * Change plan without checkout (alias)
-         * @description Alias of `POST /billing/upgrade`, served by the same handler. Changes the plan of the customer's active subscription without checkout, from a trusted backend. Requires a secret key with `subscription:write`. Engine loads the target plan, the customer's most recent active subscription and its plan. When the target plan's yearly amount is above zero and at least the current plan's yearly amount, Engine returns `422` with `code: payment_checkout_required` and changes nothing. Otherwise it calls Core `POST /subscriptions` with the subscription's external ID and the new plan code, and returns Core's status and body unchanged.
+         * @description Alias of `POST /billing/upgrade`, served by the same handler. Changes the plan of the customer's current subscription without checkout, from a trusted backend. Requires a secret key with `subscription:write`. Engine loads the target plan and the subscription: the one named by `subscription_id` or `entity_id`, else the customer's only current subscription, else the customer's own (not Entity-owned) one when there is exactly one; otherwise `409` with `code: subscription_required`. A target whose yearly amount is below the current plan's (a downgrade, including paid to free), or the paid plan the subscription is already on, goes to Core `POST /subscription_transitions` with `operation: downgrade` and the Idempotency-Key, so the merchant's plan transition policy and Core's guards apply; Core's status and body are returned unchanged. A paid target at or above the current yearly amount returns `422` with `code: payment_checkout_required` and changes nothing. A free to free change calls Core `POST /subscriptions` and returns Core's `{"subscription": {...}}`. For new integrations, prefer `POST /subscriptions/transitions` and `POST /checkout`.
          */
         post: operations["engineChangeSubscription"];
         delete?: never;
@@ -3422,7 +3464,9 @@ export interface paths {
          *
          *     The migration runs in the background in chunks and records one item per subscription, so the response has `status: running`; read it again with `GET /plans/{code}/version-migrations/{id}`. Subscriptions are skipped, with a `skip_reason`, when they are on custom pricing, billed by another system, not started, canceling at the end of their period, in a trial the new version would change, already on the target version, waiting on another plan change, have an open checkout, or when the two versions bill on another interval, currency or billing time. Running it again is safe: moved subscriptions are not moved twice and failed ones are retried.
          *
-         *     One migration of a plan code runs at a time: another one returns `409` with `plan_version_migration_running`. `422` with `to_version: same_version` when both versions are the same, or `to_version: plan_pending_deletion` when the target is being deleted. Secret keys only.
+         *     One migration of a plan code runs at a time: another one returns `409` with `plan_version_migration_running`. `422` with `to_version: same_version` when both versions are the same, or `to_version: plan_pending_deletion` when the target is being deleted.
+         *
+         *     **Price increases need your consent.** When any subscription would pay more, or the new amount is above its auto-pay limit, nothing is started: the response is `422` with `code: price_increase_not_allowed`, `price_increase_count` and `mandate_cap_exceeded_count`. Review the preview, then send the same request with `allow_price_increase: true`. When a move changes a subscriber's plan amount, the customer gets the `subscription.price_change_scheduled` email if the billing entity has it on. Secret keys only.
          */
         post: operations["createPlanVersionMigration"];
         delete?: never;
@@ -3442,7 +3486,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a version migration
-         * @description Says what a migration would do to each active subscription on `from_version`, without writing anything. Each item is `move` with the day the subscription would start on the new version and its current and new plan amounts, or `skip` with the reason. Secret keys only.
+         * @description Says what a migration would do to each active subscription on `from_version`, without writing anything. Each item is `move` with the day the subscription would start on the new version and its current and new plan amounts, or `skip` with the reason. It also says what the move does to the price (`price_change`, `price_increase`) and whether the new amount is above the customer's auto-pay limit (`mandate_cap_exceeded`). Secret keys only.
          */
         post: operations["previewPlanVersionMigration"];
         delete?: never;
@@ -3723,7 +3767,7 @@ export interface paths {
         post?: never;
         /**
          * Cancel a subscription
-         * @description Cancels a subscription now or at its next renewal boundary. Engine checks that the subscription belongs to the customer, then forwards to Core `DELETE /subscriptions/{id}?cancellation_policy=...`. Requires `subscription:write`. For `end_of_period` the subscription stays `active` and `ending_at` is set; for `immediate` the terminated subscription is returned. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
+         * @description Cancels a subscription now or at its next renewal boundary. Engine checks that the subscription belongs to the customer, then forwards to Core `DELETE /subscriptions/{id}` only the timing and settlement parameters that were sent (`credit_action` becomes Core `on_termination_credit_note`, with `none` as `skip`; `final_invoice_action` becomes `on_termination_invoice`). Each parameter left out follows the subscription, then the organization's cancellation settings. Requires `subscription:write`. For `end_of_period` the subscription stays `active` and `ending_at` is set; for `immediate` the terminated subscription is returned. Engine forwards Core's status code and JSON body unchanged, so Core error bodies (`{status, error, code, error_details?}` or `{code}`) can appear in addition to Engine's own `{error, code?}` errors.
          */
         delete: operations["engineCancelSubscription"];
         options?: never;
@@ -3885,15 +3929,11 @@ export interface paths {
         get: operations["engineGetCustomerEntity"];
         /**
          * Create or update a customer Entity
-         * @description Creates the Entity or replaces its name, status and metadata. The body is a complete snapshot. Entity lifecycle changes never create billing events. When the Entity becomes active (created, activated or reactivated), its credit grants are scheduled. The body is at most 128 KiB. Requires an organization secret key, or trusted internal authentication. A secret key needs `entity:write`. Publishable keys are rejected.
+         * @description Creates the Entity or replaces its name, status and metadata. The body is a complete snapshot. Entity lifecycle changes never create billing events. When the Entity becomes active (created or activated), its credit grants are scheduled. The body is at most 128 KiB. Requires an organization secret key, or trusted internal authentication. A secret key needs `entity:write`. Publishable keys are rejected.
          */
         put: operations["engineUpsertCustomerEntity"];
         post?: never;
-        /**
-         * Delete a customer Entity
-         * @description Moves the Entity to `deleted`. Deletion is not a financial cascade: sources, allocations, operations and audit rows are kept. Requires an organization secret key, or trusted internal authentication. A secret key needs `entity:write`. Publishable keys are rejected.
-         */
-        delete: operations["engineDeleteCustomerEntity"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3993,6 +4033,26 @@ export interface paths {
          * @description Starts checkout for a fixed top-up package. The Engine forwards the request to Nozle Core and returns Core's status and body unchanged. Creating checkout does not grant credits; credits are added once the top-up invoice is fully paid, by a provider payment, a manual payment for the full amount, a payment request or marking the invoice paid. A partial payment grants nothing. The body is at most 64 KiB and unknown fields are rejected. Requires an organization secret key, or trusted internal authentication; a secret key needs `credit_system:write`.
          */
         post: operations["engineCreateCreditTopUpPurchase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credit-top-up-purchases/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a credit top-up purchase
+         * @description Returns the purchase from Nozle Core, passed through unchanged, with `payment_status` and `fulfillment_status`. Poll it after checkout until `fulfillment_status` is `fulfilled` (then `fulfilled_at` is set and the credits can be spent), or wait for the `credit_top_up_purchase.fulfilled` webhook. A paid invoice (`payment_status` `succeeded`) can come a few seconds before the credits. Requires an organization secret key, or trusted internal authentication; a secret key needs `credit_system:read`. A customer-scoped internal caller gets `404` for another customer's purchase. Engine 2.12.0 and later.
+         */
+        get: operations["engineGetCreditTopUpPurchase"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4284,8 +4344,6 @@ export interface paths {
          *     | `usage_limit_exceeded` | Usage reached a hard limit. A soft limit never denies; it sets `overage: true`. |
          *     | `economic_policy_denied` | A margin policy decided `deny`. The `policy` object has the detail. |
          *
-         *     A customer whose unpaid invoices are past the plan's grace gets `402` with `allowed: false`, `reason` and `code` `customer_payment_overdue`, until the invoices are paid.
-         *
          *     A subscription on an override plan (a plan made from a catalog plan for one customer, for example a negotiated price or a subscription created from a quote) gets the entitlements and usage limits of the catalog plan it was made from. Its usage is still priced with the override plan's own charges.
          *
          *     **Subscription.** Plan, entitlements, limits and usage come from one subscription that is current now (started, not ended). With `subscription_id`, that subscription is evaluated. With `entity_id`, the Entity's own subscription is evaluated, else the customer's own (not Entity-owned) one. Without either, the customer's only current subscription is evaluated; with several, the customer's own one when there is exactly one, otherwise the answer is `subscription_required`. The newest subscription is never picked.
@@ -4336,7 +4394,7 @@ export interface paths {
         };
         /**
          * List the public plan catalog (Engine)
-         * @description Engine proxy for Core's `GET /plans`. Engine calls Core `GET /api/v1/plans` with the caller's query string (`page`, `per_page`) and copies Core's status code and body unchanged, so a `200` body is the same `PlansPaginated` object Core returns. Engine also serves `GET /api/v1/plans/{code}` the same way, as a proxy for Core's `GET /plans/{code}`.
+         * @description Engine proxy for Core's `GET /plans`. Engine calls Core `GET /api/v1/plans` with the caller's query string (`page`, `per_page`, and from Engine 2.21.0 `currency` and `external_customer_id`) and copies Core's status code and body unchanged, so a `200` body is the same `PlansPaginated` object Core returns. Engine also serves `GET /api/v1/plans/{code}` the same way, as a proxy for Core's `GET /plans/{code}`.
          *
          *     **Keys.** These two plan routes are the only Engine routes that accept a publishable `pk_` key. They also accept a secret `sk_` key and the trusted internal credential. Engine forwards a `pk_` or `sk_` key to Core as the caller's own credential. The internal credential works only for the organization Engine is configured to act for; any other organization returns `403`.
          *
@@ -4523,7 +4581,7 @@ export interface webhooks {
         put?: never;
         /**
          * A new alert was triggered
-         * @description One or more thresholds defined in the alert were crossed
+         * @description A usage alert on a subscription (or a wallet balance alert) crosses one of its thresholds.
          */
         post: operations["alertTriggered"];
         delete?: never;
@@ -4543,7 +4601,7 @@ export interface webhooks {
         put?: never;
         /**
          * A new feature has been created
-         * @description A new feature has been created
+         * @description A feature is created.
          */
         post: operations["featureCreated"];
         delete?: never;
@@ -4563,7 +4621,7 @@ export interface webhooks {
         put?: never;
         /**
          * A feature has been updated
-         * @description A feature has been updated
+         * @description A feature is updated, or one of its privileges is removed.
          */
         post: operations["featureUpdated"];
         delete?: never;
@@ -4583,7 +4641,7 @@ export interface webhooks {
         put?: never;
         /**
          * A feature has been deleted
-         * @description A feature has been deleted
+         * @description A feature is deleted.
          */
         post: operations["featureDeleted"];
         delete?: never;
@@ -4603,7 +4661,7 @@ export interface webhooks {
         put?: never;
         /**
          * A new customer has been created
-         * @description A new customer has been created
+         * @description A customer is created, from the API, the dashboard or an upsert that creates one.
          */
         post: operations["customerCreated"];
         delete?: never;
@@ -4623,7 +4681,7 @@ export interface webhooks {
         put?: never;
         /**
          * A customer has been updated
-         * @description A customer has been updated
+         * @description A customer is updated, from the API (an upsert on an existing `external_id`) or the dashboard.
          */
         post: operations["customerUpdated"];
         delete?: never;
@@ -4643,7 +4701,7 @@ export interface webhooks {
         put?: never;
         /**
          * A customer was created on an accouting integration
-         * @description A customer was created on an accouting integration
+         * @description A customer is created in an accounting integration (for example NetSuite or Xero).
          */
         post: operations["customerAccountingProviderCreated"];
         delete?: never;
@@ -4663,7 +4721,7 @@ export interface webhooks {
         put?: never;
         /**
          * An error was encountered while syncing a customer to an accounting provider
-         * @description An error was encountered while syncing a customer to an accounting provider
+         * @description Syncing a customer to an accounting integration fails.
          */
         post: operations["customerAccountingProviderError"];
         delete?: never;
@@ -4683,7 +4741,7 @@ export interface webhooks {
         put?: never;
         /**
          * A customer has been created on a payment provider
-         * @description A customer has been created on a payment provider
+         * @description A customer is created at a payment provider (Stripe, Razorpay and the other providers).
          */
         post: operations["customerPaymentProviderCreated"];
         delete?: never;
@@ -4703,7 +4761,7 @@ export interface webhooks {
         put?: never;
         /**
          * An error was encountered while syncing a customer to a payment provider
-         * @description An error was encountered while syncing a customer to a payment provider
+         * @description Creating or syncing a customer at a payment provider fails.
          */
         post: operations["customerPaymentProviderError"];
         delete?: never;
@@ -4723,7 +4781,7 @@ export interface webhooks {
         put?: never;
         /**
          * A checkout URL was generated for a customer
-         * @description A checkout URL was generated for a customer
+         * @description A provider checkout URL is generated for a customer, for example to add a payment method. For a Stripe connection with a publishable key and a customer who pays by card only, the URL is a Nozle-hosted card page (not stripe.com) that registers an e-mandate for cards issued in India; the customer returns to the return URL with nozle_card=succeeded, processing or failed appended.
          */
         post: operations["customerCheckoutUrlGenerated"];
         delete?: never;
@@ -4743,7 +4801,7 @@ export interface webhooks {
         put?: never;
         /**
          * An error was encountered while fetching taxes for a customer on a tax provider
-         * @description An error was encountered while fetching taxes for a customer on a tax provider
+         * @description Fetching taxes for a customer from a tax integration (Anrok or Avalara) fails.
          */
         post: operations["customerTaxProviderError"];
         delete?: never;
@@ -4763,7 +4821,7 @@ export interface webhooks {
         put?: never;
         /**
          * VIES VAT number has been checked for a customer
-         * @description VIES VAT number has been checked for a customer
+         * @description The EU VAT number of a customer is checked against VIES. The `vies_check` field has the VIES answer, or the error when the check fails.
          */
         post: operations["customerViesCheck"];
         delete?: never;
@@ -4783,7 +4841,7 @@ export interface webhooks {
         put?: never;
         /**
          * A new credit note has been created
-         * @description A new credit note has been created
+         * @description A credit note is created, including the one made when a draft invoice is refreshed and finalized.
          */
         post: operations["creditNoteCreated"];
         delete?: never;
@@ -4803,7 +4861,7 @@ export interface webhooks {
         put?: never;
         /**
          * A new credit note PDF has been generated
-         * @description A new credit note PDF has been generated
+         * @description The PDF of a credit note has been generated. `file_url` is set.
          */
         post: operations["creditNoteGenerated"];
         delete?: never;
@@ -4823,7 +4881,7 @@ export interface webhooks {
         put?: never;
         /**
          * The refund of a credit note has failed on a payment provider
-         * @description The refund of a credit note has failed on a payment provider. Sent as `credit_note.refund_failure`, the name to use in an endpoint's `event_types` filter. The former name `credit_note.provider_refund_failure` is still accepted in `event_types` and saved as `credit_note.refund_failure`.
+         * @description Refunding a credit note at the payment provider fails. Endpoints that subscribed with the former name `credit_note.provider_refund_failure` receive it under this name.
          */
         post: operations["creditNoteProviderRefundFailure"];
         delete?: never;
@@ -4843,9 +4901,29 @@ export interface webhooks {
         put?: never;
         /**
          * The dunning campaign has been completed for a customer
-         * @description The dunning campaign has been completed for a customer
+         * @description A dunning campaign has run its last attempt for a customer.
          */
         post: operations["dunningCampaignFinished"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    dunning_step: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A step of the dunning policy ran for an unpaid invoice
+         * @description Core 11.16.0. A step of the [dunning policy](/guides/billing/dunning) ran for an unpaid invoice of a customer: `payment_failed` (day 0), `reminder`, `final_reminder`, `end_action` (the last day of the grace) or `resolved` (sent once when the invoice no longer needs paying). Only dunning campaigns with an `end_action` send it.
+         */
+        post: operations["dunningStep"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4864,7 +4942,7 @@ export interface webhooks {
         /**
          * An error has been detected on an event
          * @deprecated
-         * @description An error has been detected on an event
+         * @description Deprecated. An ingested usage event cannot be processed, for example when its target wallet does not exist. Use `events.errors`.
          */
         post: operations["eventError"];
         delete?: never;
@@ -4884,7 +4962,7 @@ export interface webhooks {
         put?: never;
         /**
          * Errors were encountered while post-processing some events
-         * @description Errors were encountered while post-processing some events
+         * @description The periodic check of ingested events finds events with an unknown billable metric code, a missing aggregation property or invalid filter values.
          */
         post: operations["eventsErrors"];
         delete?: never;
@@ -4904,7 +4982,7 @@ export interface webhooks {
         put?: never;
         /**
          * A pay in advance fee has been created
-         * @description A pay in advance fee has been created
+         * @description A pay-in-advance fee is created (an instant usage charge or a non-invoiceable fee).
          */
         post: operations["feeCreated"];
         delete?: never;
@@ -4924,7 +5002,7 @@ export interface webhooks {
         put?: never;
         /**
          * An error was encountered while fetching taxes for a fee on a tax provider
-         * @description An error was encountered while fetching taxes for a fee on a tax provider
+         * @description Reserved. Core accepts this type in `event_types` but no code path sends it today.
          */
         post: operations["feeTaxProviderError"];
         delete?: never;
@@ -4944,7 +5022,7 @@ export interface webhooks {
         put?: never;
         /**
          * A new invoice has been emitted
-         * @description A new invoice has been emitted
+         * @description An invoice is finalized: a subscription invoice, a pay-in-advance or progressive billing invoice, or an invoice regenerated from a voided one.
          */
         post: operations["invoiceCreated"];
         delete?: never;
@@ -4964,29 +5042,9 @@ export interface webhooks {
         put?: never;
         /**
          * A new one off invoice has been emitted
-         * @description A new one off invoice has been emitted
+         * @description A one-off invoice is created.
          */
         post: operations["invoiceOneOffCreated"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    invoice_add_on_added: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * A new add on invoice has been emitted
-         * @description A new add on invoice has been emitted
-         */
-        post: operations["invoiceAddOnAdded"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5004,7 +5062,7 @@ export interface webhooks {
         put?: never;
         /**
          * A new prepaid credit invoice has been emitted
-         * @description A new prepaid credit invoice has been emitted
+         * @description An invoice for prepaid credits (a wallet top-up) is finalized.
          */
         post: operations["invoicePaidCreditAdded"];
         delete?: never;
@@ -5024,7 +5082,7 @@ export interface webhooks {
         put?: never;
         /**
          * A new invoice PDF has been generated
-         * @description A new invoice PDF has been generated
+         * @description The PDF of an invoice has been generated. `file_url` is set.
          */
         post: operations["invoiceGenerated"];
         delete?: never;
@@ -5044,7 +5102,7 @@ export interface webhooks {
         put?: never;
         /**
          * A new draft invoice has been emitted
-         * @description A new draft invoice has been emitted
+         * @description An invoice is created as a draft, while it is in its grace period or has been refreshed.
          */
         post: operations["invoiceDrafted"];
         delete?: never;
@@ -5064,7 +5122,7 @@ export interface webhooks {
         put?: never;
         /**
          * An invoice has been voided
-         * @description An invoice has been voided
+         * @description An invoice is voided.
          */
         post: operations["invoiceVoided"];
         delete?: never;
@@ -5084,9 +5142,29 @@ export interface webhooks {
         put?: never;
         /**
          * A payment dispute has been lost for an invoice payment
-         * @description A payment dispute has been lost for an invoice payment
+         * @description A payment dispute on an invoice is lost. The payload wraps the invoice in `payment_dispute_lost` with the provider reason.
          */
         post: operations["invoicePaymentDisputeLost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    invoice_payment_dispute_updated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A payment dispute for an invoice payment was updated
+         * @description A payment dispute on an invoice was opened, needs a response, is under review or was won. The payload wraps the invoice and the dispute in `payment_dispute_updated`. The invoice is unchanged; a lost dispute is sent as `invoice.payment_dispute_lost`.
+         */
+        post: operations["invoicePaymentDisputeUpdated"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5104,7 +5182,7 @@ export interface webhooks {
         put?: never;
         /**
          * The payment status of an invoice has been updated
-         * @description The payment status of an invoice has been updated
+         * @description The payment status of an invoice changes (pending, succeeded, failed).
          */
         post: operations["invoicePaymentStatusUpdated"];
         delete?: never;
@@ -5124,7 +5202,7 @@ export interface webhooks {
         put?: never;
         /**
          * An invoice payment is overdue
-         * @description An invoice payment is overdue
+         * @description An unpaid invoice passes its due date and is marked overdue.
          */
         post: operations["invoicePaymentOverdue"];
         delete?: never;
@@ -5144,7 +5222,7 @@ export interface webhooks {
         put?: never;
         /**
          * A payment attempt for an invoice has failed on a payment provider
-         * @description A payment attempt for an invoice has failed on a payment provider
+         * @description A payment attempt for an invoice fails at the provider, or a duplicate payment is refunded. `provider_error` says why.
          */
         post: operations["invoicePaymentFailure"];
         delete?: never;
@@ -5164,7 +5242,7 @@ export interface webhooks {
         put?: never;
         /**
          * An error was encountered while processing data on an integration
-         * @description An error was encountered while processing data on an integration
+         * @description An integration (accounting, CRM or tax) reports an error that is not tied to one customer.
          */
         post: operations["integrationProviderError"];
         delete?: never;
@@ -5184,9 +5262,49 @@ export interface webhooks {
         put?: never;
         /**
          * An action is required to process a payment
-         * @description An action is required to process a payment
+         * @description A payment needs the customer to act, for example 3D Secure authentication. `next_action` has the details.
          */
         post: operations["paymentRequiresAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    payment_scheduled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A payment will be debited automatically
+         * @description Nozle will debit a payment automatically from the customer's saved card or mandate at `scheduled_at`. It is sent once per payment and `scheduled_at`; a changed `scheduled_at` sends it again. The payload is the payment object plus `scheduled_at` and `method_type`. Nozle emails the customer with this notice when the connection setting `upcomingDebitEmail` is on (default: on for Razorpay and for INR payments on Stripe); you can send your own message from this webhook instead. It is sent for Stripe card payments that the bank debits after its notice, and for Razorpay card and UPI debits when the debit is scheduled (not for a bank eMandate, and not when `pre_debit_notice` is off).
+         */
+        post: operations["paymentScheduled"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    payment_schedule_cancelled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An announced automatic debit will not happen
+         * @description An automatic debit announced by `payment.scheduled` will not happen. It is sent only after `payment.scheduled` was sent for the payment. The payload is the payment object plus `scheduled_at` (the announced time) and `reason`; it has no `method_type`.
+         */
+        post: operations["paymentScheduleCancelled"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5204,7 +5322,7 @@ export interface webhooks {
         put?: never;
         /**
          * A payment has been successfully processed
-         * @description A payment has been successfully processed by the payment provider
+         * @description A payment succeeds at the provider (Stripe, Razorpay and the other providers).
          */
         post: operations["paymentSucceeded"];
         delete?: never;
@@ -5224,7 +5342,7 @@ export interface webhooks {
         put?: never;
         /**
          * An error was raised by a payment provider
-         * @description An error was raised by a payment provider
+         * @description A payment provider connection reports an error, for example when Nozle cannot register its webhook at Stripe.
          */
         post: operations["paymentProviderError"];
         delete?: never;
@@ -5244,7 +5362,7 @@ export interface webhooks {
         put?: never;
         /**
          * An new payment request has been created
-         * @description An new payment request has been created
+         * @description A payment request is created, by dunning or automatically for an invoice that Core did not charge (`automatic` is `true`).
          */
         post: operations["paymentRequestCreated"];
         delete?: never;
@@ -5264,7 +5382,7 @@ export interface webhooks {
         put?: never;
         /**
          * A payment attempt for a payment request has failed on a payment provider
-         * @description A payment attempt for a payment request has failed on a payment provider
+         * @description A payment attempt for a payment request fails, or its Pay link cannot be built. `provider_error` says why, for example `payment_request_invoices_changed`.
          */
         post: operations["paymentRequestPaymentFailure"];
         delete?: never;
@@ -5284,7 +5402,7 @@ export interface webhooks {
         put?: never;
         /**
          * The payment status of an invoice has been updated
-         * @description The payment status of an invoice has been updated
+         * @description The payment status of a payment request changes. An automatic request is closed when its invoice is paid another way, settled by a credit note or voided.
          */
         post: operations["paymentRequestPaymentStatusUpdated"];
         delete?: never;
@@ -5304,7 +5422,7 @@ export interface webhooks {
         put?: never;
         /**
          * A new plan has been created
-         * @description A new plan has been created
+         * @description A plan is created.
          */
         post: operations["planCreated"];
         delete?: never;
@@ -5324,7 +5442,7 @@ export interface webhooks {
         put?: never;
         /**
          * A plan has been updated
-         * @description A plan has been updated
+         * @description A plan is updated, including changes to its entitlements or pricing display.
          */
         post: operations["planUpdated"];
         delete?: never;
@@ -5364,7 +5482,7 @@ export interface webhooks {
         put?: never;
         /**
          * A plan has been deleted
-         * @description A plan has been deleted
+         * @description A plan is deleted.
          */
         post: operations["planDeleted"];
         delete?: never;
@@ -5384,7 +5502,7 @@ export interface webhooks {
         put?: never;
         /**
          * A subscription has been terminated
-         * @description A subscription has been terminated
+         * @description A subscription is terminated, by the API, at its end date or when it is replaced.
          */
         post: operations["subscriptionTerminated"];
         delete?: never;
@@ -5404,7 +5522,7 @@ export interface webhooks {
         put?: never;
         /**
          * A subscription is incomplete and waiting for payment
-         * @description A payment-gated subscription has been created in the `incomplete` state and is waiting for the gating payment to succeed before it is activated.
+         * @description A subscription waits for its first payment and stays incomplete.
          */
         post: operations["subscriptionIncomplete"];
         delete?: never;
@@ -5424,7 +5542,7 @@ export interface webhooks {
         put?: never;
         /**
          * A subscription has been canceled
-         * @description A subscription has been canceled before its activation. For payment-gated subscriptions this happens when the gating payment fails or the activation rule expires, in which case the `cancellation_reason` field is set.
+         * @description A payment-gated subscription is canceled because an activation rule failed.
          */
         post: operations["subscriptionCanceled"];
         delete?: never;
@@ -5444,7 +5562,7 @@ export interface webhooks {
         put?: never;
         /**
          * An subscription has started
-         * @description An subscription has started
+         * @description A subscription starts or is activated, including the new subscription of a plan change.
          */
         post: operations["subscriptionStarted"];
         delete?: never;
@@ -5464,7 +5582,7 @@ export interface webhooks {
         put?: never;
         /**
          * A subscription has been updated
-         * @description A subscription has been updated
+         * @description A subscription is updated, a plan change is scheduled or canceled, or its entitlements change. A subscription that a plan change replaces also gets this event.
          */
         post: operations["subscriptionUpdated"];
         delete?: never;
@@ -5484,7 +5602,7 @@ export interface webhooks {
         put?: never;
         /**
          * A subscription will be terminated in the future
-         * @description A subscription will be terminated in the future
+         * @description A subscription is about to end, ahead of its `ending_at`.
          */
         post: operations["subscriptionTerminationAlert"];
         delete?: never;
@@ -5504,7 +5622,7 @@ export interface webhooks {
         put?: never;
         /**
          * A subscription trial period has ended
-         * @description A subscription trial period has ended
+         * @description The free trial of a subscription ends.
          */
         post: operations["subscriptionTrialEnded"];
         delete?: never;
@@ -5524,7 +5642,7 @@ export interface webhooks {
         put?: never;
         /**
          * A usage threshold has been reached by a subscription
-         * @description A usage threshold has been reached by a subscription
+         * @description The lifetime usage of a subscription reaches a usage threshold. `usage_threshold` is the threshold that was reached.
          */
         post: operations["subscriptionUsageThresholdReached"];
         delete?: never;
@@ -5544,7 +5662,7 @@ export interface webhooks {
         put?: never;
         /**
          * The balance of a wallet has been depleted
-         * @description The balance of a wallet has been depleted
+         * @description The ongoing balance of a wallet reaches zero.
          */
         post: operations["walletDepletedOngoingBalance"];
         delete?: never;
@@ -5564,7 +5682,7 @@ export interface webhooks {
         put?: never;
         /**
          * A new wallet transaction has been created
-         * @description A new wallet transaction has been created
+         * @description A wallet transaction (a top-up, a grant or a void) is created.
          */
         post: operations["walletTransactionCreated"];
         delete?: never;
@@ -5584,7 +5702,7 @@ export interface webhooks {
         put?: never;
         /**
          * A wallet transaction has been updated
-         * @description A wallet transaction has been updated
+         * @description A wallet transaction is settled or marked as failed.
          */
         post: operations["walletTransactionUpdated"];
         delete?: never;
@@ -5604,9 +5722,409 @@ export interface webhooks {
         put?: never;
         /**
          * A payment attempt for a wallet transaction has failed on a payment provider
-         * @description A payment attempt for a wallet transaction has failed on a payment provider
+         * @description The payment for a wallet top-up fails at the provider. `provider_error` says why.
          */
         post: operations["walletTransactionPaymentFailure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    customer_crm_provider_created: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A customer has been created in a CRM integration
+         * @description A customer is created in a CRM integration (for example HubSpot or Salesforce).
+         */
+        post: operations["customerCrmProviderCreated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    customer_crm_provider_error: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Syncing a customer to a CRM integration has failed
+         * @description Syncing a customer to a CRM integration fails. The error object names the provider in `accounting_provider` and `accounting_provider_code`, the same keys as the accounting error.
+         */
+        post: operations["customerCrmProviderError"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    invoice_resynced: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An invoice has been synced again to a CRM integration
+         * @description An invoice is synced again to a CRM integration (Salesforce).
+         */
+        post: operations["invoiceResynced"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    order_created: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An order has been created
+         * @description An order form is signed and the order is created.
+         */
+        post: operations["orderCreated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    order_executed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An order has been executed
+         * @description An order is executed. `execution_record` lists what was created.
+         */
+        post: operations["orderExecuted"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    order_failed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An order has failed
+         * @description Executing an order fails and the order is marked `failed`, for example when the customer was deleted. `execution_record.errors` has the reasons. Sent once per failed execution.
+         */
+        post: operations["orderFailed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    order_form_created: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An order form has been created
+         * @description An order form is created for an approved quote.
+         */
+        post: operations["orderFormCreated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    order_form_signed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An order form has been signed
+         * @description An order form is signed.
+         */
+        post: operations["orderFormSigned"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    order_form_expired: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An order form has expired
+         * @description An order form passes its expiry date and expires.
+         */
+        post: operations["orderFormExpired"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    order_form_voided: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An order form has been voided
+         * @description An order form is voided.
+         */
+        post: operations["orderFormVoided"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    payment_receipt_created: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A payment receipt has been created
+         * @description A payment receipt is created for a successful payment.
+         */
+        post: operations["paymentReceiptCreated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    payment_receipt_generated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A payment receipt PDF has been generated
+         * @description The PDF of a payment receipt has been generated. `file_url` is set.
+         */
+        post: operations["paymentReceiptGenerated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    plan_upgrade_intent_needs_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A paid plan change needs review
+         * @description A paid plan change cannot be applied and its intent goes to review. The payment is refunded. Sent once per intent, even when two payments of the same checkout are reviewed at the same moment.
+         */
+        post: operations["planUpgradeIntentNeedsReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    quote_created: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A quote has been created
+         * @description A quote is created. The payload is the quote with the version it was created with.
+         */
+        post: operations["quoteCreated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    quote_approved: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A quote has been approved
+         * @description A quote version is approved.
+         */
+        post: operations["quoteApproved"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    quote_voided: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A quote has been voided
+         * @description A quote version is voided.
+         */
+        post: operations["quoteVoided"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    credit_top_up_purchase_fulfilled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The credits of a paid top-up can be spent
+         * @description The Engine granted the credits of a paid top-up purchase, so they are in the customer's balance and can be spent. Sent once per purchase, after the grant is committed. A paid invoice alone does not mean the credits are spendable; wait for this event or poll `GET /credit-top-up-purchases/{id}` until `fulfillment_status` is `fulfilled`.
+         */
+        post: operations["creditTopUpPurchaseFulfilled"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    wallet_created: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A wallet has been created
+         * @description A wallet is created.
+         */
+        post: operations["walletCreated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    wallet_terminated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A wallet has been terminated
+         * @description A wallet is terminated.
+         */
+        post: operations["walletTerminated"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    wallet_updated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A wallet has been updated
+         * @description A wallet is updated or its balance changes.
+         */
+        post: operations["walletUpdated"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5762,8 +6280,8 @@ export interface components {
              * @example UTC
              */
             timezone: components["schemas"]["Timezone"];
-            /** @description The email notification settings for this billing entity */
-            email_settings?: ("invoice.finalized" | "credit_note.created" | "payment_receipt.created")[];
+            /** @description The email notification settings for this billing entity. `subscription.price_change_scheduled` is off until you add it; it emails a customer when a plan version migration moves their subscription to a different price. */
+            email_settings?: ("invoice.finalized" | "credit_note.created" | "payment_receipt.created" | "subscription.price_change_scheduled" | "dunning.step")[];
             /**
              * @description Whether EU tax management is enabled for this billing entity
              * @example false
@@ -5931,8 +6449,8 @@ export interface components {
                  * @example UTC
                  */
                 timezone?: components["schemas"]["Timezone"];
-                /** @description The email notification settings for this billing entity */
-                email_settings?: ("invoice.finalized" | "credit_note.created")[];
+                /** @description The email notification settings for this billing entity. `subscription.price_change_scheduled` is off until you add it. */
+                email_settings?: ("invoice.finalized" | "credit_note.created" | "subscription.price_change_scheduled" | "dunning.step")[];
                 /**
                  * @description Whether EU tax management is enabled for this billing entity
                  * @example false
@@ -6227,8 +6745,8 @@ export interface components {
             timezone?: components["schemas"]["Timezone"];
             /** @description The tax codes that should be associated with this billing entity */
             tax_codes?: components["schemas"]["TaxCodes"];
-            /** @description The email notification settings for this billing entity */
-            email_settings?: ("invoice.finalized" | "credit_note.created")[];
+            /** @description The email notification settings for this billing entity. `subscription.price_change_scheduled` is off until you add it. */
+            email_settings?: ("invoice.finalized" | "credit_note.created" | "subscription.price_change_scheduled" | "dunning.step")[];
             /**
              * @description Whether EU tax management is enabled for this billing entity
              * @example false
@@ -6360,7 +6878,7 @@ export interface components {
             total_count: number;
         };
         ActivityLogsPaginated: {
-            activity_logs?: components["schemas"]["ActivityLogObject"][];
+            activity_logs: components["schemas"]["ActivityLogObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         ActivityLog: {
@@ -6413,7 +6931,7 @@ export interface components {
             taxes?: components["schemas"]["TaxObject"][];
         };
         AddOnsPaginated: {
-            add_ons?: components["schemas"]["AddOnObject"][];
+            add_ons: components["schemas"]["AddOnObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         AddOnBaseInput: {
@@ -6520,7 +7038,7 @@ export interface components {
             request_response?: string;
         };
         ApiLogsPaginated: {
-            api_logs?: components["schemas"]["ApiLogObject"][];
+            api_logs: components["schemas"]["ApiLogObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         ApiLog: {
@@ -6882,7 +7400,7 @@ export interface components {
             credits: components["schemas"]["CreditObject"][];
         };
         AppliedCouponsPaginated: {
-            applied_coupons?: components["schemas"]["AppliedCouponObjectExtended"][];
+            applied_coupons: components["schemas"]["AppliedCouponObjectExtended"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         AppliedCouponInput: {
@@ -7331,7 +7849,7 @@ export interface components {
             terminated_at?: string | null;
         };
         CouponsPaginated: {
-            coupons?: components["schemas"]["CouponObject"][];
+            coupons: components["schemas"]["CouponObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         CouponBaseInput: {
@@ -7693,7 +8211,7 @@ export interface components {
              * @example 0.5
              */
             conversion_rate: string;
-        };
+        } | null;
         /** @description Array of usage breakdowns split by presentation group keys without affecting pricing or aggregation. */
         PresentationBreakdownsObject: {
             /** @description Key value list of event properties used for presentation grouping. */
@@ -7820,7 +8338,7 @@ export interface components {
              * @description The total number of units that have been aggregated for this specific fee.
              * @example 0.32
              */
-            total_aggregated_units: string;
+            total_aggregated_units: string | null;
             /**
              * @description The cost of this specific fee, including any applicable taxes.
              * @example 120
@@ -7997,6 +8515,7 @@ export interface components {
             /** @description Details about the pricing unit used and amounts for this fee. */
             pricing_unit_details?: components["schemas"]["PricingUnitDetailsObject"];
             presentation_breakdowns?: components["schemas"]["PresentationBreakdownsObject"];
+            original_fee_id?: string | null;
         };
         CreditNoteItemObject: {
             /**
@@ -8017,6 +8536,7 @@ export interface components {
             amount_currency: components["schemas"]["Currency"];
             /** @description The fee object related to the credit note item. */
             fee: components["schemas"]["FeeObject"];
+            precise_amount_cents?: string;
         };
         CreditNoteAppliedTaxObject: {
             /**
@@ -8044,7 +8564,7 @@ export interface components {
              * @description The grace period, expressed in days, for the invoice. This period refers to the additional time granted to the customer beyond the invoice due date to adjust usage and line items
              * @example 3
              */
-            invoice_grace_period?: number;
+            invoice_grace_period?: number | null;
             /**
              * @description Defines whether the issuing date follows the current billing period's end date or the next period starting date.
              * @default null
@@ -8061,21 +8581,21 @@ export interface components {
             subscription_invoice_issuing_date_adjustment: "align_with_finalization_date" | "keep_anchor" | null;
             /**
              * @description The payment provider utilized to initiate payments for invoices issued by Nozle.
-             *     Accepted values: `stripe`, `adyen`, `gocardless` or null. This field is required if you intend to assign a `provider_customer_id`.
+             *     Accepted values: `stripe`, `razorpay`, `adyen`, `gocardless`, `cashfree`, `flutterwave`, `moneyhash` or null. This field is required if you intend to assign a `provider_customer_id`.
              * @example stripe
-             * @enum {string}
+             * @enum {string|null}
              */
-            payment_provider?: "stripe" | "adyen" | "gocardless";
+            payment_provider?: "stripe" | "razorpay" | "adyen" | "gocardless" | "cashfree" | "flutterwave" | "moneyhash" | null;
             /**
              * @description Unique code used to identify a payment provider connection.
              * @example stripe-eu-1
              */
-            payment_provider_code?: string;
+            payment_provider_code?: string | null;
             /**
              * @description The customer ID within the payment provider's system. If this field is not provided, Nozle has the option to create a new customer record within the payment provider's system on behalf of the customer
              * @example cus_12345
              */
-            provider_customer_id?: string;
+            provider_customer_id?: string | null;
             /**
              * @description Set this field to `true` if you want to create the customer in the payment provider synchronously with the customer creation process in Nozle. This option is applicable only when the `provider_customer_id` is `null` and the customer is automatically created in the payment provider through Nozle. By default, the value is set to `false`
              * @example true
@@ -8090,7 +8610,7 @@ export interface components {
              * @description The document locale, specified in the ISO 639-1 format. This field represents the language or locale used for the documents issued by Nozle
              * @example fr
              */
-            document_locale?: string;
+            document_locale?: string | null;
             /**
              * @description Specifies the available payment methods that can be used for this customer when `payment_provider` is set to `stripe`. The `provider_payment_methods` field is an array that allows multiple payment options to be defined. If this field is not explicitly set, the payment methods will be set to `card`. For now, possible values are `card`, `sepa_debit`, `us_bank_account`, `bacs_debit`, `boleto`, `link`, `crypto` and `customer_balance`. Note that when `link` is selected, `card` should also be provided in the array. When `customer_balance` is selected, no other payment can be selected.
              * @example [
@@ -8332,9 +8852,33 @@ export interface components {
              * @example false
              */
             skip_invoice_custom_sections?: boolean;
+            /**
+             * Format: date-time
+             * @description Core 11.16.0. When the [dunning policy](/guides/billing/dunning) blocked the customer: an unpaid invoice is past the grace of its plan and the campaign ends with `block`. The Engine then answers `402` `customer_payment_overdue` for the customer. `null` when not blocked.
+             * @example null
+             */
+            dunning_blocked_at?: string | null;
+            /**
+             * @description Core 11.16.0. Day of the dunning timeline that the customer's furthest unpaid invoice is on. `null` without a dunned invoice.
+             * @example null
+             */
+            dunning_day?: number | null;
+            /**
+             * Format: date-time
+             * @description Core 11.16.0. When the next step of the dunning policy runs, a retry included (only after a soft decline). `null` when none is planned.
+             * @example null
+             */
+            dunning_next_action_at?: string | null;
             billing_configuration?: components["schemas"]["CustomerBillingConfiguration"];
             shipping_address?: components["schemas"]["Address"];
             metadata?: components["schemas"]["CustomerMetadata"][];
+            external_salesforce_id?: string | null;
+            /**
+             * @description Set for a customer who pays each invoice by link (Razorpay, or Stripe without a saved payment method) when no email can carry the link: the billing entity has no email, or the customer has none. `null` otherwise. While it is set, the automatic payment request of an invoice is skipped and Nozle sends `invoice.payment_failure` for that invoice with the same value as `provider_error.error_code`.
+             * @example null
+             * @enum {string|null}
+             */
+            payment_collection_warning?: "billing_entity_email_missing" | "customer_email_missing" | null;
         };
         /**
          * @description Custom metadata stored as key-value pairs.
@@ -8515,7 +9059,7 @@ export interface components {
             error_details?: components["schemas"]["CreditNoteErrorDetailsObject"][] | null;
         };
         CreditNotesPaginated: {
-            credit_notes?: components["schemas"]["CreditNoteObject"][];
+            credit_notes: components["schemas"]["CreditNoteObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         /**
@@ -8598,6 +9142,9 @@ export interface components {
         };
         CreditNoteExtendedObject: components["schemas"]["CreditNoteObject"] & {
             customer?: components["schemas"]["CustomerBaseObject"];
+            precise_total_amount_cents?: string;
+            precise_taxes_amount_cents?: string;
+            xml_url?: string | null;
         };
         CreditNoteExtended: {
             credit_note: components["schemas"]["CreditNoteExtendedObject"];
@@ -8822,6 +9369,7 @@ export interface components {
         };
         CustomerObject: components["schemas"]["CustomerBaseObject"] & {
             integration_customers?: components["schemas"]["IntegrationCustomer"][];
+            external_salesforce_id?: string | null;
         };
         ErrorDetailObject: {
             /**
@@ -8855,7 +9403,7 @@ export interface components {
             error_details?: components["schemas"]["ErrorDetailObject"][];
         };
         CustomersPaginated: {
-            customers?: components["schemas"]["CustomerObjectExtended"][];
+            customers: components["schemas"]["CustomerObjectExtended"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         CustomerCreateInput: {
@@ -9074,7 +9622,7 @@ export interface components {
              * @description This ID helps in uniquely identifying and organizing the invoices associated with a specific customer. It provides a sequential numbering system specific to the customer, allowing for easy tracking and management of invoices within the customer's context.
              * @example 2
              */
-            sequential_id?: number;
+            sequential_id?: number | null;
             /**
              * @description The unique number assigned to the invoice. This number serves as a distinct identifier for the invoice and helps in differentiating it from other invoices in the system.
              * @example LAG-1234-001-002
@@ -9091,7 +9639,7 @@ export interface components {
              * @description The date when the payment dispute was lost. It is expressed in Coordinated Universal Time (UTC).
              * @example 2022-09-14T16:35:31Z
              */
-            payment_dispute_lost_at?: string;
+            payment_dispute_lost_at?: string | null;
             /**
              * Format: date
              * @description The payment due date for the invoice, specified in the ISO 8601 date format.
@@ -9214,7 +9762,7 @@ export interface components {
              * @description Contains the URL that provides direct access to the invoice PDF file. You can use this URL to download or view the PDF document of the invoice
              * @example https://billing.example.com/invoices/example.pdf
              */
-            file_url?: string;
+            file_url?: string | null;
             /**
              * Format: date-time
              * @description The date of the invoice creation, represented in ISO 8601 datetime format and expressed in Coordinated Universal Time (UTC). The creation_date provides a standardized and internationally recognized timestamp for when the invoice object was created
@@ -9227,6 +9775,45 @@ export interface components {
              * @example 2022-04-29T08:59:51Z
              */
             updated_at: string;
+            total_due_amount_cents?: number;
+            total_paid_amount_cents?: number;
+            total_offsetted_credit_note_amount_cents?: number;
+            /**
+             * @description Core 11.16.0. The amount due of this invoice carried to the customer's next invoice because it was below the payment provider's minimum charge (Stripe's minimum per currency, Razorpay INR 1). `0` when nothing was carried. A carried invoice is settled (`payment_status` `succeeded`, `total_due_amount_cents` `0`) and is never charged or dunned. See [Amounts below the provider minimum](/guides/billing/invoices#amounts-below-the-provider-minimum).
+             * @example 0
+             */
+            carried_forward_amount_cents?: number;
+            /**
+             * Format: uuid
+             * @description Core 11.16.0. The invoice that took the carried amount. `null` until the customer's next invoice in the same currency is finalized, and when nothing was carried.
+             * @example null
+             */
+            carried_forward_invoice_id?: string | null;
+            /**
+             * @description Core 11.16.0. The amounts of earlier invoices carried into this one, added to its total after taxes (the earlier invoices already charged their taxes). `0` when none.
+             * @example 0
+             */
+            carried_in_amount_cents?: number;
+            /** @description Core 11.16.0. The earlier invoices whose amounts were carried into this one. The PDF shows a line `Balance carried forward from invoice <number>` for each. */
+            carried_in_invoices?: {
+                /**
+                 * Format: uuid
+                 * @description The earlier invoice.
+                 */
+                nozle_id: string;
+                /**
+                 * @description Its number.
+                 * @example ACME-47DD-012-001
+                 */
+                number: string;
+                /**
+                 * @description The amount carried from it (its `carried_forward_amount_cents`).
+                 * @example 30
+                 */
+                amount_cents: number;
+            }[];
+            xml_url?: string | null;
+            voided_at?: string | null;
         };
         InvoiceMetadataObject: {
             /**
@@ -9359,8 +9946,38 @@ export interface components {
             applied_usage_thresholds?: components["schemas"]["AppliedUsageThresholdObject"][];
         };
         InvoicesPaginated: {
-            invoices?: components["schemas"]["InvoiceObject"][];
+            invoices: components["schemas"]["InvoiceObject"][];
             meta: components["schemas"]["PaginationMeta"];
+        };
+        /** @description The payment plus when Nozle will debit it automatically and with which kind of payment method. */
+        PaymentScheduledObject: components["schemas"]["PaymentObject"] & {
+            /**
+             * Format: date-time
+             * @description When the automatic debit is planned, ISO 8601 in UTC.
+             * @example 2026-10-30T14:30:00Z
+             */
+            scheduled_at: string;
+            /**
+             * @description The kind of saved payment method that will be debited.
+             * @example card
+             * @enum {string}
+             */
+            method_type: "card" | "upi" | "bank";
+        };
+        /** @description The payment plus the announced debit time and why the debit will not happen. There is no `method_type`. */
+        PaymentScheduleCancelledObject: components["schemas"]["PaymentObject"] & {
+            /**
+             * Format: date-time
+             * @description The debit time that was announced, ISO 8601 in UTC.
+             * @example 2026-10-30T14:30:00Z
+             */
+            scheduled_at: string;
+            /**
+             * @description Why the debit was cancelled. `mandate_changed`, the card or mandate can no longer be used or changed; `invoice_paid`, the invoice was paid another way while the debit waited; `invoice_voided`, the invoice was voided while the debit waited; `notice_failed`, the bank or provider notice failed; `other`, any other failed check before the debit, for example a changed amount.
+             * @example invoice_paid
+             * @enum {string}
+             */
+            reason: "mandate_changed" | "invoice_paid" | "invoice_voided" | "notice_failed" | "other";
         };
         PaymentObject: {
             /**
@@ -9427,7 +10044,7 @@ export interface components {
              * @description Reference for the payment.
              * @example ref1
              */
-            reference: string;
+            reference: string | null;
             /**
              * @description Code of the payment provider
              * @example stripe_prod
@@ -9478,7 +10095,7 @@ export interface components {
             created_at: string;
         };
         PaymentsPaginated: {
-            payments?: components["schemas"]["PaymentObject"][];
+            payments: components["schemas"]["PaymentObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         PaymentRequestObject: {
@@ -9521,10 +10138,15 @@ export interface components {
             created_at: string;
             /** @description The customer on which the payment request applies. It refers to the customer account or entity associated with the payment request. */
             customer: components["schemas"]["CustomerBaseObject"];
-            invoices?: components["schemas"]["InvoiceBaseObject"][];
+            invoices: components["schemas"]["InvoiceBaseObject"][];
+            /**
+             * @description `true` when Core created the request itself for an invoice it did not charge (a Razorpay customer without a mandate, or a Stripe customer without a usable saved payment method), `false` for a request created by dunning or by hand.
+             * @example false
+             */
+            automatic?: boolean;
         };
         PaymentRequestsPaginated: {
-            payment_requests?: components["schemas"]["PaymentRequestObject"][];
+            payment_requests: components["schemas"]["PaymentRequestObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         AppliedInvoiceCustomSectionObject: {
@@ -9562,7 +10184,7 @@ export interface components {
              * @description The unique identifier of the payment method (required when using a specific provider payment method).
              * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
              */
-            payment_method_id?: string;
+            payment_method_id?: string | null;
         };
         SubscriptionActivationRuleObject: {
             /**
@@ -9825,9 +10447,13 @@ export interface components {
             activated_at?: string | null;
             /** @description The activation rules attached to the subscription. A payment activation rule gates activation on a successful first payment, keeping the subscription in the `incomplete` state until the payment succeeds or the rule expires. */
             activation_rules?: components["schemas"]["SubscriptionActivationRuleObject"][];
+            billing_authority?: string;
+            credit_import_completed_at?: string | null;
+            progressive_billing_disabled?: boolean;
+            purchase_order_number?: string | null;
         };
         SubscriptionsPaginated: {
-            subscriptions?: components["schemas"]["SubscriptionObject"][];
+            subscriptions: components["schemas"]["SubscriptionObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         /** @description Object that represents rule for wallet recurring transactions. */
@@ -10104,7 +10730,7 @@ export interface components {
             metadata?: components["schemas"]["MetadataObject"];
         };
         WalletsPaginated: {
-            wallets?: components["schemas"]["WalletObject"][];
+            wallets: components["schemas"]["WalletObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         /** @description Configuration for invoice custom sections to apply to invoices generated by this resource. */
@@ -10385,7 +11011,7 @@ export interface components {
                      * @example interval
                      * @enum {string}
                      */
-                    trigger?: "interval" | "threshold";
+                    trigger: "interval" | "threshold";
                     /**
                      * @description The method used for recurring top-up. Possible values are `fixed` or `target`.
                      * @example target
@@ -10579,7 +11205,7 @@ export interface components {
             created_at: string;
         };
         WalletAlerts: {
-            alerts?: components["schemas"]["WalletAlertObject"][];
+            alerts: components["schemas"]["WalletAlertObject"][];
             meta?: components["schemas"]["PaginationMeta"];
         };
         AlertThresholdInput: components["schemas"]["AlertThresholdBaseObject"] & {
@@ -10625,7 +11251,7 @@ export interface components {
         };
         WalletAlertBatchCreateInput: {
             /** @description Array of alerts to create. All alerts are created atomically - if any fail validation, none are created. */
-            alerts?: (components["schemas"]["AlertBaseInput"] & {
+            alerts: (components["schemas"]["AlertBaseInput"] & {
                 /**
                  * @description The type of alert.
                  * @example wallet_balance_amount
@@ -10685,22 +11311,22 @@ export interface components {
              * @description The number of units consumed for a specific charge filter related to a charge item.
              * @example 0.9
              */
-            units?: string;
+            units: string;
             /**
              * @description The total number of units consumed by the customer for a specific charge item, aggregated across all usage events.
              * @example 1.0
              */
-            total_aggregated_units?: string;
+            total_aggregated_units: string;
             /**
              * @description The amount in cents, tax excluded, consumed for a specific charge filter related to a charge item.
              * @example 1000
              */
-            amount_cents?: number;
+            amount_cents: number;
             /**
              * @description The quantity of usage events that have been recorded for a particular charge filter during the specified time period. These events may also be referred to as the number of transactions in some contexts.
              * @example 10
              */
-            events_count?: number;
+            events_count: number;
             /**
              * @description Specifies the name that will be displayed on an invoice.
              * @example AWS eu-east-1
@@ -10715,7 +11341,7 @@ export interface components {
              *       ]
              *     }
              */
-            values?: {
+            values: {
                 [key: string]: string[];
             };
             presentation_breakdowns?: components["schemas"]["PresentationBreakdownsObject"];
@@ -10726,28 +11352,28 @@ export interface components {
              * @description The amount in cents, tax excluded, consumed for a specific group related to a charge item.
              * @example 1000
              */
-            amount_cents?: number;
+            amount_cents: number;
             /**
              * @description The quantity of usage events that have been recorded for a particular charge during the specified time period. These events may also be referred to as the number of transactions in some contexts.
              * @example 10
              */
-            events_count?: number;
+            events_count: number;
             /**
              * @description The number of units consumed for a specific group related to a charge item.
              * @example 0.9
              */
-            units?: string;
+            units: string;
             /**
              * @description The total number of units consumed by the customer for a specific charge item, aggregated across all usage events.
              * @example 1.0
              */
-            total_aggregated_units?: string;
+            total_aggregated_units: string;
             pricing_unit_details?: components["schemas"]["UsagePricingUnitDetailsObject"];
             /** @description Key value list of event properties aggregated by the charge model */
-            grouped_by?: {
+            grouped_by: {
                 [key: string]: string;
             };
-            filters?: components["schemas"]["CustomerChargeFiltersUsageObject"];
+            filters: components["schemas"]["CustomerChargeFiltersUsageObject"];
             presentation_breakdowns?: components["schemas"]["PresentationBreakdownsObject"];
         }[];
         CustomerChargeUsageObject: {
@@ -10875,7 +11501,7 @@ export interface components {
             charges_usage: components["schemas"]["CustomerChargeUsageObject"][];
         };
         CustomerUsage: {
-            customer_usage?: components["schemas"]["CustomerUsageObject"];
+            customer_usage: components["schemas"]["CustomerUsageObject"];
         };
         /** @description Array of filter object, representing multiple dimensions for a charge item. */
         CustomerProjectedChargeFiltersUsageObject: {
@@ -10883,27 +11509,27 @@ export interface components {
              * @description The number of units consumed for a specific charge filter related to a charge item.
              * @example 0.9
              */
-            units?: string;
+            units: string;
             /**
              * @description The projected number of units that can be consumed for a specific charge filter related to a charge item.
              * @example 1.8
              */
-            projected_units?: string;
+            projected_units: string;
             /**
              * @description The amount in cents, tax excluded, consumed for a specific charge filter related to a charge item.
              * @example 1000
              */
-            amount_cents?: number;
+            amount_cents: number;
             /**
              * @description The projected amount in cents, tax excluded, that can be consumed for a specific charge filter related to a charge item.
              * @example 2000
              */
-            projected_amount_cents?: number;
+            projected_amount_cents: number;
             /**
              * @description The quantity of usage events that have been recorded for a particular charge filter during the specified time period. These events may also be referred to as the number of transactions in some contexts.
              * @example 10
              */
-            events_count?: number;
+            events_count: number;
             /**
              * @description Specifies the name that will be displayed on an invoice.
              * @example AWS eu-east-1
@@ -10918,7 +11544,7 @@ export interface components {
              *       ]
              *     }
              */
-            values?: {
+            values: {
                 [key: string]: string[];
             };
             presentation_breakdowns?: components["schemas"]["PresentationBreakdownsObject"];
@@ -10930,33 +11556,33 @@ export interface components {
              * @description The amount in cents, tax excluded, consumed for a specific group related to a charge item.
              * @example 1000
              */
-            amount_cents?: number;
+            amount_cents: number;
             /**
              * @description The projected amount in cents, tax excluded, that can be consumed for a specific group related to a charge item.
              * @example 2000
              */
-            projected_amount_cents?: number;
+            projected_amount_cents: number;
             /**
              * @description The quantity of usage events that have been recorded for a particular charge during the specified time period. These events may also be referred to as the number of transactions in some contexts.
              * @example 10
              */
-            events_count?: number;
+            events_count: number;
             /**
              * @description The number of units consumed for a specific group related to a charge item.
              * @example 0.9
              */
-            units?: string;
+            units: string;
             /**
              * @description The projected number of units that can be consumed for a specific group related to a charge item.
              * @example 1.8
              */
-            projected_units?: string;
+            projected_units: string;
             pricing_unit_details?: components["schemas"]["UsagePricingUnitDetailsObject"];
             /** @description Key value list of event properties aggregated by the charge model */
-            grouped_by?: {
+            grouped_by: {
                 [key: string]: string;
             };
-            filters?: components["schemas"]["CustomerProjectedChargeFiltersUsageObject"];
+            filters: components["schemas"]["CustomerProjectedChargeFiltersUsageObject"];
             presentation_breakdowns?: components["schemas"]["PresentationBreakdownsObject"];
             projected_presentation_breakdowns?: components["schemas"]["PresentationBreakdownsObject"];
         }[];
@@ -11038,7 +11664,7 @@ export interface components {
                 aggregation_type: "count_agg" | "sum_agg" | "max_agg" | "unique_count_agg" | "weighted_sum_agg" | "latest_agg";
             };
             filters?: components["schemas"]["CustomerProjectedChargeFiltersUsageObject"];
-            grouped_usage?: components["schemas"]["CustomerProjectedChargeGroupedUsageObject"];
+            grouped_usage: components["schemas"]["CustomerProjectedChargeGroupedUsageObject"];
             presentation_breakdowns?: components["schemas"]["PresentationBreakdownsObject"];
             projected_presentation_breakdowns?: components["schemas"]["PresentationBreakdownsObject"];
         };
@@ -11170,7 +11796,7 @@ export interface components {
             created_at: string;
         };
         PaymentMethodsPaginated: {
-            payment_methods?: components["schemas"]["PaymentMethodObject"][];
+            payment_methods: components["schemas"]["PaymentMethodObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         PaymentMethod: {
@@ -11235,7 +11861,7 @@ export interface components {
              * @description The unique identifier of the subscription within your application. It is a mandatory field when the customer possesses multiple subscriptions or when the `external_customer_id` is not provided.
              * @example sub_1234567890
              */
-            external_subscription_id: string;
+            external_subscription_id: string | null;
             /**
              * Format: date-time
              * @description The creation date of the event's record in the Nozle application, presented in the ISO 8601 datetime format, specifically in Coordinated Universal Time (UTC). It provides the precise timestamp of when the event's record was created within the Nozle application
@@ -11244,7 +11870,7 @@ export interface components {
             created_at?: string | null;
         };
         EventsPaginated: {
-            events?: components["schemas"]["EventObject"][];
+            events: components["schemas"]["EventObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         EventInputObject: {
@@ -11497,20 +12123,6 @@ export interface components {
             uncosted: components["schemas"]["CostIntelligenceUncostedSource"][];
             conflicts: components["schemas"]["CostIntelligenceProcessingConflict"][];
         };
-        CostIntelligenceSourceReplayInput: {
-            /** @enum {string} */
-            source_type: "feature_event" | "cost_event";
-            /** @description Feature Event `transaction_id` or Cost Event `cost_event_id`. */
-            source_external_id: string;
-        };
-        CostIntelligenceProjectionReplayInput: {
-            /** Format: uuid */
-            ledger_entry_id: string;
-        };
-        CostIntelligenceReplayResult: {
-            /** @example queued */
-            status: string;
-        };
         EventInput: {
             event: components["schemas"]["EventInputObject"];
         };
@@ -11527,13 +12139,28 @@ export interface components {
             events: components["schemas"]["EventInputObject"][];
         };
         EventsCreated: {
-            events?: (components["schemas"]["EventObject"] & {
+            events: (components["schemas"]["EventObject"] & {
                 /**
                  * @description The value will always be null in this response as the event processing is done asynchronously
                  * @example null
                  */
                 customer_id?: null;
             })[];
+            /**
+             * @description Engine 2.22.0, `POST /events/batch` only. Present when events were refused because their customer is blocked by its [dunning policy](/guides/billing/dunning): keyed by the position of each refused event in the request. The other events were stored.
+             * @example {
+             *       "2": {
+             *         "external_customer_id": [
+             *           "customer_payment_overdue"
+             *         ]
+             *       }
+             *     }
+             */
+            error_details?: {
+                [key: string]: {
+                    [key: string]: string[];
+                };
+            };
         };
         EventEstimateFeesInput: {
             event: {
@@ -11552,7 +12179,7 @@ export interface components {
             };
         };
         Fees: {
-            fees?: components["schemas"]["FeeObject"][];
+            fees: components["schemas"]["FeeObject"][];
         };
         EventEstimateInstantFeesInput: {
             event: {
@@ -11762,16 +12389,16 @@ export interface components {
             };
         };
         FeesEstimate: {
-            fees?: components["schemas"]["FeeEstimateObject"][];
+            fees: components["schemas"]["FeeEstimateObject"][];
         };
         EventBatchEstimateInstantFeesInput: {
-            events?: components["schemas"]["EventEstimateInstantFeesInput"][];
+            events: components["schemas"]["EventEstimateInstantFeesInput"][];
         };
         Event: {
             event: components["schemas"]["EventObject"];
         };
         FeesPaginated: {
-            fees?: components["schemas"]["FeeObject"][];
+            fees: components["schemas"]["FeeObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         Fee: {
@@ -11804,7 +12431,7 @@ export interface components {
                  * @example EUR
                  */
                 currency?: components["schemas"]["Currency"];
-                fees?: {
+                fees: {
                     /**
                      * @description The code of the add-on used as invoice item.
                      * @example setup_fee
@@ -11903,6 +12530,8 @@ export interface components {
              * @enum {string}
              */
             invoicing_reason: "subscription_starting" | "subscription_periodic" | "subscription_terminating" | "in_advance_charge" | "in_advance_charge_periodic" | "progressive_billing";
+            fixed_charges_from_datetime?: string;
+            fixed_charges_to_datetime?: string;
         };
         InvoiceObjectExtended: components["schemas"]["InvoiceObject"] & {
             billing_periods?: components["schemas"]["BillingPeriodObject"][];
@@ -11910,6 +12539,11 @@ export interface components {
             fees?: components["schemas"]["FeeObject"][];
             subscriptions?: components["schemas"]["SubscriptionObject"][];
             error_details?: components["schemas"]["ErrorDetailObject"][];
+            total_due_amount_cents?: number;
+            total_paid_amount_cents?: number;
+            total_offsetted_credit_note_amount_cents?: number;
+            xml_url?: string | null;
+            voided_at?: string | null;
         };
         Invoice: {
             invoice: components["schemas"]["InvoiceObjectExtended"];
@@ -12118,6 +12752,12 @@ export interface components {
         };
         /** @description The custom billing settings for your organization. */
         OrganizationBillingConfiguration: {
+            /**
+             * @description When the billing periods of new subscriptions start: `calendar` (the first of the month) or `anniversary` (the day the subscription starts). A subscription, checkout or Entity checkout can set its own `billing_time`; without one it follows this setting. Changing it does not move existing subscriptions.
+             * @example calendar
+             * @enum {string}
+             */
+            billing_alignment?: "calendar" | "anniversary";
             /**
              * @description The customer invoice message that appears at the bottom of each billing documents.
              * @example This is my customer footer
@@ -12350,6 +12990,14 @@ export interface components {
              */
             document_number_prefix: string;
             /**
+             * @description The documents Nozle sends by email for your organization.
+             * @example [
+             *       "invoice.finalized",
+             *       "credit_note.created"
+             *     ]
+             */
+            email_settings: ("invoice.finalized" | "credit_note.created" | "payment_receipt.created")[];
+            /**
              * @description The net payment term, expressed in days, specifies the duration within which a customer is expected to remit payment after the invoice is finalized.
              * @example 30
              */
@@ -12414,7 +13062,7 @@ export interface components {
             payment: components["schemas"]["PaymentObject"];
         };
         PaymentReceiptsPaginated: {
-            payment_receipts?: components["schemas"]["PaymentReceiptObject"][];
+            payment_receipts: components["schemas"]["PaymentReceiptObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         PaymentReceipt: {
@@ -12991,22 +13639,6 @@ export interface components {
              */
             hard_limit: boolean | null;
             /**
-             * @description Minimum margin, as a percentage, the plan must keep on this feature. `null` when no minimum is set.
-             * @example null
-             */
-            min_margin_percent: number | null;
-            /**
-             * @description What happens when the margin falls below `min_margin_percent`. `null` for boolean and config features.
-             * @example null
-             * @enum {string|null}
-             */
-            margin_enforcement_mode: "enforce" | "warn" | "off" | null;
-            /**
-             * @description Whether the plan-level margin is enforced for this metered feature. `null` for boolean and config features.
-             * @example null
-             */
-            enforce_plan_margin: boolean | null;
-            /**
              * @description Unique code used to identify the feature. Max 255 characters.
              * @example seats
              */
@@ -13151,16 +13783,75 @@ export interface components {
              */
             bill_fixed_charges_monthly: boolean | null;
             /**
+             * @description Core 11.16.0. Days after the unpaid invoice of an automatic upgrade at the plan's MRR limit before the end action, 0 to 90 (`0` acts at once). Read for Nozle's own plans; the dunning policy of your customers reads `unpaid_invoice_grace_days`. Editing it never creates a new plan version. Out of range: `422` `value_is_out_of_range`.
+             * @example 7
+             */
+            limit_grace_days?: number;
+            /**
+             * @description Core 11.16.0. Days between day 0 of an unpaid invoice of this plan and the end action of its [dunning policy](/guides/billing/dunning), 0 to 90 (`0` acts at once). Editing it never creates a new plan version; new versions and the other currencies of a plan family copy it. Out of range: `422` `value_is_out_of_range`.
+             * @example 7
+             */
+            unpaid_invoice_grace_days?: number;
+            /**
+             * @description Core 11.16.0. The dunning campaign the plan's unpaid invoices follow, before the customer's and the billing entity's. `null` unlinks it. An unknown code returns `404` `dunning_campaign_not_found`. Editing it never creates a new plan version.
+             * @example block_after_grace
+             */
+            dunning_campaign_code?: string | null;
+            /**
              * Format: uuid
              * @description Identifier of the parent plan when this plan is a per-customer override of another plan. `null` for a regular plan. Override plans are not returned by `GET /plans` or `GET /plans/{code}`, so it is `null` there.
              * @example null
              */
             parent_id: string | null;
             /**
-             * @description Code of the plan family the plan belongs to. A plan family groups the billing intervals of one offer (for example "Pro" monthly and yearly). `null` for a per-customer override plan, which has no family.
+             * @description Code of the plan family the plan belongs to. A plan family groups the billing intervals and currencies of one offer (for example "Pro" monthly and yearly, in USD and EUR). `null` for a per-customer override plan, which has no family.
              * @example startup
              */
             plan_family_code?: string | null;
+            /** @description Core 11.10.0. The plan's family, on every plan of a family in `GET /plans` and `GET /plans/{code}`. Absent for a plan without a family, and for a publishable key reading a plan of a family hidden from the pricing table with `GET /plans/{code}`. See [Multi-currency pricing](/guides/billing/multi-currency-pricing). */
+            family?: {
+                /**
+                 * @description Code of the plan family.
+                 * @example pro
+                 */
+                code: string;
+                /**
+                 * @description The currencies the family's current plans sell, in display order.
+                 * @example [
+                 *       "USD",
+                 *       "EUR"
+                 *     ]
+                 */
+                currencies: string[];
+                /**
+                 * @description The currency the pricing table shows first. Always one of `currencies`.
+                 * @example USD
+                 */
+                default_currency: string;
+            };
+            /** @description Core 11.10.0. Every current plan of the family, in every interval and currency, plans pending deletion left out. Present when `family` is. One plan per interval and currency. */
+            prices?: {
+                /**
+                 * @description ISO 4217 code of the plan.
+                 * @example EUR
+                 */
+                currency: string;
+                /**
+                 * @example monthly
+                 * @enum {string}
+                 */
+                interval: "weekly" | "monthly" | "quarterly" | "semiannual" | "yearly";
+                /**
+                 * @description Code of the plan that sells this interval and currency. Use it, or `plan_family_code` with `interval` and `currency`, to check out.
+                 * @example pro_eur
+                 */
+                plan_code: string;
+                /**
+                 * @description Base price per interval, in the minor unit of `currency`.
+                 * @example 900
+                 */
+                amount_cents: number;
+            }[];
             /**
              * @description `true` when deletion of the plan was requested and is still being processed in the background. The plan is going away and should not be offered to new customers; `GET /plans` still lists it until the deletion finishes. Filter on `pending_deletion` when you build a pricing page.
              * @example false
@@ -13590,8 +14281,21 @@ export interface components {
                 pricing_highlighted?: boolean;
                 badge_text?: string | null;
                 cta_text?: string | null;
-                /** @description Codes of the family's plans. A publishable key does not receive the codes of plans pending deletion. */
+                /** @description Codes of the family's plans in the listed currency (every plan of the family for a secret key without `currency`). A publishable key does not receive the codes of plans pending deletion. */
                 plan_codes?: string[];
+                /**
+                 * @description Core 11.10.0. The currencies the family's current plans sell, in display order.
+                 * @example [
+                 *       "USD",
+                 *       "EUR"
+                 *     ]
+                 */
+                currencies?: string[];
+                /**
+                 * @description Core 11.10.0. The currency the pricing table shows first. Always one of `currencies`.
+                 * @example USD
+                 */
+                default_currency?: string;
                 features?: {
                     code?: string;
                     name?: string;
@@ -13716,7 +14420,7 @@ export interface components {
                  */
                 description?: string | null;
                 /**
-                 * @description Code of the plan family the plan belongs to, for example the monthly and yearly versions of one plan. Without it, or with a code that does not exist yet, the call creates a new family for the plan. A family holds at most one plan per `interval`, all in the same `amount_currency`; otherwise the call returns `422` with the error `plan_family_interval_already_exist` on `interval` or `plan_family_currency_mismatch` on `amount_currency`. A plan that joins a family that already has plans takes the family's features and privileges.
+                 * @description Code of the plan family the plan belongs to, for example the monthly and yearly versions of one plan. Without it, or with a code that does not exist yet, the call creates a new family for the plan. A family holds at most one current plan per `interval` and `amount_currency` (Core 11.10.0; before, one currency per family); otherwise the call returns `422` with the error `plan_family_interval_already_exist` on `interval`. A plan in a new currency adds that currency to the family. In a family sold in several currencies, the plans of one interval may differ only in money (`plan_family_variant_mismatch`); see [Multi-currency pricing](/guides/billing/multi-currency-pricing). A plan that joins a family that already has plans takes the family's features and privileges.
                  * @example startup
                  */
                 plan_family_code?: string | null;
@@ -13755,6 +14459,23 @@ export interface components {
                  * @example null
                  */
                 bill_fixed_charges_monthly?: boolean | null;
+                /**
+                 * @description Core 11.16.0. Days after the unpaid invoice of an automatic upgrade at the plan's MRR limit before the end action, 0 to 90 (`0` acts at once). Read for Nozle's own plans; the dunning policy of your customers reads `unpaid_invoice_grace_days`. Editing it never creates a new plan version. Out of range: `422` `value_is_out_of_range`.
+                 * @default 7
+                 * @example 7
+                 */
+                limit_grace_days: number;
+                /**
+                 * @description Core 11.16.0. Days between day 0 of an unpaid invoice of this plan and the end action of its [dunning policy](/guides/billing/dunning), 0 to 90 (`0` acts at once). Editing it never creates a new plan version; new versions and the other currencies of a plan family copy it. Out of range: `422` `value_is_out_of_range`.
+                 * @default 7
+                 * @example 7
+                 */
+                unpaid_invoice_grace_days: number;
+                /**
+                 * @description Core 11.16.0. The dunning campaign the plan's unpaid invoices follow, before the customer's and the billing entity's. `null` unlinks it. An unknown code returns `404` `dunning_campaign_not_found`. Editing it never creates a new plan version.
+                 * @example block_after_grace
+                 */
+                dunning_campaign_code?: string | null;
                 tax_codes?: components["schemas"]["TaxCodes"];
                 minimum_commitment?: components["schemas"]["MinimumCommitmentInput"];
                 /**
@@ -14088,7 +14809,7 @@ export interface components {
                  */
                 description?: string | null;
                 /**
-                 * @description Code of the plan family the plan belongs to, for example the monthly and yearly versions of one plan. Without it, or with a code that does not exist yet, the call creates a new family for the plan. A family holds at most one plan per `interval`, all in the same `amount_currency`; otherwise the call returns `422` with the error `plan_family_interval_already_exist` on `interval` or `plan_family_currency_mismatch` on `amount_currency`. A plan that joins a family that already has plans takes the family's features and privileges.
+                 * @description Code of the plan family the plan belongs to, for example the monthly and yearly versions of one plan. Without it, or with a code that does not exist yet, the call creates a new family for the plan. A family holds at most one current plan per `interval` and `amount_currency` (Core 11.10.0; before, one currency per family); otherwise the call returns `422` with the error `plan_family_interval_already_exist` on `interval`. A plan in a new currency adds that currency to the family. In a family sold in several currencies, the plans of one interval may differ only in money (`plan_family_variant_mismatch`); see [Multi-currency pricing](/guides/billing/multi-currency-pricing). A plan that joins a family that already has plans takes the family's features and privileges.
                  * @example startup
                  */
                 plan_family_code?: string | null;
@@ -14127,6 +14848,21 @@ export interface components {
                  * @example null
                  */
                 bill_fixed_charges_monthly?: boolean | null;
+                /**
+                 * @description Core 11.16.0. Days after the unpaid invoice of an automatic upgrade at the plan's MRR limit before the end action, 0 to 90 (`0` acts at once). Read for Nozle's own plans; the dunning policy of your customers reads `unpaid_invoice_grace_days`. Editing it never creates a new plan version. Out of range: `422` `value_is_out_of_range`.
+                 * @example 7
+                 */
+                limit_grace_days?: number;
+                /**
+                 * @description Core 11.16.0. Days between day 0 of an unpaid invoice of this plan and the end action of its [dunning policy](/guides/billing/dunning), 0 to 90 (`0` acts at once). Editing it never creates a new plan version; new versions and the other currencies of a plan family copy it. Out of range: `422` `value_is_out_of_range`.
+                 * @example 7
+                 */
+                unpaid_invoice_grace_days?: number;
+                /**
+                 * @description Core 11.16.0. The dunning campaign the plan's unpaid invoices follow, before the customer's and the billing entity's. `null` unlinks it. An unknown code returns `404` `dunning_campaign_not_found`. Editing it never creates a new plan version.
+                 * @example block_after_grace
+                 */
+                dunning_campaign_code?: string | null;
                 tax_codes?: components["schemas"]["TaxCodes"];
                 minimum_commitment?: components["schemas"]["MinimumCommitmentInput"];
                 /**
@@ -14446,6 +15182,58 @@ export interface components {
                 /** @description List of usage thresholds to apply to the plan. */
                 usage_thresholds?: components["schemas"]["UsageThresholdInput"][];
                 /**
+                 * @description Core 11.10.0. Amounts for the other currencies of the plan's family, used when this edit changes the structure of a family sold in several currencies. A structural edit is copied to the family's other plans of the same interval, and money is never copied between currencies: each new or rescaled amount of another currency must come from here, or the whole edit is refused with `plan_family_variant_prices_missing` (its `field` paths are the paths used here).
+                 *
+                 *     Keyed by uppercase currency code. Inside a currency: `amount_cents`; `charges`, keyed by feature code (a second charge of one feature is `<code>#2`), each with `min_amount_cents`, `pricing_unit_conversion_rate`, `properties` (ranges given with their `from_value` and `to_value`) and `filters` keyed by filter key such as `region=eu`; `fixed_charges` keyed by add-on code, each with `properties`; `minimum_commitment` with `amount_cents`; `usage_thresholds` with `amount_cents`, in this plan's order.
+                 *
+                 *     A currency that is not another plan of this plan's interval, or a path this plan does not have, returns `422` with `currency_amounts: [value_is_invalid]` and `currency_amounts_invalid` (`currency`, `field`). Not needed on plan create. The part-edit endpoints (charges, filters, fixed charges) do not take it. See [Multi-currency pricing](/guides/billing/multi-currency-pricing#edit-prices-in-several-currencies).
+                 * @example {
+                 *       "INR": {
+                 *         "amount_cents": 80000,
+                 *         "charges": {
+                 *           "api_calls": {
+                 *             "min_amount_cents": 0,
+                 *             "properties": {
+                 *               "graduated_ranges": [
+                 *                 {
+                 *                   "from_value": 11,
+                 *                   "to_value": 100,
+                 *                   "per_unit_amount": "83",
+                 *                   "flat_amount": "0"
+                 *                 }
+                 *               ]
+                 *             },
+                 *             "filters": {
+                 *               "region=eu": {
+                 *                 "amount": "90"
+                 *               }
+                 *             }
+                 *           }
+                 *         },
+                 *         "fixed_charges": {
+                 *           "seats": {
+                 *             "properties": {
+                 *               "amount": "800"
+                 *             }
+                 *           }
+                 *         },
+                 *         "minimum_commitment": {
+                 *           "amount_cents": 400000
+                 *         },
+                 *         "usage_thresholds": [
+                 *           {
+                 *             "amount_cents": 800000
+                 *           }
+                 *         ]
+                 *       }
+                 *     }
+                 */
+                currency_amounts?: {
+                    [key: string]: {
+                        [key: string]: unknown;
+                    };
+                };
+                /**
                  * @description This field determines whether the changes made to the plan should be cascaded to the children plans. When set to `true`, the changes will be cascaded into children. Conversely, when set to `false`, the changes will only be applied to the plan itself. If not defined in the request, default value is `false`.
                  * @example true
                  */
@@ -14464,7 +15252,7 @@ export interface components {
             };
         };
         PlanEntitlements: {
-            entitlements?: components["schemas"]["PlanEntitlementObject"][];
+            entitlements: components["schemas"]["PlanEntitlementObject"][];
         };
         EntitlementUpdateInput: {
             /**
@@ -14480,7 +15268,7 @@ export interface components {
              *       }
              *     }
              */
-            entitlements?: {
+            entitlements: {
                 [key: string]: {
                     [key: string]: number | boolean | string;
                 };
@@ -14944,6 +15732,7 @@ export interface components {
                  */
                 amount_currency: string;
             };
+            /** @description Send `plan_code`, or `plan_family_code` with `interval` (and optional `currency`). */
             subscription: {
                 /**
                  * @description The code of the billing entity to be used for the subscription. If not provided, the default billing entity will be used.
@@ -14956,10 +15745,26 @@ export interface components {
                  */
                 external_customer_id: string;
                 /**
-                 * @description The unique code representing the plan to be attached to the customer. This code must correspond to the `code` property of one of the active plans.
+                 * @description The unique code representing the plan to be attached to the customer. This code must correspond to the `code` property of one of the active plans. Required unless `plan_family_code` is sent.
                  * @example premium
                  */
-                plan_code: string;
+                plan_code?: string;
+                /**
+                 * @description Core 11.10.0. Sells a plan family instead of `plan_code`; Nozle picks the family's current plan for `interval` and `currency`. Cannot be combined with `plan_code` (`422`, `plan_family_code: [incompatible_with_plan_code]`). An unknown family returns `404 plan_family_not_found`. See [Multi-currency pricing](/guides/billing/multi-currency-pricing#checkout-and-subscribe-by-family).
+                 * @example pro
+                 */
+                plan_family_code?: string;
+                /**
+                 * @description Required with `plan_family_code` (`interval: [value_is_mandatory]` without it, `[value_is_invalid]` for an unknown value).
+                 * @example yearly
+                 * @enum {string}
+                 */
+                interval?: "weekly" | "monthly" | "quarterly" | "semiannual" | "yearly";
+                /**
+                 * @description With `plan_family_code`, the ISO 4217 code of the plan to sell. Without it, the currency of the subscription being changed, else the customer's locked currency, else the family's default currency. A currency the family does not sell for that interval returns `422` with `currency: [currency_not_offered]`.
+                 * @example EUR
+                 */
+                currency?: string;
                 /**
                  * @description Optional. The version of `plan_code` to sell, for example to keep selling an older price to a customer. Without it, a new subscription gets the current version.
                  *
@@ -15231,7 +16036,7 @@ export interface components {
             created_at: string;
         };
         Alerts: {
-            alerts?: components["schemas"]["AlertObject"][];
+            alerts: components["schemas"]["AlertObject"][];
             meta?: components["schemas"]["PaginationMeta"];
         };
         AlertCreateInput: {
@@ -15256,7 +16061,7 @@ export interface components {
         };
         AlertBatchCreateInput: {
             /** @description Array of alerts to create. All alerts are created atomically - if any fail validation, none are created. */
-            alerts?: (components["schemas"]["AlertBaseInput"] & {
+            alerts: (components["schemas"]["AlertBaseInput"] & {
                 /**
                  * @description The type of alert.
                  * @example feature_current_usage_amount
@@ -15378,7 +16183,7 @@ export interface components {
             };
         };
         SubscriptionEntitlements: {
-            entitlements?: components["schemas"]["SubscriptionEntitlementObject"][];
+            entitlements: components["schemas"]["SubscriptionEntitlementObject"][];
         };
         SubscriptionEntitlement: {
             entitlement: components["schemas"]["SubscriptionEntitlementObject"];
@@ -15627,36 +16432,35 @@ export interface components {
             payment_method: components["schemas"]["PaymentMethodReference"];
         };
         WalletTransactions: {
-            wallet_transactions?: components["schemas"]["WalletTransactionObject"][];
+            wallet_transactions: components["schemas"]["WalletTransactionObject"][];
         };
-        /** @description . */
         WalletTransactionPaymentUrl: {
-            wallet_transaction_payment_details?: {
+            wallet_transaction_payment_details: {
                 /**
                  * @description Unique identifier assigned to the customer within the Nozle application. This ID is exclusively created by Nozle and serves as a unique identifier for the customer's record within the Nozle system
                  * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                  */
-                customer_id?: string;
+                customer_id: string;
                 /**
                  * @description Unique identifier assigned to the wallet transaction within the Nozle application. This ID is exclusively created by Nozle and serves as a unique identifier for the wallet transaction's record within the Nozle system
                  * @example 1e501a90-1a90-1a90-1a90-1a901a901a80
                  */
-                wallet_transaction_id?: string;
+                wallet_transaction_id: string;
                 /**
                  * @description The customer external unique identifier (provided by your own application)
                  * @example 5eb02857-a71e-4ea2-bcf9-57d3a41bc6ba
                  */
-                external_customer_id?: string;
+                external_customer_id: string;
                 /**
                  * @description The Payment Provider name linked to the Customer.
                  * @example stripe
                  */
-                payment_provider?: string;
+                payment_provider: string;
                 /**
                  * @description The generated Payment URL for the Wallet transaction.
                  * @example https://foo.bar
                  */
-                payment_url?: string;
+                payment_url: string;
             };
         };
         WalletTransactionConsumptionObject: {
@@ -15738,25 +16542,88 @@ export interface components {
              */
             organization_id: string;
             /**
-             * @description The name of the wallet.
-             * @example Prepaid
+             * @description The URL Nozle sends the webhooks to.
+             * @example https://app.example.com/nozle/webhooks
              */
             webhook_url: string;
             /**
-             * @description The signature algo for the webhook.
-             * @example hmac
-             * @enum {string}
+             * @description The endpoint secret (`whsec_...`) used to verify `standard` signatures. The REST API returns it to any API key with the `webhook_endpoint` read permission; the dashboard (GraphQL) shows it only to members with `developers:manage`. Keep such API keys on your server.
+             * @example whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
              */
-            signature_algo?: "jwt" | "hmac";
+            secret?: string | null;
+            /**
+             * Format: date-time
+             * @description When the previous secret stops being valid after a rotation (24 hours after `rotate_secret`). `null` when no rotation happened or the grace has passed.
+             */
+            previous_secret_expires_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Set when Nozle disabled the endpoint after 5 days without a successful delivery. No webhooks are created for it until you re-enable it with `disabled: false`.
+             */
+            disabled_at?: string | null;
             /**
              * Format: date-time
              * @description The date of the webhook endpoint creation, represented in ISO 8601 datetime format and expressed in Coordinated Universal Time (UTC).
              * @example 2022-04-29T08:59:51Z
              */
             created_at: string;
+            /**
+             * @description A label for the endpoint.
+             * @example Production
+             */
+            name?: string | null;
+            /** @description Event types the endpoint receives. `null` means every type. */
+            event_types?: ("alert.triggered" | "customer.created" | "customer.updated" | "customer.accounting_provider_created" | "customer.accounting_provider_error" | "customer.crm_provider_created" | "customer.crm_provider_error" | "customer.payment_provider_created" | "customer.payment_provider_error" | "customer.checkout_url_generated" | "customer.tax_provider_error" | "customer.vies_check" | "credit_note.created" | "credit_note.generated" | "credit_note.refund_failure" | "dunning_campaign.finished" | "dunning.step" | "event.error" | "events.errors" | "feature.created" | "feature.updated" | "feature.deleted" | "fee.created" | "fee.tax_provider_error" | "invoice.created" | "invoice.one_off_created" | "invoice.paid_credit_added" | "invoice.generated" | "invoice.drafted" | "invoice.voided" | "invoice.payment_dispute_lost" | "invoice.payment_dispute_updated" | "invoice.payment_status_updated" | "invoice.payment_overdue" | "invoice.payment_failure" | "invoice.resynced" | "integration.provider_error" | "order.created" | "order.executed" | "order.failed" | "order_form.created" | "order_form.signed" | "order_form.expired" | "order_form.voided" | "payment.succeeded" | "payment.requires_action" | "payment.scheduled" | "payment.schedule_cancelled" | "payment_provider.error" | "payment_receipt.created" | "payment_receipt.generated" | "payment_request.created" | "payment_request.payment_failure" | "payment_request.payment_status_updated" | "plan.created" | "plan.updated" | "plan.version_created" | "plan.deleted" | "plan_upgrade_intent.needs_review" | "quote.created" | "quote.approved" | "quote.voided" | "subscription.canceled" | "subscription.incomplete" | "subscription.terminated" | "subscription.started" | "subscription.updated" | "subscription.termination_alert" | "subscription.trial_ended" | "subscription.usage_threshold_reached" | "credit_top_up_purchase.fulfilled" | "wallet.created" | "wallet.depleted_ongoing_balance" | "wallet.terminated" | "wallet.updated" | "wallet_transaction.created" | "wallet_transaction.updated" | "wallet_transaction.payment_failure")[] | null;
+        };
+        WebhookObject: {
+            /**
+             * Format: uuid
+             * @description The webhook id. It is the `webhook-id` header of every attempt.
+             */
+            nozle_id: string;
+            /** Format: uuid */
+            webhook_endpoint_id: string;
+            /** @example invoice.created */
+            webhook_type: string;
+            /** @enum {string} */
+            status: "pending" | "succeeded" | "failed" | "retrying";
+            /** @description The URL the webhook is sent to. */
+            endpoint?: string;
+            /** @description HTTP status of the last attempt. */
+            http_status?: number | null;
+            /** @description Number of retries made so far. */
+            retries?: number;
+            object_type?: string | null;
+            object_id?: string | null;
+            payload?: {
+                [key: string]: unknown;
+            };
+            /** @description Body of the last response from your endpoint. */
+            response?: unknown;
+            /** Format: date-time */
+            last_retried_at?: string | null;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        WebhookResult: {
+            webhook: components["schemas"]["WebhookObject"];
+        };
+        WebhooksPaginated: {
+            webhooks: components["schemas"]["WebhookObject"][];
+            meta: components["schemas"]["PaginationMeta"];
+        };
+        WebhookRecoverResult: {
+            recover: {
+                /** Format: uuid */
+                webhook_endpoint_id?: string;
+                /** @description How many failed webhooks were queued again. */
+                retried_webhooks?: number;
+            };
         };
         WebhookEndpointsPaginated: {
-            webhook_endpoints?: components["schemas"]["WebhookEndpointObject"][];
+            webhook_endpoints: components["schemas"]["WebhookEndpointObject"][];
             meta: components["schemas"]["PaginationMeta"];
         };
         WebhookEndpointCreateInput: {
@@ -15767,11 +16634,18 @@ export interface components {
                  */
                 webhook_url: string;
                 /**
-                 * @description The signature used for the webhook. If no value is passed,
-                 * @example hmac
-                 * @enum {string|null}
+                 * @description A label for the endpoint.
+                 * @example Production
                  */
-                signature_algo?: "jwt" | "hmac" | null;
+                name?: string | null;
+                /**
+                 * @description Event types the endpoint receives, from the [webhook event list](/api/webhook-events). Send `null` or `["*"]` (or leave it out) to receive every type; an empty array is rejected. The former name `credit_note.provider_refund_failure` is accepted and saved as `credit_note.refund_failure`. An unknown type is rejected with a 422 `invalid_types` error.
+                 * @example [
+                 *       "subscription.started",
+                 *       "invoice.payment_status_updated"
+                 *     ]
+                 */
+                event_types?: ("alert.triggered" | "customer.created" | "customer.updated" | "customer.accounting_provider_created" | "customer.accounting_provider_error" | "customer.crm_provider_created" | "customer.crm_provider_error" | "customer.payment_provider_created" | "customer.payment_provider_error" | "customer.checkout_url_generated" | "customer.tax_provider_error" | "customer.vies_check" | "credit_note.created" | "credit_note.generated" | "credit_note.refund_failure" | "dunning_campaign.finished" | "dunning.step" | "event.error" | "events.errors" | "feature.created" | "feature.updated" | "feature.deleted" | "fee.created" | "fee.tax_provider_error" | "invoice.created" | "invoice.one_off_created" | "invoice.paid_credit_added" | "invoice.generated" | "invoice.drafted" | "invoice.voided" | "invoice.payment_dispute_lost" | "invoice.payment_dispute_updated" | "invoice.payment_status_updated" | "invoice.payment_overdue" | "invoice.payment_failure" | "invoice.resynced" | "integration.provider_error" | "order.created" | "order.executed" | "order.failed" | "order_form.created" | "order_form.signed" | "order_form.expired" | "order_form.voided" | "payment.succeeded" | "payment.requires_action" | "payment.scheduled" | "payment.schedule_cancelled" | "payment_provider.error" | "payment_receipt.created" | "payment_receipt.generated" | "payment_request.created" | "payment_request.payment_failure" | "payment_request.payment_status_updated" | "plan.created" | "plan.updated" | "plan.version_created" | "plan.deleted" | "plan_upgrade_intent.needs_review" | "quote.created" | "quote.approved" | "quote.voided" | "subscription.canceled" | "subscription.incomplete" | "subscription.terminated" | "subscription.started" | "subscription.updated" | "subscription.termination_alert" | "subscription.trial_ended" | "subscription.usage_threshold_reached" | "credit_top_up_purchase.fulfilled" | "wallet.created" | "wallet.depleted_ongoing_balance" | "wallet.terminated" | "wallet.updated" | "wallet_transaction.created" | "wallet_transaction.updated" | "wallet_transaction.payment_failure")[] | null;
             };
         };
         WebhookEndpoint: {
@@ -15780,16 +16654,28 @@ export interface components {
         WebhookEndpointUpdateInput: {
             webhook_endpoint?: {
                 /**
+                 * @description Send `true` to disable the endpoint, or `false` to re-enable one Nozle disabled (clears `disabled_at`).
+                 * @example false
+                 */
+                disabled?: boolean;
+                /**
                  * @description The URL of the webhook endpoint.
                  * @example https://foo.bar
                  */
-                webhook_url: string;
+                webhook_url?: string;
                 /**
-                 * @description The signature used for the webhook. If no value is passed,
-                 * @example hmac
-                 * @enum {string|null}
+                 * @description A label for the endpoint.
+                 * @example Production
                  */
-                signature_algo?: "jwt" | "hmac" | null;
+                name?: string | null;
+                /**
+                 * @description Event types the endpoint receives, from the [webhook event list](/api/webhook-events). Send `null` or `["*"]` (or leave it out) to receive every type; an empty array is rejected. The former name `credit_note.provider_refund_failure` is accepted and saved as `credit_note.refund_failure`. An unknown type is rejected with a 422 `invalid_types` error.
+                 * @example [
+                 *       "subscription.started",
+                 *       "invoice.payment_status_updated"
+                 *     ]
+                 */
+                event_types?: ("alert.triggered" | "customer.created" | "customer.updated" | "customer.accounting_provider_created" | "customer.accounting_provider_error" | "customer.crm_provider_created" | "customer.crm_provider_error" | "customer.payment_provider_created" | "customer.payment_provider_error" | "customer.checkout_url_generated" | "customer.tax_provider_error" | "customer.vies_check" | "credit_note.created" | "credit_note.generated" | "credit_note.refund_failure" | "dunning_campaign.finished" | "dunning.step" | "event.error" | "events.errors" | "feature.created" | "feature.updated" | "feature.deleted" | "fee.created" | "fee.tax_provider_error" | "invoice.created" | "invoice.one_off_created" | "invoice.paid_credit_added" | "invoice.generated" | "invoice.drafted" | "invoice.voided" | "invoice.payment_dispute_lost" | "invoice.payment_dispute_updated" | "invoice.payment_status_updated" | "invoice.payment_overdue" | "invoice.payment_failure" | "invoice.resynced" | "integration.provider_error" | "order.created" | "order.executed" | "order.failed" | "order_form.created" | "order_form.signed" | "order_form.expired" | "order_form.voided" | "payment.succeeded" | "payment.requires_action" | "payment.scheduled" | "payment.schedule_cancelled" | "payment_provider.error" | "payment_receipt.created" | "payment_receipt.generated" | "payment_request.created" | "payment_request.payment_failure" | "payment_request.payment_status_updated" | "plan.created" | "plan.updated" | "plan.version_created" | "plan.deleted" | "plan_upgrade_intent.needs_review" | "quote.created" | "quote.approved" | "quote.voided" | "subscription.canceled" | "subscription.incomplete" | "subscription.terminated" | "subscription.started" | "subscription.updated" | "subscription.termination_alert" | "subscription.trial_ended" | "subscription.usage_threshold_reached" | "credit_top_up_purchase.fulfilled" | "wallet.created" | "wallet.depleted_ongoing_balance" | "wallet.terminated" | "wallet.updated" | "wallet_transaction.created" | "wallet_transaction.updated" | "wallet_transaction.payment_failure")[] | null;
             };
         };
         TriggeredAlertObject: {
@@ -15849,15 +16735,15 @@ export interface components {
              */
             alert_name: string | null;
             /**
-             * @description When the system checked if this alert should be triggered, this value was retrieved and checked if any threshold were crossed between this value and previous value.
-             * @example 1200
+             * @description When the system checked if this alert should be triggered, this value was retrieved and checked if any threshold were crossed between this value and previous value. A decimal, sent as a string.
+             * @example 1200.0
              */
-            current_value: number;
+            current_value: string;
             /**
-             * @description During the previous run, this value was retrieved.
-             * @example 900
+             * @description During the previous run, this value was retrieved. A decimal, sent as a string.
+             * @example 1200.0
              */
-            previous_value: number;
+            previous_value: string;
             /**
              * Format: date-time
              * @description The date and time in UTC (ISO 8601) when the system triggered the alert.
@@ -15866,6 +16752,9 @@ export interface components {
             triggered_at: string | null;
             /** @description Array of thresholds crossed. All the recurring threshold values are present. */
             crossed_thresholds: components["schemas"]["AlertThresholdObject"][];
+            wallet_id?: string | null;
+            subscription_external_id?: string;
+            customer_external_id?: string;
         };
         CustomerIntegratrionErrorObject: {
             /**
@@ -15911,7 +16800,7 @@ export interface components {
              * @example stripe
              * @enum {string}
              */
-            payment_provider: "adyen" | "cashfree" | "gocardless" | "stripe";
+            payment_provider: "adyen" | "cashfree" | "gocardless" | "stripe" | "razorpay" | "flutterwave" | "moneyhash";
             /**
              * @description Code of the payment provider
              * @example Stripe Prod
@@ -15955,7 +16844,13 @@ export interface components {
                  * @example true
                  */
                 valid?: boolean;
+                country_code?: string;
+                vat_number?: string;
+                request_date?: string;
+                name?: string;
+                address?: string;
             };
+            external_salesforce_id?: string | null;
         };
         CreditNotePaymentProviderRefundError: {
             /**
@@ -15985,7 +16880,7 @@ export interface components {
              * @example stripe
              * @enum {string}
              */
-            payment_provider: "adyen" | "cashfree" | "gocardless" | "stripe";
+            payment_provider: "adyen" | "cashfree" | "gocardless" | "stripe" | "razorpay" | "flutterwave" | "moneyhash";
             /**
              * @description Code of the payment provider
              * @example Stripe Prod
@@ -16016,6 +16911,93 @@ export interface components {
              * @example EUR
              */
             overdue_balance_currency: components["schemas"]["Currency"];
+            customer_external_id?: string;
+        };
+        /** @description Core 11.16.0. One step of the dunning policy of an unpaid invoice. See [Dunning policy](/guides/billing/dunning). */
+        DunningStepObject: {
+            /**
+             * Format: uuid
+             * @description Unique identifier of the unpaid invoice, created by Nozle.
+             * @example 00000000-0000-4000-8000-000000000006
+             */
+            invoice_id: string;
+            /**
+             * @description Number of the unpaid invoice.
+             * @example ACME-47DD-012-001
+             */
+            invoice_number: string;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the customer, created by Nozle.
+             * @example 00000000-0000-4000-8000-000000000003
+             */
+            customer_id: string;
+            /**
+             * @description The customer external unique identifier (provided by your own application).
+             * @example customer_123
+             */
+            external_customer_id?: string | null;
+            /**
+             * @description Code of the dunning campaign the invoice follows (the plan's, else the customer's, its billing entity's, then the default billing entity's).
+             * @example block_after_grace
+             */
+            dunning_campaign_code?: string;
+            /**
+             * @description The step that ran. `payment_failed` on day 0, `reminder` on round(grace × 3 / 7), `final_reminder` the day before the end, `end_action` on the last day, `resolved` once when the invoice no longer needs paying.
+             * @example reminder
+             * @enum {string}
+             */
+            step: "payment_failed" | "reminder" | "final_reminder" | "end_action" | "resolved";
+            /**
+             * @description Day of the timeline the step ran on, counted from `started_at`.
+             * @example 3
+             */
+            day: number;
+            /**
+             * @description `unpaid_invoice_grace_days` of the plan behind the invoice (7 for an invoice without a plan).
+             * @example 7
+             */
+            grace_days: number;
+            /**
+             * @description What happens on the last day of the grace. `block` refuses the customer's usage with `402` `customer_payment_overdue`.
+             * @example block
+             * @enum {string}
+             */
+            end_action: "block";
+            /**
+             * Format: date-time
+             * @description Day 0 of the invoice's timeline.
+             * @example 2026-10-20T09:00:00Z
+             */
+            started_at: string;
+            /**
+             * Format: date-time
+             * @description When the end action runs, `started_at` plus `grace_days`.
+             * @example 2026-10-27T09:00:00Z
+             */
+            deadline_at: string;
+            /**
+             * @description The next step of the timeline. `retry` only when the last decline is retried (a soft decline); after a hard decline or one that needs the customer, the next message step. `null` after the last one and on `resolved`.
+             * @example retry
+             * @enum {string|null}
+             */
+            next_action?: "reminder" | "final_reminder" | "end_action" | "retry" | null;
+            /**
+             * Format: date-time
+             * @description When `next_action` runs.
+             * @example 2026-10-25T09:00:00Z
+             */
+            next_action_at?: string | null;
+            /**
+             * @description Amount still owed on the invoice, in cents.
+             * @example 4900
+             */
+            total_due_amount_cents: number;
+            /**
+             * @description Currency of the invoice.
+             * @example USD
+             */
+            currency: components["schemas"]["Currency"];
         };
         EventErrorsObject: {
             /**
@@ -16056,7 +17038,7 @@ export interface components {
              */
             invalid_filter_values: string[];
             /** @deprecated */
-            missing_group_key: string[];
+            missing_group_key: string[] | null;
         };
         FeeTaxProviderErrorObject: {
             /**
@@ -16079,9 +17061,48 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        InvoicePaymentDisputeLostObject: components["schemas"]["InvoiceObjectExtended"] & {
+        /** @description The lost dispute: the invoice, and the provider reason when there is one. */
+        InvoicePaymentDisputeLostObject: {
+            invoice: components["schemas"]["InvoiceObjectExtended"];
+            /** @description Reason given by the provider. Only present when the provider sent one. */
             provider_error?: string | {
                 [key: string]: unknown;
+            };
+        };
+        /** @description The invoice and the current state of its payment dispute. Only ids and statuses are sent. */
+        InvoicePaymentDisputeUpdatedObject: {
+            invoice: components["schemas"]["InvoiceObjectExtended"];
+            dispute: {
+                /**
+                 * @description Identifier of the dispute at the payment provider.
+                 * @example disp_Nozle0000000001
+                 */
+                id: string;
+                /**
+                 * @description The provider event that reported the dispute, without the `payment.dispute.` prefix. For Razorpay `created`, `under_review`, `action_required` or `won`.
+                 * @example action_required
+                 */
+                event: string;
+                /**
+                 * @description Current status of the dispute at the provider, for example `open`, `under_review` or `won`.
+                 * @example open
+                 */
+                status: string;
+                /**
+                 * @description Reason code the provider gives for the dispute.
+                 * @example fraudulent
+                 */
+                reason_code?: string | null;
+                /**
+                 * @description Phase of the dispute, for example `chargeback`.
+                 * @example chargeback
+                 */
+                phase?: string | null;
+                /**
+                 * @description Unix time by which you must answer the dispute, while you still can. Otherwise null.
+                 * @example 1793500000
+                 */
+                respond_by?: number | null;
             };
         };
         InvoicePaymentFailureObject: {
@@ -16112,7 +17133,7 @@ export interface components {
              * @example stripe
              * @enum {string}
              */
-            payment_provider: "adyen" | "cashfree" | "gocardless" | "stripe";
+            payment_provider: "adyen" | "cashfree" | "gocardless" | "stripe" | "razorpay" | "flutterwave" | "moneyhash";
             /**
              * @description Code of the payment provider
              * @example Stripe Prod
@@ -16168,15 +17189,15 @@ export interface components {
             /**
              * @description The source of the error
              * @example stripe
-             * @enum {string}
+             * @enum {string|null}
              */
-            source: "stripe";
+            source: "stripe" | null;
             /**
              * @description The action that was being performed when the error occurred
              * @example payment_provider.register_webhook
-             * @enum {string}
+             * @enum {string|null}
              */
-            action?: "payment_provider.register_webhook";
+            action?: "payment_provider.register_webhook" | null;
             provider_error: string | {
                 [key: string]: unknown;
             };
@@ -16214,14 +17235,14 @@ export interface components {
             /**
              * @description The type of payment provider code
              * @example stripe
-             * @enum {string}
+             * @enum {string|null}
              */
-            payment_provider: "adyen" | "cashfree" | "gocardless" | "stripe";
+            payment_provider: "adyen" | "cashfree" | "gocardless" | "stripe" | "razorpay" | "flutterwave" | "moneyhash" | null;
             /**
              * @description Code of the payment provider
              * @example Stripe Prod
              */
-            payment_provider_code?: string;
+            payment_provider_code?: string | null;
             provider_error?: string | {
                 [key: string]: unknown;
             };
@@ -16229,6 +17250,7 @@ export interface components {
         SubscriptionWithCustomerObject: components["schemas"]["SubscriptionObject"] & {
             plan: components["schemas"]["PlanObject"];
             customer: components["schemas"]["CustomerObject"];
+            entitlements?: unknown[];
         };
         SubscriptionWithThresholdObject: components["schemas"]["SubscriptionObject"] & {
             plan: components["schemas"]["PlanObject"];
@@ -16266,29 +17288,19 @@ export interface components {
             /**
              * @description The type of payment provider code
              * @example stripe
-             * @enum {string}
+             * @enum {string|null}
              */
-            payment_provider: "adyen" | "cashfree" | "gocardless" | "stripe";
+            payment_provider: "adyen" | "cashfree" | "gocardless" | "stripe" | "razorpay" | "flutterwave" | "moneyhash" | null;
             /**
              * @description Code of the payment provider
              * @example Stripe Prod
              */
-            payment_provider_code?: string;
+            payment_provider_code?: string | null;
             provider_error?: string | {
                 [key: string]: unknown;
             };
         };
         CustomerPaymentProvidernErrorObject: components["schemas"]["CustomerPaymentProviderErrorObject"];
-        WebhookPublicKey: {
-            webhook: components["schemas"]["WebhookPublicKeyObject"];
-        };
-        WebhookPublicKeyObject: {
-            /**
-             * @description Base64-encoded public key used to verify webhook signatures.
-             * @example MEgCQQCo9+BpMRYQ/dL3DS2CyJxRF+j6ctbT3/Qp84+KeFhnii7NT7fELilKUSnxS30WAvQCCo2yU1orfgqr41mM70MBAgMBAAE=
-             */
-            public_key: string;
-        };
         /** @description Error body of an Engine operation. Branch on `code` when it is present; `error` is a human-readable message. */
         EngineError: {
             /** @example customer has multiple active subscriptions */
@@ -16298,7 +17310,39 @@ export interface components {
             /** @description Request id to quote to support, when the Engine includes it. */
             request_id?: string;
         };
-        /** @description Error body produced by Core and forwarded unchanged by Engine. Some conflict responses carry only `code`. Validation failures carry `error_details`, an object whose keys are field names and whose values are arrays of error codes. */
+        /** @description Engine 2.22.0. A refusal of an OpenAI route of the LLM proxy, in OpenAI's error shape so the OpenAI SDK surfaces `error.code`. The top-level `code` is the same code. Before Engine 2.22.0 the body was `{"code", "error"}` with `error` a string. */
+        OpenAIProxyError: {
+            error: {
+                message: string;
+                /**
+                 * @description `invalid_request_error` for `400` and `422`, `authentication_error` for `401`, `payment_required` for `402`, `permission_error` for `403`, `rate_limit_error` for `429`, else `api_error`.
+                 * @enum {string}
+                 */
+                type: "invalid_request_error" | "authentication_error" | "payment_required" | "permission_error" | "rate_limit_error" | "api_error";
+                /** @description The Nozle error code, for example `customer_payment_overdue`. */
+                code: string;
+            };
+            /** @description The same code, kept at the top level. */
+            code: string;
+        };
+        /** @description Engine 2.22.0. A refusal of an Anthropic route of the LLM proxy, in Anthropic's error shape so the Anthropic SDK surfaces it. The top-level `code` is the same code. Before Engine 2.22.0 the body was `{"code", "error"}` with `error` a string. */
+        AnthropicProxyError: {
+            /** @enum {string} */
+            type: "error";
+            error: {
+                /**
+                 * @description `invalid_request_error` for `400` and `422`, `authentication_error` for `401`, `billing_error` for `402`, `permission_error` for `403`, `rate_limit_error` for `429`, else `api_error`.
+                 * @enum {string}
+                 */
+                type: "invalid_request_error" | "authentication_error" | "billing_error" | "permission_error" | "rate_limit_error" | "api_error";
+                message: string;
+                /** @description The Nozle error code, for example `customer_payment_overdue`. */
+                code: string;
+            };
+            /** @description The same code, kept at the top level. */
+            code: string;
+        };
+        /** @description Error body produced by Core and forwarded unchanged by Engine. Checkout errors always carry `status`, `error` and `code`; some conflict responses of other routes carry only `code`. Validation failures carry `error_details`, an object whose keys are field names and whose values are arrays of error codes. */
         BillingCoreError: {
             /** @example 409 */
             status?: number;
@@ -16436,7 +17480,7 @@ export interface components {
         BillingUpgradeRequest: {
             /**
              * @description Target plan code.
-             * @example growth
+             * @example starter_monthly
              */
             plan_code: string;
             /**
@@ -16449,7 +17493,12 @@ export interface components {
              * @description Legacy fallback used as `customer_id` when `customer_id` is empty.
              */
             organization_id?: string;
+            /** @description External ID of the subscription to change. Optional; selects the subscription as for `/can`. */
+            subscription_id?: string;
+            /** @description External ID of the Entity whose subscription to change. Optional; selects the subscription as for `/can`. */
+            entity_id?: string;
         };
+        /** @description Send `plan_code`, or `plan_family_code` with `interval` (and optional `currency`). Neither returns `400`. */
         BillingSubscribeRequest: {
             /**
              * @description External ID of an existing customer.
@@ -16457,7 +17506,23 @@ export interface components {
              */
             customer_id: string;
             /** @example pro */
-            plan_code: string;
+            plan_code?: string;
+            /**
+             * @description Core 11.10.0, Engine 2.21.0. The subscription's external ID is then `sub-<customer_id>-<plan_family_code>`. Sells a plan family instead of `plan_code`; Nozle picks the family's current plan for `interval` and `currency`. Cannot be combined with `plan_code` (`422`, `plan_family_code: [incompatible_with_plan_code]`). An unknown family returns `404 plan_family_not_found`. See [Multi-currency pricing](/guides/billing/multi-currency-pricing#checkout-and-subscribe-by-family).
+             * @example pro
+             */
+            plan_family_code?: string;
+            /**
+             * @description Required with `plan_family_code` (`interval: [value_is_mandatory]` without it, `[value_is_invalid]` for an unknown value).
+             * @example yearly
+             * @enum {string}
+             */
+            interval?: "weekly" | "monthly" | "quarterly" | "semiannual" | "yearly";
+            /**
+             * @description With `plan_family_code`, the ISO 4217 code of the plan to sell. Without it, the currency of the subscription being changed, else the customer's locked currency, else the family's default currency. A currency the family does not sell for that interval returns `422` with `currency: [currency_not_offered]`.
+             * @example EUR
+             */
+            currency?: string;
             /**
              * @description Optional. The version of `plan_code` to subscribe to. Without it, the customer gets the current version. Core's rules apply (see `plan_version` on `POST /subscriptions`).
              * @example 1
@@ -16477,18 +17542,34 @@ export interface components {
              */
             status: string;
         };
-        /** @description Either `invoice_id` (pay an existing invoice) or `plan_code` with a customer is required. */
+        /** @description Either `invoice_id` (pay an existing invoice), or `plan_code` (or `plan_family_code` with `interval`) with a customer, is required. */
         BillingCheckoutRequest: {
             /**
-             * @description External customer ID. Required with `plan_code`. Falls back to the customer of trusted internal authentication, then to `organization_id`.
+             * @description External customer ID. Required with `plan_code` or `plan_family_code`. Falls back to the customer of trusted internal authentication, then to `organization_id`.
              * @example customer_123
              */
             customer_id?: string;
             /**
-             * @description Plan to check out. Required unless `invoice_id` is sent.
+             * @description Plan to check out. Required unless `invoice_id` or `plan_family_code` is sent.
              * @example growth
              */
             plan_code?: string;
+            /**
+             * @description Core 11.10.0, Engine 2.21.0. Sells a plan family instead of `plan_code`; Nozle picks the family's current plan for `interval` and `currency`. Cannot be combined with `plan_code` (`422`, `plan_family_code: [incompatible_with_plan_code]`). An unknown family returns `404 plan_family_not_found`. See [Multi-currency pricing](/guides/billing/multi-currency-pricing#checkout-and-subscribe-by-family).
+             * @example pro
+             */
+            plan_family_code?: string;
+            /**
+             * @description Required with `plan_family_code` (`interval: [value_is_mandatory]` without it, `[value_is_invalid]` for an unknown value).
+             * @example yearly
+             * @enum {string}
+             */
+            interval?: "weekly" | "monthly" | "quarterly" | "semiannual" | "yearly";
+            /**
+             * @description With `plan_family_code`, the ISO 4217 code of the plan to sell. Without it, the currency of the subscription being changed, else the customer's locked currency, else the family's default currency. A currency the family does not sell for that interval returns `422` with `currency: [currency_not_offered]`.
+             * @example EUR
+             */
+            currency?: string;
             /**
              * @deprecated
              * @description Legacy fallback for `customer_id`.
@@ -16496,25 +17577,25 @@ export interface components {
             organization_id?: string;
             /**
              * Format: uri
-             * @description Absolute HTTPS URL whose origin is on Engine's allowlist. Defaults to `success_url`, then to the configured dashboard return URL.
+             * @description Absolute HTTPS URL on one of the organization's allowed origins (`checkout_return_origins`). May contain the literal `{CHECKOUT_SESSION_ID}`, which Stripe replaces with the Checkout Session ID. Defaults to `success_url`, then to the organization's default return URL.
              */
             return_url?: string;
+            /**
+             * Format: uri
+             * @description Where Stripe sends a customer who leaves the hosted page without paying. Validated like `return_url`. Defaults to the return URL. Accepted by `POST /checkout` only; the Entity subscription endpoints take `return_url` alone.
+             */
+            cancel_url?: string;
             /**
              * Format: uri
              * @description Backward-compatible alias for `return_url`.
              */
             success_url?: string;
-            /**
-             * Format: uri
-             * @description Where the hosted payment page sends a customer who leaves it. Validated like `return_url`; defaults to the return URL. A return URL may contain the literal `{CHECKOUT_SESSION_ID}`.
-             */
-            cancel_url?: string;
-            /** @description Nozle invoice to collect payment for instead of starting a plan checkout. Cannot be combined with `subscription_id`. */
+            /** @description Nozle invoice to collect payment for instead of starting a plan checkout. Cannot be combined with `subscription_id`. From Core 11.16.0 the hosted Stripe page offers only the customer's payment methods, a card saved while paying is recorded as the customer's payment method, and a `return_url` replaces an open Checkout Session that returns elsewhere. */
             invoice_id?: string;
             /** @description Customer Entity whose own subscription is checked out. Cannot be combined with `subscription_id`. */
             external_entity_id?: string;
             /**
-             * @description Razorpay only: register a recurring mandate with the payment.
+             * @description Razorpay only: set up auto-pay with the payment of a subscription invoice. The result is `hosted` with `payment_url`, Nozle's auto-pay setup page, instead of a `razorpay` order. A plan change that leaves an amount due answers `422 razorpay_mandate_registration_unavailable` instead.
              * @default false
              */
             register_mandate: boolean;
@@ -16523,27 +17604,24 @@ export interface components {
             /** @description Opaque signed quote from `POST /subscriptions/preview`. Core requires `subscription_id` and an `Idempotency-Key` with it. */
             quote_id?: string;
         };
-        /** @description Result of a checkout. The fields present depend on `type`. `hosted` (Stripe Checkout page or Razorpay payment link): `url`, `payment_url` (same address), `checkout_id`, `amount_cents`, `currency`, `expires_at`, and `invoice_id` or `plan_upgrade_intent_id`; redirect the customer to `url`. `razorpay`: `checkout_id`, `key_id`, `order_id`, `amount_cents`, `currency`, `expires_at`, and `invoice_id` or `plan_upgrade_intent_id` (mandate checkouts add `customer_id`, `recurring`, `mandate_max_amount_cents`). `processing`: `checkout_id` and `status`. `completed`: `status`, `payment_source`, `subscription_id`, `plan_code`, `invoice_id`, `amount_cents`, `currency` (an immediate configured downgrade instead carries the settlement fields of a transition result). `scheduled`: `status`, `subscription_id` (the pending subscription), `plan_code`, `transition_direction`, `transition_policy`, `effective_at`. Entity checkouts add `external_entity_id` and `external_subscription_id`. */
+        /** @description Result of a checkout. The fields present depend on `type`. `hosted` (Stripe): `url`, `payment_url` (the same value), `checkout_id` (the Stripe Checkout Session ID), `amount_cents`, `currency`, `expires_at`, and `invoice_id` or `plan_upgrade_intent_id`. `hosted` (Razorpay mandate checkout, `register_mandate`): `payment_url` (Nozle's auto-pay setup page), `checkout_id` (to poll), `amount_cents`, `currency`, `expires_at`, `invoice_id`. `razorpay`: `checkout_id`, `key_id`, `order_id`, `amount_cents`, `currency`, `expires_at`, and `invoice_id` or `plan_upgrade_intent_id`. `processing`: `checkout_id` and `status`. `completed`: `status`, `payment_source`, `subscription_id`, `plan_code`, `invoice_id`, `amount_cents`, `currency` (an immediate configured downgrade instead carries the settlement fields of a transition result). `scheduled`: `status`, `subscription_id` (the pending subscription), `plan_code`, `transition_direction`, `transition_policy`, `effective_at`. Entity checkouts add `external_entity_id` and `external_subscription_id`. There is no `stripe` result and no client secret. */
         BillingCheckoutResult: {
             /** @enum {string} */
-            type: "razorpay" | "processing" | "completed" | "scheduled" | "hosted";
+            type: "hosted" | "razorpay" | "processing" | "completed" | "scheduled";
             /** @description `succeeded` for `completed`; the pending subscription status for `scheduled`; the internal operation status for `processing`. */
             status?: string;
             /**
              * Format: uri
-             * @description Hosted result: the page to redirect the customer to.
+             * @description `hosted` only: the Stripe-hosted Checkout page. Redirect the customer to it.
              */
             url?: string;
-            /**
-             * Format: uuid
-             * @description Razorpay operation ID; use with `GET /checkout/{id}` and `POST /checkout/{id}/verify`.
-             */
+            /** @description For `hosted`, the Stripe Checkout Session ID (`cs_...`); it is not a status ID (poll a paid upgrade with `plan_upgrade_intent_id`). For Razorpay, the operation ID (UUID), used with `GET /checkout/{id}` and `POST /checkout/{id}/verify`. */
             checkout_id?: string;
             /** @description Public Razorpay key ID. */
             key_id?: string;
             /** @description Razorpay order ID. */
             order_id?: string;
-            /** @description Razorpay customer ID (mandate checkouts). */
+            /** @description Razorpay customer ID. Only on orders of earlier mandate checkouts; a mandate checkout now answers `hosted`. */
             customer_id?: string;
             recurring?: boolean;
             mandate_max_amount_cents?: number;
@@ -16638,7 +17716,12 @@ export interface components {
             nextBillingDate?: string | null;
             /** Format: date */
             invoice_issuing_date?: string | null;
+            /** @description Credit applied to this change; `net_amount_cents` is debit minus credit. */
             credit_amount_cents?: number;
+            /** @description Balance left on the credit notes the change issues, used on later invoices. */
+            credit_remaining_amount_cents?: number;
+            /** @description Amount the credit notes the change issues refund. */
+            refund_amount_cents?: number;
             debit_amount_cents?: number;
             net_amount_cents?: number;
             amount_due_now_cents?: number;
@@ -16933,6 +18016,11 @@ export interface components {
             from_version: number;
             /** @description The version they move to. Defaults to the current version. */
             to_version?: number;
+            /**
+             * @description Only read when starting a migration. Without it, starting is refused with `422` `price_increase_not_allowed` when any subscription would pay more, or pass its auto-pay limit. Check the preview first.
+             * @default false
+             */
+            allow_price_increase: boolean;
         };
         /** @description The outcome of a migration for one subscription. */
         PlanVersionMigrationItem: {
@@ -17004,6 +18092,15 @@ export interface components {
             effective_on?: string | null;
             current_amount_cents?: number;
             new_amount_cents?: number;
+            /**
+             * @description What the move does to the price. `increase` when the plan amount goes up. `undeterminable` when the plan amount does not go up but usage, fixed or commitment pricing differs, so the total depends on future usage. `null` for a skipped subscription, which keeps its price.
+             * @enum {string|null}
+             */
+            price_change?: "increase" | "decrease" | "same" | "undeterminable" | null;
+            /** @description `true` when `price_change` is `increase`. Starting the migration needs `allow_price_increase` while any item has it. */
+            price_increase?: boolean;
+            /** @description `true` when the new amount is above the customer's auto-pay limit. Starting the migration needs `allow_price_increase` while any item has it. */
+            mandate_cap_exceeded?: boolean;
         };
         PlanVersionMigrationPreview: {
             plan_code: string;
@@ -17093,7 +18190,10 @@ export interface components {
              * @enum {string}
              */
             billing_time?: "anniversary" | "calendar";
-            /** Format: uri */
+            /**
+             * Format: uri
+             * @description May contain the literal `{CHECKOUT_SESSION_ID}`.
+             */
             return_url?: string;
             /**
              * Format: uri
@@ -17130,7 +18230,10 @@ export interface components {
                  * @enum {string}
                  */
                 billing_time?: "anniversary" | "calendar";
-                /** Format: uri */
+                /**
+                 * Format: uri
+                 * @description May contain the literal `{CHECKOUT_SESSION_ID}`.
+                 */
                 return_url?: string;
                 items: {
                     external_entity_id: string;
@@ -17142,7 +18245,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /**
-             * @description Razorpay results override the default `hosted` type with the Razorpay checkout's own `type` and fields.
+             * @description Razorpay results override the default `hosted` (Stripe) type with the Razorpay checkout's own `type` and fields.
              * @enum {string}
              */
             type: "hosted" | "razorpay" | "processing" | "completed";
@@ -17151,10 +18254,13 @@ export interface components {
              * @enum {string}
              */
             status: "pending" | "open" | "completed" | "failed" | "expired";
+            /**
+             * Format: uri
+             * @description `hosted` only: the Stripe-hosted Checkout page.
+             */
+            url?: string | null;
             /** Format: uri */
-            url?: string;
-            /** Format: uri */
-            payment_url?: string;
+            payment_url?: string | null;
             /** Format: uuid */
             invoice_id?: string | null;
             amount_cents?: number;
@@ -17414,7 +18520,7 @@ export interface components {
             /** @description External Entity ID. */
             entity_id: string;
             /** @enum {string} */
-            entity_status: "active" | "suspended" | "deleted";
+            entity_status: "active" | "suspended";
             credit_system: string;
             credit_system_id: string;
             credit_system_name: string;
@@ -17441,7 +18547,7 @@ export interface components {
             customer_id: string;
             entity_id: string;
             /** @enum {string} */
-            entity_status: "active" | "suspended" | "deleted";
+            entity_status: "active" | "suspended";
             /** Format: date-time */
             as_of: string;
             balances: components["schemas"]["CreditsEntityBalance"][];
@@ -17549,7 +18655,7 @@ export interface components {
          *     }
          */
         CreditsEntity: {
-            /** @description Durable Entity UUID. Recreating an Entity with the same external ID after deletion gives a new incarnation. */
+            /** @description Durable Entity UUID. An Entity keeps its id for its whole life; Entities cannot be deleted. */
             id: string;
             /** @description External customer ID. */
             customer_id: string;
@@ -17557,7 +18663,7 @@ export interface components {
             external_id: string;
             name: string | null;
             /** @enum {string} */
-            status: "active" | "suspended" | "deleted";
+            status: "active" | "suspended";
             metadata: {
                 [key: string]: unknown;
             };
@@ -17582,10 +18688,10 @@ export interface components {
             /** @description Display name, at most 255 characters after trimming. An empty or missing value stores no name. */
             name?: string | null;
             /**
-             * @description Required. Allowed transitions: `active` to `suspended` or `deleted`; `suspended` to `active` or `deleted`; `deleted` to `active` (reactivation). Any other change returns `422 entity_status_transition_invalid`.
+             * @description Required: `active` or `suspended`. Any other value, including `deleted`, returns `400 invalid_request`. Entities cannot be deleted. Suspending an Entity does not cancel its subscription: cancel the Entity subscription yourself to stop billing. A legacy Entity already in `deleted` status is never revived: changing its status returns `422 entity_status_transition_invalid`.
              * @enum {string}
              */
-            status: "active" | "suspended" | "deleted";
+            status: "active" | "suspended";
             /** @description JSON object, at most 65536 bytes when encoded. Omitted means `{}`. */
             metadata?: {
                 [key: string]: unknown;
@@ -17597,10 +18703,10 @@ export interface components {
             /** @description Display name, at most 255 characters after trimming. An empty or missing value stores no name. */
             name?: string | null;
             /**
-             * @description Required. Allowed transitions: `active` to `suspended` or `deleted`; `suspended` to `active` or `deleted`; `deleted` to `active` (reactivation). Any other change returns `422 entity_status_transition_invalid`.
+             * @description Required: `active` or `suspended`. Any other value, including `deleted`, returns `400 invalid_request`. Entities cannot be deleted. Suspending an Entity does not cancel its subscription: cancel the Entity subscription yourself to stop billing. A legacy Entity already in `deleted` status is never revived: changing its status returns `422 entity_status_transition_invalid`.
              * @enum {string}
              */
-            status: "active" | "suspended" | "deleted";
+            status: "active" | "suspended";
             /** @description JSON object, at most 65536 bytes when encoded. Omitted means `{}`. */
             metadata?: {
                 [key: string]: unknown;
@@ -17611,7 +18717,7 @@ export interface components {
         };
         CreditsEntityMutationItem: {
             /** @enum {string} */
-            action: "created" | "updated" | "unchanged" | "activated" | "reactivated" | "suspended" | "deleted";
+            action: "created" | "updated" | "unchanged" | "activated" | "suspended";
             entity: components["schemas"]["CreditsEntity"];
         };
         /**
@@ -17635,7 +18741,7 @@ export interface components {
          */
         CreditsEntityMutationResult: {
             /** @enum {string} */
-            action: "created" | "updated" | "unchanged" | "activated" | "reactivated" | "suspended" | "deleted";
+            action: "created" | "updated" | "unchanged" | "activated" | "suspended";
             entity: components["schemas"]["CreditsEntity"];
             /** @description `true` when this is the stored result of an earlier request with the same idempotency key. */
             replayed: boolean;
@@ -17645,8 +18751,10 @@ export interface components {
             updated: number;
             unchanged: number;
             activated: number;
+            /** @description Always `0`; Entities are no longer reactivated or deleted. */
             reactivated: number;
             suspended: number;
+            /** @description Always `0`; Entities cannot be deleted. */
             deleted: number;
         };
         CreditsEntityBulkMutationResult: {
@@ -17795,14 +18903,28 @@ export interface components {
             invoice_id?: string;
             invoice_number?: string | null;
             invoice_amount_cents?: number;
-            payment_status?: string;
+            /**
+             * @description Payment of the top-up invoice. `succeeded` does not mean the credits can be spent yet; see `fulfillment_status`.
+             * @enum {string}
+             */
+            payment_status?: "pending" | "succeeded" | "failed" | "voided";
+            /**
+             * @description `fulfilled` once the credits are granted and can be spent (Core 11.1.0 and later), then the `credit_top_up_purchase.fulfilled` webhook is sent. `pending` before.
+             * @enum {string}
+             */
+            fulfillment_status?: "pending" | "fulfilled";
+            /**
+             * Format: date-time
+             * @description When the credits were granted, or `null` while `fulfillment_status` is `pending`.
+             */
+            fulfilled_at?: string | null;
             payment_id?: string | null;
             /** @description For example `stripe` or `razorpay`. */
             payment_provider?: string | null;
             payment_provider_type?: string | null;
             payment_provider_code?: string | null;
             provider_payment_id?: string | null;
-            /** @description Hosted payment page. Stripe: a `checkout.stripe.com` page valid for 24 hours. Razorpay: an `rzp.io` payment link. */
+            /** @description Hosted payment page. Stripe: a `checkout.stripe.com` page (checkout results carry it as `url` too). Razorpay: an `rzp.io` payment link. */
             payment_url?: string | null;
             replayed?: boolean;
             /** Format: date-time */
@@ -18295,7 +19417,7 @@ export interface components {
             /** @description Whether the customer may use the feature now. */
             allowed: boolean;
             /**
-             * @description Denial code. Present only when `allowed` is `false`.
+             * @description Denial code. Present only when `allowed` is `false`. `customer_payment_overdue` (Engine 2.22.0) comes with HTTP `402`, every other reason with `200`.
              * @enum {string}
              */
             reason?: "feature_not_found" | "no_subscription" | "subscription_required" | "no_entitlement" | "usage_limit_exceeded" | "economic_policy_denied" | "customer_payment_overdue";
@@ -18504,9 +19626,383 @@ export interface components {
             /** @enum {string} */
             status: "archived";
         };
+        QuoteVersionWebhookObject: {
+            /**
+             * Format: uuid
+             * @description Unique identifier of the quote version.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            nozle_id: string;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the quote.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            quote_id: string;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the organization.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            organization_id: string;
+            /** @description Version number, starting at 1. */
+            version: number;
+            /**
+             * @description Status of the quote version.
+             * @enum {string}
+             */
+            status: "draft" | "approved" | "voided";
+            /**
+             * @description Three-letter ISO 4217 currency code.
+             * @example USD
+             */
+            currency?: string;
+            /** @description Code of the billing entity. */
+            billing_entity_code?: string;
+            /**
+             * @description Why the version was voided.
+             * @enum {string|null}
+             */
+            void_reason?: "manual" | "superseded" | "cascade_of_expired" | "cascade_of_voided" | null;
+            /**
+             * Format: date-time
+             * @description When the version was approved.
+             * @example 2026-10-22T07:10:02Z
+             */
+            approved_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When the version was voided.
+             * @example 2026-10-22T07:10:02Z
+             */
+            voided_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When the version was created.
+             * @example 2026-10-22T07:10:02Z
+             */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description When the version was last updated.
+             * @example 2026-10-22T07:10:02Z
+             */
+            updated_at: string;
+        };
+        /** @description A quote with the version the event happened to (not the quote's current version). */
+        QuoteWebhookObject: {
+            /**
+             * Format: uuid
+             * @description Unique identifier of the quote.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            nozle_id: string;
+            /**
+             * @description Quote number.
+             * @example QT-2026-0002
+             */
+            number: string;
+            /**
+             * @description What the quote orders.
+             * @enum {string}
+             */
+            order_type: "subscription_creation" | "subscription_amendment" | "one_off";
+            /**
+             * Format: uuid
+             * @description Unique identifier of the customer.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            customer_id: string;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the subscription an amendment quote changes.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            subscription_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the organization.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            organization_id: string;
+            /**
+             * Format: date-time
+             * @description When the quote was created.
+             * @example 2026-10-22T07:10:02Z
+             */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description When the quote was last updated.
+             * @example 2026-10-22T07:10:02Z
+             */
+            updated_at: string;
+            version: components["schemas"]["QuoteVersionWebhookObject"];
+        };
+        OrderFormWebhookObject: {
+            /**
+             * Format: uuid
+             * @description Unique identifier of the order form.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            nozle_id: string;
+            /**
+             * @description Order form number.
+             * @example OF-2026-0001
+             */
+            number: string;
+            /**
+             * @description Status of the order form.
+             * @enum {string}
+             */
+            status: "generated" | "signed" | "expired" | "voided";
+            /**
+             * @description Why the order form was voided.
+             * @enum {string|null}
+             */
+            void_reason?: "manual" | "expired" | "invalid" | null;
+            /**
+             * Format: date-time
+             * @description When the order form expires.
+             * @example 2026-10-22T07:10:02Z
+             */
+            expires_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When the order form was signed.
+             * @example 2026-10-22T07:10:02Z
+             */
+            signed_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When the order form was voided.
+             * @example 2026-10-22T07:10:02Z
+             */
+            voided_at?: string | null;
+            /**
+             * Format: uri
+             * @description URL of the signed document, when one was uploaded.
+             */
+            signed_document_url?: string | null;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the organization.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            organization_id: string;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the customer.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            customer_id: string;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the quote.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            quote_id: string;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the approved quote version.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            quote_version_id: string;
+            /**
+             * Format: date-time
+             * @description When the order form was created.
+             * @example 2026-10-22T07:10:02Z
+             */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description When the order form was last updated.
+             * @example 2026-10-22T07:10:02Z
+             */
+            updated_at: string;
+        };
+        OrderWebhookObject: {
+            /**
+             * Format: uuid
+             * @description Unique identifier of the order.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            nozle_id: string;
+            /**
+             * @description Order number.
+             * @example OR-2026-0001
+             */
+            number: string;
+            /**
+             * @description Status of the order.
+             * @enum {string}
+             */
+            status: "created" | "executed" | "failed";
+            /**
+             * @description What the order does.
+             * @enum {string}
+             */
+            order_type: "subscription_creation" | "subscription_amendment" | "one_off";
+            /**
+             * @description Whether Nozle creates the records or only records the order.
+             * @enum {string|null}
+             */
+            execution_mode?: "execute_in_nozle" | "order_only" | null;
+            /**
+             * @description Three-letter ISO 4217 currency code.
+             * @example USD
+             */
+            currency?: string;
+            /**
+             * Format: date-time
+             * @description When the order was executed.
+             * @example 2026-10-22T07:10:02Z
+             */
+            executed_at?: string | null;
+            /** @description What the execution created. It has the same keys on every order. */
+            execution_record: {
+                /** @description When the order was executed. */
+                executed_at?: string | null;
+                /** @description Execution mode recorded with the execution. */
+                execution_mode?: string | null;
+                /**
+                 * Format: uuid
+                 * @description Invoice created by the execution.
+                 * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                 */
+                invoice_id?: string | null;
+                /** @description Subscriptions created. */
+                subscription_ids?: string[];
+                /** @description Subscriptions terminated. */
+                terminated_subscription_ids?: string[];
+                /** @description Coupons applied. */
+                applied_coupon_ids?: string[];
+                /** @description Wallets created. */
+                wallet_ids?: string[];
+                /** @description Error codes of a failed execution, for example `customer_not_found`. */
+                errors?: string[];
+            };
+            /**
+             * Format: uuid
+             * @description Unique identifier of the organization.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            organization_id: string;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the customer.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            customer_id: string;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the signed order form.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            order_form_id: string;
+            /**
+             * Format: date-time
+             * @description When the order was created.
+             * @example 2026-10-22T07:10:02Z
+             */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description When the order was last updated.
+             * @example 2026-10-22T07:10:02Z
+             */
+            updated_at: string;
+        };
+        PaymentReceiptWebhookObject: {
+            /**
+             * Format: uuid
+             * @description Unique identifier of the payment receipt.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            nozle_id: string;
+            /**
+             * @description Receipt number.
+             * @example PUL-CDDE-380-RCPT-000001
+             */
+            number: string;
+            /**
+             * Format: uri
+             * @description URL of the receipt PDF. `null` until the PDF is generated.
+             */
+            file_url?: string | null;
+            /**
+             * Format: uri
+             * @description URL of the receipt XML.
+             */
+            xml_url?: string | null;
+            payment: components["schemas"]["PaymentObject"];
+            /**
+             * Format: date-time
+             * @description When the receipt was created.
+             * @example 2026-10-22T07:10:02Z
+             */
+            created_at: string;
+        };
+        PlanUpgradeIntentWebhookObject: {
+            /**
+             * Format: uuid
+             * @description Unique identifier of the plan upgrade intent.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            nozle_id: string;
+            /**
+             * @description Status of the intent. It is `needs_review` in this event.
+             * @enum {string}
+             */
+            status: "pending" | "processing" | "payment_failed" | "applied" | "canceled" | "expired" | "needs_review";
+            /** @description Why the change could not be applied, for example `plan_upgrade_apply_failed`. */
+            error_code?: string | null;
+            /**
+             * Format: uuid
+             * @description Unique identifier of the customer.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            customer_id: string;
+            /**
+             * Format: uuid
+             * @description Subscription being changed.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            subscription_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Plan the customer paid to move to.
+             * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+             */
+            target_plan_id: string;
+            /**
+             * @description Amount of the payment, in cents.
+             * @example 919
+             */
+            amount_cents: number;
+            /**
+             * @description Three-letter ISO 4217 currency code.
+             * @example USD
+             */
+            currency: string;
+            /** @description Payment ID at the provider. The payment is refunded. */
+            provider_payment_id?: string | null;
+            /**
+             * Format: date-time
+             * @description When the intent was created.
+             * @example 2026-10-22T07:10:02Z
+             */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description When the intent was last updated.
+             * @example 2026-10-22T07:10:02Z
+             */
+            updated_at: string;
+        };
     };
     responses: {
-        /** @description Unauthorized error */
+        /** @description Missing, unknown or expired API key, or a key refused by its environment: a sandbox key (`sk_nozle_test_`, `pk_nozle_test_`) on a live organization, a live key on a sandbox, or a key of a reset sandbox. The body does not say which. A `401` carries no `X-Nozle-Livemode` header. */
         Unauthorized: {
             headers: {
                 [name: string]: unknown;
@@ -18569,7 +20065,7 @@ export interface components {
                 "application/json": components["schemas"]["EngineError"];
             };
         };
-        /** @description Missing, malformed or unknown API key. */
+        /** @description Missing, malformed or unknown API key, or a key refused by its environment: a sandbox key (`sk_nozle_test_`, `pk_nozle_test_`) on a live organization, a live key on a sandbox, or a key of a reset sandbox. The body is `{"error": "invalid api key"}` in each case, without `X-Nozle-Livemode`. */
         EngineUnauthorized: {
             headers: {
                 [name: string]: unknown;
@@ -18614,6 +20110,255 @@ export interface components {
                 "application/json": components["schemas"]["EngineError"];
             };
         };
+        /** @description Engine 2.22.0. `customer_payment_overdue`: the customer's unpaid invoices are past the grace of their plan and their [dunning policy](/guides/billing/dunning) ends with `block`. Nothing is tracked and the provider is not called. Do not retry: the next request after the invoices are paid, voided or credited works. A suspended workspace gets `workspace_suspended` instead; see [Errors](/api/errors#workspace-billing-errors). */
+        EngineCustomerPaymentOverdue: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "code": "customer_payment_overdue",
+                 *       "error": "This customer's invoices are unpaid past their grace period. Usage resumes once they are paid."
+                 *     }
+                 */
+                "application/json": components["schemas"]["EngineError"];
+            };
+        };
+        /** @description `invalid_request`: `X-Nozle-Customer-Id` is missing, or the request body could not be read. In the OpenAI error shape from Engine 2.22.0. */
+        OpenAIProxyBadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "message": "missing X-Nozle-Customer-Id header",
+                 *         "type": "invalid_request_error",
+                 *         "code": "invalid_request"
+                 *       },
+                 *       "code": "invalid_request"
+                 *     }
+                 */
+                "application/json": components["schemas"]["OpenAIProxyError"];
+            };
+        };
+        /** @description `unauthorized`: `X-Nozle-Key` is missing or unknown. In the OpenAI error shape from Engine 2.22.0. */
+        OpenAIProxyUnauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "message": "invalid nozle key",
+                 *         "type": "authentication_error",
+                 *         "code": "unauthorized"
+                 *       },
+                 *       "code": "unauthorized"
+                 *     }
+                 */
+                "application/json": components["schemas"]["OpenAIProxyError"];
+            };
+        };
+        /** @description `customer_payment_overdue` (Engine 2.22.0): the customer's unpaid invoices are past the grace of their plan and their [dunning policy](/guides/billing/dunning) ends with `block`; the provider is not called. `workspace_suspended` or `card_required`: your workspace is blocked by Nozle, see [Errors](/api/errors#workspace-billing-errors). Do not retry. In the OpenAI error shape from Engine 2.22.0. */
+        OpenAIProxyPaymentRequired: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "message": "This customer's invoices are unpaid past their grace period. Usage resumes once they are paid.",
+                 *         "type": "payment_required",
+                 *         "code": "customer_payment_overdue"
+                 *       },
+                 *       "code": "customer_payment_overdue"
+                 *     }
+                 */
+                "application/json": components["schemas"]["OpenAIProxyError"];
+            };
+        };
+        /** @description `publishable_key_not_allowed` (a publishable key) or `permission_denied` (the key cannot write events). In the OpenAI error shape from Engine 2.22.0. */
+        OpenAIProxyForbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "message": "API key requires event:write permission",
+                 *         "type": "permission_error",
+                 *         "code": "permission_denied"
+                 *       },
+                 *       "code": "permission_denied"
+                 *     }
+                 */
+                "application/json": components["schemas"]["OpenAIProxyError"];
+            };
+        };
+        /** @description No subscription to bill. `active_subscription_not_found` when the customer is unknown, has no active subscription, or `X-Nozle-Subscription` names no active subscription of the customer; `active_subscription_ambiguous` when the customer has several active subscriptions and no `X-Nozle-Subscription`. The provider is not called. In the OpenAI error shape from Engine 2.22.0. */
+        OpenAIProxyNoSubscription: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "message": "customer has multiple active subscriptions; set X-Nozle-Subscription",
+                 *         "type": "invalid_request_error",
+                 *         "code": "active_subscription_ambiguous"
+                 *       },
+                 *       "code": "active_subscription_ambiguous"
+                 *     }
+                 */
+                "application/json": components["schemas"]["OpenAIProxyError"];
+            };
+        };
+        /** @description `unavailable`: the key, the subscription or the customer payment state could not be read. The provider is not called. Retry later. In the OpenAI error shape from Engine 2.22.0. */
+        OpenAIProxyUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "message": "subscription lookup is unavailable",
+                 *         "type": "api_error",
+                 *         "code": "unavailable"
+                 *       },
+                 *       "code": "unavailable"
+                 *     }
+                 */
+                "application/json": components["schemas"]["OpenAIProxyError"];
+            };
+        };
+        /** @description `invalid_request`: `X-Nozle-Customer-Id` is missing, or the request body could not be read. In the Anthropic error shape from Engine 2.22.0. */
+        AnthropicProxyBadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "type": "error",
+                 *       "error": {
+                 *         "type": "invalid_request_error",
+                 *         "message": "missing X-Nozle-Customer-Id header",
+                 *         "code": "invalid_request"
+                 *       },
+                 *       "code": "invalid_request"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AnthropicProxyError"];
+            };
+        };
+        /** @description `unauthorized`: `X-Nozle-Key` is missing or unknown. In the Anthropic error shape from Engine 2.22.0. */
+        AnthropicProxyUnauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "type": "error",
+                 *       "error": {
+                 *         "type": "authentication_error",
+                 *         "message": "invalid nozle key",
+                 *         "code": "unauthorized"
+                 *       },
+                 *       "code": "unauthorized"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AnthropicProxyError"];
+            };
+        };
+        /** @description `customer_payment_overdue` (Engine 2.22.0): the customer's unpaid invoices are past the grace of their plan and their [dunning policy](/guides/billing/dunning) ends with `block`; the provider is not called. `workspace_suspended` or `card_required`: your workspace is blocked by Nozle, see [Errors](/api/errors#workspace-billing-errors). Do not retry. In the Anthropic error shape from Engine 2.22.0. */
+        AnthropicProxyPaymentRequired: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "type": "error",
+                 *       "error": {
+                 *         "type": "billing_error",
+                 *         "message": "This customer's invoices are unpaid past their grace period. Usage resumes once they are paid.",
+                 *         "code": "customer_payment_overdue"
+                 *       },
+                 *       "code": "customer_payment_overdue"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AnthropicProxyError"];
+            };
+        };
+        /** @description `publishable_key_not_allowed` (a publishable key) or `permission_denied` (the key cannot write events). In the Anthropic error shape from Engine 2.22.0. */
+        AnthropicProxyForbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "type": "error",
+                 *       "error": {
+                 *         "type": "permission_error",
+                 *         "message": "API key requires event:write permission",
+                 *         "code": "permission_denied"
+                 *       },
+                 *       "code": "permission_denied"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AnthropicProxyError"];
+            };
+        };
+        /** @description No subscription to bill. `active_subscription_not_found` when the customer is unknown, has no active subscription, or `X-Nozle-Subscription` names no active subscription of the customer; `active_subscription_ambiguous` when the customer has several active subscriptions and no `X-Nozle-Subscription`. The provider is not called. In the Anthropic error shape from Engine 2.22.0. */
+        AnthropicProxyNoSubscription: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "type": "error",
+                 *       "error": {
+                 *         "type": "invalid_request_error",
+                 *         "message": "customer has multiple active subscriptions; set X-Nozle-Subscription",
+                 *         "code": "active_subscription_ambiguous"
+                 *       },
+                 *       "code": "active_subscription_ambiguous"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AnthropicProxyError"];
+            };
+        };
+        /** @description `unavailable`: the key, the subscription or the customer payment state could not be read. The provider is not called. Retry later. In the Anthropic error shape from Engine 2.22.0. */
+        AnthropicProxyUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "type": "error",
+                 *       "error": {
+                 *         "type": "api_error",
+                 *         "message": "subscription lookup is unavailable",
+                 *         "code": "unavailable"
+                 *       },
+                 *       "code": "unavailable"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AnthropicProxyError"];
+            };
+        };
         /** @description A dependency is busy or unavailable. Retry after the Retry-After seconds when the header is present. */
         EngineUnavailable: {
             headers: {
@@ -18625,6 +20370,10 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Core 11.10.0 (on the Engine host, Engine 2.21.0). ISO 4217 code. Lists only plans in this currency, with or without a plan family. An unknown currency returns `422` with `currency: [value_is_invalid]`. On the Engine, a repeated value, one longer than 255 bytes or one with a control character returns `400 invalid_request`. */
+        plans_currency: string;
+        /** @description Core 11.10.0 (on the Engine host, Engine 2.21.0). Secret keys only. Without `currency`, lists plans in this customer's locked currency. Ignored for an unknown customer, a customer without a currency yet, and an organization that allows several currencies per customer. A publishable key never reads a customer (the Engine drops the parameter). A customer-scoped Engine request lists for its own customer and returns `403 customer_scope_mismatch` when this names another one. */
+        plans_external_customer_id: string;
         /** @description The plan code. Every version of a plan keeps its code. */
         plan_version_code: string;
         /** @description The `nozle_id` of the migration. */
@@ -18661,12 +20410,12 @@ export interface components {
         subscription_status: "pending" | "active" | "terminated" | "canceled";
         /** @description External ID of the existing subscription. */
         subscription_external_id_path: string;
-        /** @description Signature of the webhook payload */
+        /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+        webhook_id: string;
+        /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+        webhook_timestamp: string;
+        /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
         webhook_signature: string;
-        /** @description Algorithm used to generate the signature */
-        webhook_signature_algorithm: "jwt" | "hmac";
-        /** @description Unique id of the webhook. It can be used for idempotency */
-        webhook_unique_key: string;
     };
     requestBodies: never;
     headers: never;
@@ -18690,7 +20439,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        billing_entities?: components["schemas"]["BillingEntityObject"][];
+                        billing_entities: components["schemas"]["BillingEntityObject"][];
                     };
                 };
             };
@@ -21102,6 +22851,27 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            /** @description The payment method is managed by the payment provider */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 410 */
+                        status: number;
+                        /** @example Gone */
+                        error: string;
+                        /** @example payment_method_managed_by_provider */
+                        code: string;
+                        /**
+                         * @description Where the customer manages the payment method.
+                         * @example Use POST /api/v1/customers/{external_id}/manage_payment_method_url (GraphQL generateCustomerManagePaymentMethodUrl) to send the customer to the provider's page
+                         */
+                        hint?: string;
+                    };
+                };
+            };
         };
     };
     manageCustomerPaymentMethod: {
@@ -21119,14 +22889,14 @@ export interface operations {
                 "application/json": {
                     /**
                      * Format: uri
-                     * @description HTTPS URL on an allowlisted origin that Stripe returns to. Defaults to the organization return URL.
+                     * @description HTTPS URL on one of the organization's allowed origins that Stripe returns to. Defaults to the organization return URL. Checked but unused for Razorpay, whose pages do not return.
                      */
                     return_url?: string;
                 };
             };
         };
         responses: {
-            /** @description Stripe Billing Portal page */
+            /** @description Stripe Billing Portal page, or Nozle's Razorpay auto-pay setup page */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -21134,11 +22904,14 @@ export interface operations {
                 content: {
                     "application/json": {
                         manage_payment_method: {
-                            /** @description Stripe Billing Portal URL. */
+                            /** @description Stripe Billing Portal URL, or Nozle's auto-pay setup page URL for a Razorpay customer. */
                             url: string;
                             /** @enum {string} */
-                            provider: "stripe";
-                            /** Format: date-time */
+                            provider: "stripe" | "razorpay";
+                            /**
+                             * Format: date-time
+                             * @description When the page stops working. null for Stripe Billing Portal sessions; 24 hours after the call for the Razorpay setup page.
+                             */
                             expires_at?: string | null;
                         };
                     };
@@ -21160,7 +22933,7 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
-            /** @description One of no_linked_payment_provider, razorpay_pays_by_link (Razorpay customers pay each invoice by payment link), provider_not_supported, missing_payment_provider_customer. */
+            /** @description One of no_linked_payment_provider, razorpay_pays_by_link (Razorpay connection without auto-pay, error_details.auto_pay is auto_pay_not_enabled; the customer pays each invoice by payment link), payment_method_not_enabled, customer_details_required, provider_not_supported, missing_payment_provider_customer. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21234,6 +23007,22 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description Engine 2.22.0. `customer_payment_overdue`: the event's customer (by `external_customer_id`, or the customer of `external_subscription_id`) is blocked by its [dunning policy](/guides/billing/dunning). The event is not stored and is not queued. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": 402,
+                     *       "error": "This customer's invoices are unpaid past their grace period. Usage resumes once they are paid.",
+                     *       "code": "customer_payment_overdue"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ApiErrorUnprocessableEntity"];
+                };
+            };
             403: components["responses"]["Forbidden"];
             /** @description Standard (PostgreSQL) event store only. The `transaction_id` is already used in the organization by an event with a different payload (feature code, subscription, `properties`, `precise_total_amount_cents`, or `timestamp` when sent). Nothing is stored; the first event keeps the ID. The same payload returns `200` with the stored event. Organizations on the high-volume (ClickHouse) event store get `200` for any repeat: billing removes repeats when usage is read. */
             409: {
@@ -21281,44 +23070,41 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Events received. Events of a customer whose unpaid invoices are past the plan's grace are refused and listed by their position in `error_details`, for example `{"2": {"external_customer_id": ["customer_payment_overdue"]}}`; the other events are stored and returned in `events`. */
+            /** @description Events received. From Engine 2.22.0, events of a customer blocked by its [dunning policy](/guides/billing/dunning) are refused one by one and listed in `error_details` by their position; the other events are stored and returned in `events`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EventsCreated"] & {
-                        error_details?: {
-                            [index: string]: {
-                                [field: string]: string[];
-                            };
-                        };
-                    };
+                    "application/json": components["schemas"]["EventsCreated"];
                 };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            /** @description Every event belongs to a customer whose unpaid invoices are past the plan's grace; nothing was stored. `code` is `customer_payment_overdue` and `error_details` lists every event by position. */
+            /** @description Engine 2.22.0. Every event of the batch belongs to a customer blocked by its [dunning policy](/guides/billing/dunning). Nothing is stored. `error_details` lists each refused event by its position in the request. When only some events are refused, the others are stored and the answer is `200` with the refused ones in `error_details`. */
             402: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @example 402 */
-                        status: number;
-                        error: string;
-                        /** @example customer_payment_overdue */
-                        code: string;
-                        error_details: {
-                            [index: string]: {
-                                [field: string]: string[];
-                            };
-                        };
-                    };
+                    /**
+                     * @example {
+                     *       "status": 402,
+                     *       "error": "This customer's invoices are unpaid past their grace period. Usage resumes once they are paid.",
+                     *       "code": "customer_payment_overdue",
+                     *       "error_details": {
+                     *         "0": {
+                     *           "external_customer_id": [
+                     *             "customer_payment_overdue"
+                     *           ]
+                     *         }
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ApiErrorUnprocessableEntity"];
                 };
             };
+            403: components["responses"]["Forbidden"];
             /** @description The batch was not stored. `code` is `validation_errors` and `error_details` is keyed by the position of each failing event, with the same field errors as a single event, for example `{"0": {"external_customer_id": ["active_subscription_not_found"]}}`. An empty batch returns `events: [no_events]`, more than 100 events `events: [too_many_events]`. On the standard (PostgreSQL) event store, the same `transaction_id` twice in the batch, or one already used by an event with a different payload, fails that event with `transaction_id: [value_already_exist]`; the high-volume (ClickHouse) event store accepts repeats. */
             422: {
                 headers: {
@@ -21590,80 +23376,6 @@ export interface operations {
                 };
                 content?: never;
             };
-        };
-    };
-    replayCostIntelligenceSource: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CostIntelligenceSourceReplayInput"];
-            };
-        };
-        responses: {
-            /** @description Source replay result */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CostIntelligenceReplayResult"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            /** @description Not the internal service token. Organization secret and publishable keys are refused with `{"error": "internal service authentication required"}`. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description The source is not eligible for replay */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    replayCostIntelligenceProjection: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CostIntelligenceProjectionReplayInput"];
-            };
-        };
-        responses: {
-            /** @description Projection queued */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CostIntelligenceReplayResult"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            /** @description Not the internal service token. Organization secret and publishable keys are refused with `{"error": "internal service authentication required"}`. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["NotFound"];
         };
     };
     findEvent: {
@@ -22109,7 +23821,19 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        /** @description Optional. Where to send the customer after paying. */
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uri
+                     * @description Core 11.16.0. Where the payment provider sends the customer after paying a new pay link (Stripe success and cancel URL, Razorpay payment link callback). Validated like every checkout return URL: an HTTPS URL on Nozle's origins or your organization's `checkout_return_origins`, else `422` with `return_url: [invalid_or_untrusted]`. Without it, the customer stays on the provider's page.
+                     * @example https://app.example.com/billing/paid
+                     */
+                    return_url?: string;
+                };
+            };
+        };
         responses: {
             /** @description Payment URL has been generated */
             200: {
@@ -22471,6 +24195,10 @@ export interface operations {
                 page?: components["parameters"]["page"];
                 /** @description Number of records per page. */
                 per_page?: components["parameters"]["per_page"];
+                /** @description Core 11.10.0 (on the Engine host, Engine 2.21.0). ISO 4217 code. Lists only plans in this currency, with or without a plan family. An unknown currency returns `422` with `currency: [value_is_invalid]`. On the Engine, a repeated value, one longer than 255 bytes or one with a control character returns `400 invalid_request`. */
+                currency?: components["parameters"]["plans_currency"];
+                /** @description Core 11.10.0 (on the Engine host, Engine 2.21.0). Secret keys only. Without `currency`, lists plans in this customer's locked currency. Ignored for an unknown customer, a customer without a currency yet, and an organization that allows several currencies per customer. A publishable key never reads a customer (the Engine drops the parameter). A customer-scoped Engine request lists for its own customer and returns `403 customer_scope_mismatch` when this names another one. */
+                external_customer_id?: components["parameters"]["plans_external_customer_id"];
                 /** @description Secret keys only. Send `false` to get the pricing table view that a publishable key always gets, without the plans of plan families hidden from the pricing table and without hidden features in `families[].features`. Any other value, or no value, returns everything. A publishable key ignores it. */
                 include_hidden?: boolean;
             };
@@ -24378,7 +26106,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Send the `nozle_eu_<rest>` code for the EU taxes Nozle creates; an old EU code no longer resolves. */
                 code: string;
             };
             cookie?: never;
@@ -24403,7 +26131,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Send the `nozle_eu_<rest>` code for the EU taxes Nozle creates; an old EU code no longer resolves. */
                 code: string;
             };
             cookie?: never;
@@ -24435,7 +26163,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. */
+                /** @description The code of the tax. It serves as a unique identifier associated with a particular tax. The code is typically used for internal or system-level identification purposes. Send the `nozle_eu_<rest>` code for the EU taxes Nozle creates; an old EU code no longer resolves. */
                 code: string;
             };
             cookie?: never;
@@ -24898,46 +26626,164 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    fetchPublicKey: {
+    rotateWebhookEndpointSecret: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description Unique identifier of the webhook endpoint. */
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Public key */
+            /** @description The endpoint with its new secret */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/plain": string;
+                    "application/json": components["schemas"]["WebhookEndpoint"];
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
-    fetchJsonPublicKey: {
+    recoverWebhookEndpoint: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                /** @description Unique identifier of the webhook endpoint. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: date-time
+                     * @description Resend failed webhooks created at or after this time. At most 14 days back.
+                     * @example 2026-10-28T00:00:00Z
+                     */
+                    since: string;
+                };
+            };
+        };
+        responses: {
+            /** @description How many webhooks were queued again */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookRecoverResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description A bad `since` (`validation_errors` with `error_details.since`), or a disabled endpoint (`webhook_endpoint_disabled`, without `error_details`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorUnprocessableEntity"] | components["schemas"]["ApiErrorNotAllowed"];
+                };
+            };
+        };
+    };
+    testWebhookEndpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Unique identifier of the webhook endpoint. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The test webhook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["NotAllowed"];
+        };
+    };
+    findAllWebhooks: {
+        parameters: {
+            query?: {
+                /** @description Page number. */
+                page?: components["parameters"]["page"];
+                /** @description Number of records per page. */
+                per_page?: components["parameters"]["per_page"];
+                /** @description Only webhooks of this endpoint. */
+                webhook_endpoint_id?: string;
+                /** @description Only webhooks with one of these statuses. Repeat the parameter for several, for example `status[]=failed&status[]=retrying`. */
+                "status[]"?: ("pending" | "succeeded" | "failed" | "retrying")[];
+                /** @description Only webhooks of one of these event types. Repeat the parameter for several, for example `event_type[]=invoice.created`. */
+                "event_type[]"?: string[];
+                /** @description Only webhooks updated on or after this time (ISO 8601). */
+                from_date?: string;
+                /** @description Only webhooks updated on or before this time (ISO 8601). */
+                to_date?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Public key */
+            /** @description Webhooks */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WebhookPublicKey"];
+                    "application/json": components["schemas"]["WebhooksPaginated"];
                 };
             };
             401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    retryWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Unique identifier of the webhook (its `webhook-id`). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The webhook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["NotAllowed"];
         };
     };
     findAllWebhookEndpoints: {
@@ -25291,7 +27137,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
-            /** @description Core: `subscription_selection_required` (several active subscriptions and no `subscription_id`), `plan_change_quote_changed` or `subscription_change_pending`. Body is `{"code": "..."}`. */
+            /** @description Core: `subscription_selection_required` (several active subscriptions and no `subscription_id`), `plan_change_quote_changed` or `subscription_change_pending`. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25299,6 +27145,8 @@ export interface operations {
                 content: {
                     /**
                      * @example {
+                     *       "status": 409,
+                     *       "error": "Conflict",
                      *       "code": "subscription_selection_required"
                      *     }
                      */
@@ -25438,7 +27286,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCheckoutResult"];
                 };
             };
-            /** @description Engine rejected the request: invalid body; `subscription_id` with `invoice_id` or `external_entity_id` (`code: invalid_request`); neither `invoice_id` nor `plan_code` with a customer (`code: invalid_request`); `return_url` not an allowlisted HTTPS origin (`code: invalid_return_url`); or an Idempotency-Key longer than 255 bytes. */
+            /** @description Engine rejected the request with `code: invalid_request`: invalid JSON body, `subscription_id` with `invoice_id` or `external_entity_id`, neither `invoice_id` nor `plan_code` with a customer, or an Idempotency-Key longer than 255 bytes. Or Core refused the `return_url` (`code: invalid_return_url`: not an HTTPS URL on an origin allowed for the organization). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25446,7 +27294,7 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "error": "return_url origin is not allowed",
+                     *       "error": "return_url must be an HTTPS URL on an origin allowed for this organization",
                      *       "code": "invalid_return_url"
                      *     }
                      */
@@ -25454,7 +27302,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["EngineUnauthorized"];
-            /** @description Engine refused the credential (publishable key, missing API permission, or no Core credential for this organization), or Core refused it (`secret_key_required`, `write_action_not_allowed_for_<resource>`). */
+            /** @description Engine refused the credential (publishable key, missing API permission, or no Core credential for this organization), or Core refused it (`secret_key_required`, `write_action_not_allowed_for_<resource>`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the request's customer, Engine answers `{"error": "customer scope mismatch", "code": "customer_scope_mismatch"}`. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -25481,7 +27329,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCoreError"];
                 };
             };
-            /** @description Core: `checkout_not_required`, `payment_provider_required`, `stripe_customer_required`, `plan_already_active` (also right after a late upgrade payment for this plan was applied), `subscription_and_idempotency_key_required`, `third_party_error`, `provider_error`, or `validation_errors` with `error_details` (for example `return_url: [invalid_or_untrusted]`, or `base: [invalid_invoice_status_or_payment_status]` for an invoice checkout of an invoice that is paid, voided, draft, closed, failed or has nothing due, or `base: [payment_already_processing]` while a Stripe payment of the invoice's last Checkout Session is processing or has succeeded). Refused in the current state: Core refused the plan change. `code` names the reason (for example `plan_transition_policy_required`, `plan_already_active`, `target_plan_is_not_a_downgrade`, `subscription_not_active`, `externally_billed_subscription`). */
+            /** @description Core: `checkout_not_required`, `payment_provider_required`, `stripe_customer_required`, `plan_already_active` (also right after a late upgrade payment for this plan was applied), `subscription_and_idempotency_key_required`, `third_party_error`, `provider_error`, or `validation_errors` with `error_details` (for example `return_url: [invalid_or_untrusted]`, or `base: [invalid_invoice_status_or_payment_status]` for an invoice checkout of an invoice that is paid, voided, draft, closed, failed or has nothing due, or `base: [payment_already_processing]` while a Stripe payment of the invoice's last Checkout Session is processing or has succeeded, or from Core 11.16.0 while an automatic debit of the invoice is waiting for the bank, or `base: [invoice_carried_forward]` from Core 11.16.0 when the invoice's amount due is below the provider's minimum charge and was carried to the next invoice). Refused in the current state: Core refused the plan change. `code` names the reason (for example `plan_transition_policy_required`, `plan_already_active`, `target_plan_is_not_a_downgrade`, `subscription_not_active`, `externally_billed_subscription`). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25549,7 +27397,7 @@ export interface operations {
             };
             400: components["responses"]["EngineBadRequest"];
             401: components["responses"]["EngineUnauthorized"];
-            /** @description Engine refused the credential (publishable key, missing API permission, or no Core credential for this organization), or Core refused it (`secret_key_required`, `write_action_not_allowed_for_<resource>`). */
+            /** @description Engine refused the credential (publishable key, missing API permission, or no Core credential for this organization), or Core refused it (`secret_key_required`, `write_action_not_allowed_for_<resource>`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the request's customer, Engine answers `{"error": "customer scope mismatch", "code": "customer_scope_mismatch"}`. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -25640,7 +27488,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingCheckoutStatus"];
                 };
             };
-            /** @description Invalid checkout ID, missing Razorpay fields, unpaired scope parameters, or an Idempotency-Key longer than 255 bytes. */
+            /** @description Invalid checkout ID, missing Razorpay fields, unpaired scope parameters, or an Idempotency-Key longer than 255 bytes. `code` is `invalid_request`. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25648,14 +27496,15 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "error": "Razorpay order, payment and signature are required"
+                     *       "error": "Razorpay order, payment and signature are required",
+                     *       "code": "invalid_request"
                      *     }
                      */
                     "application/json": components["schemas"]["EngineError"];
                 };
             };
             401: components["responses"]["EngineUnauthorized"];
-            /** @description Engine refused the credential (publishable key, missing API permission, or no Core credential for this organization), or Core refused it (`secret_key_required`, `write_action_not_allowed_for_<resource>`). */
+            /** @description Engine refused the credential (publishable key, missing API permission, or no Core credential for this organization), or Core refused it (`secret_key_required`, `write_action_not_allowed_for_<resource>`). With trusted internal authentication and an `X-Nozle-Customer-Id` header that differs from the request's customer, Engine answers `{"error": "customer scope mismatch", "code": "customer_scope_mismatch"}`. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -25716,7 +27565,10 @@ export interface operations {
     engineUpgradeSubscription: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Used for downgrades. A retry with the same key returns Core's stored answer with `replayed: true`. Without a key Engine generates one per request, so retries are not deduplicated; send one. */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -25725,20 +27577,20 @@ export interface operations {
                 /**
                  * @example {
                  *       "customer_id": "customer_123",
-                 *       "plan_code": "growth"
+                 *       "plan_code": "starter_monthly"
                  *     }
                  */
                 "application/json": components["schemas"]["BillingUpgradeRequest"];
             };
         };
         responses: {
-            /** @description The updated subscription (Core's response). */
+            /** @description A downgrade returns the recorded transition, `{"subscription_transition": {...}}`. A free to free change returns Core's `{"subscription": {...}}`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Subscription"];
+                    "application/json": components["schemas"]["BillingTransitionResultResponse"] | components["schemas"]["Subscription"];
                 };
             };
             400: components["responses"]["EngineBadRequest"];
@@ -25752,7 +27604,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
-            /** @description Engine: `plan not found`, `active subscription not found` or `active subscription plan not found`. Core errors are forwarded. */
+            /** @description Engine: `plan not found` or `active subscription not found`. Core errors are forwarded. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -25761,7 +27613,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
-            /** @description Engine: `subscription_required`. The customer has several current subscriptions and not exactly one of them is the customer's own. Nothing changes. */
+            /** @description Engine: `subscription_required`. The customer has several current subscriptions, none was selected, and not exactly one of them is the customer's own. Nothing changes. Core: `subscription_change_pending` (an end-of-period downgrade while a cancellation is scheduled). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25769,14 +27621,14 @@ export interface operations {
                 content: {
                     /**
                      * @example {
-                     *       "error": "subscription_required",
+                     *       "error": "the customer has several current subscriptions",
                      *       "code": "subscription_required"
                      *     }
                      */
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
-            /** @description Engine: the change needs payment. Core validation errors are also forwarded. */
+            /** @description Engine: `payment_checkout_required`, the change needs payment; use `POST /checkout`. Core, for a downgrade: `plan_transition_policy_required` (the pair has no transition policy), `target_plan_is_not_a_downgrade`, `payment_required` (an immediate downgrade leaves an amount due), `outstanding_invoice`, `plan_already_active` (already on the target plan, with a new Idempotency-Key) and validation errors. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25811,7 +27663,10 @@ export interface operations {
     engineChangeSubscription: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Used for downgrades. A retry with the same key returns Core's stored answer with `replayed: true`. Without a key Engine generates one per request, so retries are not deduplicated; send one. */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -25820,20 +27675,20 @@ export interface operations {
                 /**
                  * @example {
                  *       "customer_id": "customer_123",
-                 *       "plan_code": "growth"
+                 *       "plan_code": "starter_monthly"
                  *     }
                  */
                 "application/json": components["schemas"]["BillingUpgradeRequest"];
             };
         };
         responses: {
-            /** @description The updated subscription (Core's response). */
+            /** @description A downgrade returns the recorded transition, `{"subscription_transition": {...}}`. A free to free change returns Core's `{"subscription": {...}}`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Subscription"];
+                    "application/json": components["schemas"]["BillingTransitionResultResponse"] | components["schemas"]["Subscription"];
                 };
             };
             400: components["responses"]["EngineBadRequest"];
@@ -25847,7 +27702,7 @@ export interface operations {
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
-            /** @description Engine: `plan not found`, `active subscription not found` or `active subscription plan not found`. Core errors are forwarded. */
+            /** @description Engine: `plan not found` or `active subscription not found`. Core errors are forwarded. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -25856,7 +27711,22 @@ export interface operations {
                     "application/json": components["schemas"]["BillingEngineOrCoreError"];
                 };
             };
-            /** @description Engine: the change needs payment. Core validation errors are also forwarded. */
+            /** @description Engine: `subscription_required`. The customer has several current subscriptions, none was selected, and not exactly one of them is the customer's own. Nothing changes. Core: `subscription_change_pending` (an end-of-period downgrade while a cancellation is scheduled). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": "the customer has several current subscriptions",
+                     *       "code": "subscription_required"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BillingEngineOrCoreError"];
+                };
+            };
+            /** @description Engine: `payment_checkout_required`, the change needs payment; use `POST /checkout`. Core, for a downgrade: `plan_transition_policy_required` (the pair has no transition policy), `target_plan_is_not_a_downgrade`, `payment_required` (an immediate downgrade leaves an amount due), `outstanding_invoice`, `plan_already_active` (already on the target plan, with a new Idempotency-Key) and validation errors. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26286,7 +28156,8 @@ export interface operations {
             content: {
                 /**
                  * @example {
-                 *       "from_version": 1
+                 *       "from_version": 1,
+                 *       "allow_price_increase": true
                  *     }
                  */
                 "application/json": components["schemas"]["PlanVersionMigrationInput"];
@@ -26321,7 +28192,24 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorUnprocessableEntity"];
                 };
             };
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description A validation error, or `price_increase_not_allowed` when a subscription would pay more (or pass its auto-pay limit) and `allow_price_increase` is not `true`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": 422,
+                     *       "error": "Unprocessable Entity",
+                     *       "code": "price_increase_not_allowed",
+                     *       "price_increase_count": 3,
+                     *       "mandate_cap_exceeded_count": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ApiErrorUnprocessableEntity"];
+                };
+            };
         };
     };
     previewPlanVersionMigration: {
@@ -26360,7 +28248,10 @@ export interface operations {
                      *             "skip_reason": null,
                      *             "effective_on": "2026-11-01",
                      *             "current_amount_cents": 4900,
-                     *             "new_amount_cents": 5900
+                     *             "new_amount_cents": 5900,
+                     *             "price_change": "increase",
+                     *             "price_increase": true,
+                     *             "mandate_cap_exceeded": false
                      *           },
                      *           {
                      *             "external_subscription_id": "sub_2",
@@ -26369,7 +28260,10 @@ export interface operations {
                      *             "skip_reason": "custom_pricing",
                      *             "effective_on": null,
                      *             "current_amount_cents": 3900,
-                     *             "new_amount_cents": 5900
+                     *             "new_amount_cents": 5900,
+                     *             "price_change": null,
+                     *             "price_increase": false,
+                     *             "mandate_cap_exceeded": false
                      *           }
                      *         ]
                      *       }
@@ -27207,6 +29101,7 @@ export interface operations {
                      *         "status": "open",
                      *         "url": "https://checkout.stripe.com/c/pay/cs_...",
                      *         "payment_url": "https://checkout.stripe.com/c/pay/cs_...",
+                     *         "checkout_id": "cs_...",
                      *         "invoice_id": "invoice_uuid",
                      *         "amount_cents": 4498,
                      *         "currency": "USD",
@@ -27238,7 +29133,23 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorNotFound"];
                 };
             };
-            /** @description `validation_errors`. `error_details` keys: `items` (`paid_plan_required`, `mixed_currencies`, `mixed_intervals`, `duplicate_external_entity_id`, `entity_subscription_already_exists`, `value_is_mandatory`, `value_is_too_large`, `value_is_invalid`), `currency` (`customer_currency_mismatch`), `checkout` (`billing_anchor_checkout_in_progress`, `checkout_not_available`, `payment_provider_changed`), `billing_time` (`value_is_invalid`), `idempotency_key` (`value_is_mandatory`, `value_is_too_long`, `idempotency_key_reused`), `return_url` (`invalid_or_untrusted`). Refused in the current state: `payment_provider_required` or `stripe_customer_required`. */
+            /** @description `billing_anchor_checkout_in_progress`: a first paid Entity checkout for this customer is still open and no billing anchor is set yet. Before Core 11.6.0 this was a `422 validation_errors` with `error_details.checkout`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "status": 409,
+                     *       "error": "Conflict",
+                     *       "code": "billing_anchor_checkout_in_progress"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BillingCoreError"];
+                };
+            };
+            /** @description `validation_errors`. `error_details` keys: `items` (`paid_plan_required`, `mixed_currencies`, `mixed_intervals`, `duplicate_external_entity_id`, `entity_subscription_already_exists`, `value_is_mandatory`, `value_is_too_large`, `value_is_invalid`), `currency` (`customer_currency_mismatch`), `checkout` (`checkout_not_available`, `payment_provider_changed`), `billing_time` (`value_is_invalid`), `idempotency_key` (`value_is_mandatory`, `value_is_too_long`, `idempotency_key_reused`), `return_url` (`invalid_or_untrusted`). Refused in the current state: `payment_provider_required` or `stripe_customer_required`. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -27400,8 +29311,14 @@ export interface operations {
                  * @description Backward-compatible fallback used as the customer ID only when `customer_id` is absent (legacy dashboard behaviour). Do not use in new integrations.
                  */
                 organization_id?: string;
-                /** @description `immediate` terminates now; `end_of_period` schedules the ending at the next renewal boundary. Any other value returns `400`. */
+                /** @description `immediate` terminates now; `end_of_period` schedules the ending at the next renewal boundary. Left out, the organization's cancellation timing applies (Nozle's default is `end_of_period`); a subscription that has not started is always canceled immediately. Any other value returns `400`. */
                 cancellation_policy?: "immediate" | "end_of_period";
+                /** @description Unused paid time of a pay-in-advance plan: `credit`, `refund`, `offset` (needs a final invoice) or `none`. Ignored for pay-in-arrears plans. Left out, the subscription's, then the organization's setting applies. Any other value returns `400`. */
+                credit_action?: "credit" | "refund" | "offset" | "none";
+                /** @description `prorated` refunds the unused part, `full` the whole amount. `full` on a pay-in-advance plan needs `credit_action: refund` (sent or inherited), else Core answers `422`. Left out, the organization's setting applies. Any other value returns `400`. */
+                refund_mode?: "prorated" | "full";
+                /** @description `generate` issues a final invoice; `skip` does not. Left out, the subscription's, then the organization's setting applies. Any other value returns `400`. */
+                final_invoice_action?: "generate" | "skip";
             };
             header?: never;
             path: {
@@ -28081,7 +29998,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Filter by status. Any other value returns `400 invalid_request`. */
-                status?: "active" | "suspended" | "deleted";
+                status?: "active" | "suspended";
                 /** @description Page size from 1 to 200. Omitted, empty or `0` uses 50. A non-integer or out-of-range value returns `400 invalid_request`. */
                 limit?: number;
                 /** @description Opaque cursor from `next_cursor`, at most 512 bytes. An invalid cursor returns `400 invalid_request`. */
@@ -28333,91 +30250,6 @@ export interface operations {
             503: {
                 headers: {
                     /** @description Seconds to wait before retrying. Sent with every coded 503 listed here; values are `1` for `entity_service_temporarily_unavailable`, `1` for `entity_grant_scheduling_unavailable`. */
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EngineError"];
-                };
-            };
-        };
-    };
-    engineDeleteCustomerEntity: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Idempotency key, at most 255 bytes. Required. Leading and trailing whitespace is trimmed before the length check and before use. A missing, blank or longer value returns `400 invalid_request` (`Idempotency-Key is required and must not exceed 255 bytes`). Retry an uncertain request with the same key and an identical body; the same key with a different request returns `409 idempotency_key_reused`. */
-                "Idempotency-Key": string;
-            };
-            path: {
-                /**
-                 * @description External customer ID. It is URL-unescaped and trimmed; an empty value returns `400 invalid_request`.
-                 * @example customer_123
-                 */
-                customer_id: string;
-                /**
-                 * @description External Entity ID within the customer. It is URL-unescaped and trimmed; an empty value returns `400 invalid_request`.
-                 * @example user_42
-                 */
-                entity_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The deletion result. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "action": "deleted",
-                     *       "entity": {
-                     *         "id": "0e7c5a7e-3b8f-4c6a-9f1d-2a4b6c8d0e1f",
-                     *         "customer_id": "workspace_123",
-                     *         "external_id": "user_42",
-                     *         "name": "Asha",
-                     *         "status": "deleted",
-                     *         "metadata": {
-                     *           "role": "agent"
-                     *         },
-                     *         "created_at": "2026-07-22T10:00:00Z",
-                     *         "updated_at": "2026-07-23T10:00:00Z",
-                     *         "deleted_at": "2026-07-23T10:00:00Z"
-                     *       },
-                     *       "replayed": false
-                     *     }
-                     */
-                    "application/json": components["schemas"]["CreditsEntityMutationResult"];
-                };
-            };
-            /** @description `code: invalid_request`: invalid path value, query value or body, or a missing or invalid `Idempotency-Key`. */
-            400: components["responses"]["EngineBadRequest"];
-            /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
-            401: components["responses"]["EngineUnauthorized"];
-            /** @description The credential is not allowed. A publishable key is rejected; a secret key needs `entity:write`. The body has `error` only (no `code`). */
-            403: components["responses"]["EngineForbidden"];
-            /** @description Not found. `code` is one of `customer_not_found`, `entity_not_found`. */
-            404: components["responses"]["EngineNotFound"];
-            /** @description `code: idempotency_key_reused`: the key was used with a different request. */
-            409: components["responses"]["EngineConflict"];
-            /** @description `code: entity_status_transition_invalid`: the status change is not allowed. */
-            422: components["responses"]["EngineUnprocessable"];
-            /** @description Unexpected server error. The body has `code: internal_error`. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EngineError"];
-                };
-            };
-            /** @description Service unavailable. Retry with the same `Idempotency-Key` and body. API key verification failures return `{"error": "API key verification is unavailable"}` with no `code` and no `Retry-After`. */
-            503: {
-                headers: {
-                    /** @description Seconds to wait before retrying. Sent with every coded 503 listed here; values are `1` for `entity_service_temporarily_unavailable`. */
                     "Retry-After"?: number;
                     [name: string]: unknown;
                 };
@@ -28867,6 +30699,109 @@ export interface operations {
             503: components["responses"]["EngineUnavailable"];
         };
     };
+    engineGetCreditTopUpPurchase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The purchase `nozle_id` (or `purchase_id` from the legacy `POST /credits/purchase`). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The purchase. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "credit_top_up_purchase": {
+                     *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                     *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                     *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                     *         "external_customer_id": "customer_123",
+                     *         "credit_system_id": "00000000-0000-4000-8000-000000000004",
+                     *         "credit_system_code": "ai_credits",
+                     *         "top_up_package_id": "00000000-0000-4000-8000-000000000005",
+                     *         "package_code": "starter_pack",
+                     *         "package_name": "Starter pack",
+                     *         "credit_amount": "250.0",
+                     *         "amount_cents": 1000,
+                     *         "currency": "USD",
+                     *         "expires_after_days": null,
+                     *         "invoice_id": "00000000-0000-4000-8000-000000000006",
+                     *         "invoice_number": "FYN-47DD-008-001",
+                     *         "invoice_amount_cents": 1000,
+                     *         "payment_status": "succeeded",
+                     *         "fulfillment_status": "fulfilled",
+                     *         "fulfilled_at": "2026-10-27T14:12:39Z",
+                     *         "payment_id": null,
+                     *         "payment_provider": "stripe",
+                     *         "payment_provider_type": null,
+                     *         "payment_provider_code": null,
+                     *         "provider_payment_id": null,
+                     *         "payment_url": null,
+                     *         "replayed": false,
+                     *         "created_at": "2026-10-27T14:12:01Z"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CreditsTopUpPurchaseResponse"];
+                };
+            };
+            /** @description The ID is not a UUID; body has `error` only. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineError"];
+                };
+            };
+            /** @description Engine authentication failure, or Core rejected the forwarded credential. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineError"] | components["schemas"]["ApiErrorUnauthorized"];
+                };
+            };
+            /** @description The credential is not allowed, or a Core credential could not be resolved (Engine body has `error` only), or a Core forbidden error. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineError"] | components["schemas"]["ApiErrorForbidden"];
+                };
+            };
+            /** @description No purchase with this ID in your organization (Core `ApiErrorNotFound`), or another customer's purchase for a customer-scoped caller (Engine body has `error` only). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineError"] | components["schemas"]["ApiErrorNotFound"];
+                };
+            };
+            /** @description Core could not be reached. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngineError"];
+                };
+            };
+            /** @description API key verification is unavailable. Body `{"error": "API key verification is unavailable"}` with no `code`. */
+            503: components["responses"]["EngineUnavailable"];
+        };
+    };
     engineGetLegacyWalletBalance: {
         parameters: {
             query?: never;
@@ -28997,11 +30932,12 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
+            402: components["responses"]["EngineCustomerPaymentOverdue"];
             /** @description A publishable key, `code: permission_denied` when API key permissions are enabled and the secret key lacks `credit_system:{mode}` (`read` for check, `write` for track), or `code: customer_scope_mismatch` when internal authentication is scoped to another customer. */
             403: components["responses"]["EngineForbidden"];
             /** @description `code` is `customer_not_found`, `active_subscription_not_found` (`subscription_id` is not an active subscription of the customer, or belongs to another Entity), `feature_not_found` or `entity_not_found`. */
             404: components["responses"]["EngineNotFound"];
-            /** @description `code` is `active_subscription_ambiguous` (several active subscriptions could pay and neither `subscription_id` nor `entity_id` picks one; the message names both), `feature_not_consumable` (a boolean or config Feature, which has no usage to consume), `entity_inactive`, `credit_pool_policy_not_configured` (Entity usage with no explicit pool policy), or `credit_usage_configuration_invalid` (unsupported aggregation or expression, missing or invalid metric value, amount precision, no effective credit rate at that time, or ambiguous Credit System); `error` then holds the detail. */
+            /** @description `code` is `active_subscription_ambiguous` (several active subscriptions could pay and neither `subscription_id` nor `entity_id` picks one; the message names both), `feature_not_consumable` (a boolean or config Feature, which has no usage to consume), `feature_billed_in_money` (HTTP 409: the plan bills the Feature with a priced charge as well as credits, so the usage would be billed twice; set the charge to $0 or remove the credits), `entity_inactive`, `credit_pool_policy_not_configured` (Entity usage with no explicit pool policy), or `credit_usage_configuration_invalid` (unsupported aggregation or expression, missing or invalid metric value, amount precision, no effective credit rate at that time, or ambiguous Credit System); `error` then holds the detail. */
             422: components["responses"]["EngineUnprocessable"];
             /** @description Unexpected server error. The body has `code: internal_error`. */
             500: {
@@ -29064,13 +31000,14 @@ export interface operations {
             400: components["responses"]["EngineBadRequest"];
             /** @description Missing `Authorization` header, a header that is not `Bearer <key>`, an unknown key, or no organization context. Body has `error` only. */
             401: components["responses"]["EngineUnauthorized"];
+            402: components["responses"]["EngineCustomerPaymentOverdue"];
             /** @description A publishable key, `code: permission_denied` when API key permissions are enabled and the secret key lacks `credit_system:{mode}` (`read` for check, `write` for track), or `code: customer_scope_mismatch` when internal authentication is scoped to another customer. */
             403: components["responses"]["EngineForbidden"];
             /** @description `code` is `customer_not_found`, `active_subscription_not_found` (`subscription_id` is not an active subscription of the customer, or belongs to another Entity), `feature_not_found` or `entity_not_found`. */
             404: components["responses"]["EngineNotFound"];
             /** @description `code: idempotency_key_reused`: the key was used with a different body. */
             409: components["responses"]["EngineConflict"];
-            /** @description `code` is `active_subscription_ambiguous` (several active subscriptions could pay and neither `subscription_id` nor `entity_id` picks one; the message names both), `feature_not_consumable` (a boolean or config Feature, which has no usage to consume), `entity_inactive`, `credit_pool_policy_not_configured` (Entity usage with no explicit pool policy), or `credit_usage_configuration_invalid` (unsupported aggregation or expression, missing or invalid metric value, amount precision, no effective credit rate at that time, or ambiguous Credit System); `error` then holds the detail. */
+            /** @description `code` is `active_subscription_ambiguous` (several active subscriptions could pay and neither `subscription_id` nor `entity_id` picks one; the message names both), `feature_not_consumable` (a boolean or config Feature, which has no usage to consume), `feature_billed_in_money` (HTTP 409: the plan bills the Feature with a priced charge as well as credits, so the usage would be billed twice; set the charge to $0 or remove the credits), `entity_inactive`, `credit_pool_policy_not_configured` (Entity usage with no explicit pool policy), or `credit_usage_configuration_invalid` (unsupported aggregation or expression, missing or invalid metric value, amount precision, no effective credit rate at that time, or ambiguous Credit System); `error` then holds the detail. */
             422: components["responses"]["EngineUnprocessable"];
             /** @description Unexpected server error. The body has `code: internal_error`. */
             500: {
@@ -29668,16 +31605,32 @@ export interface operations {
             };
             400: components["responses"]["EngineBadRequest"];
             401: components["responses"]["EngineUnauthorized"];
-            403: components["responses"]["EngineForbidden"];
-            /** @description The customer's unpaid invoices are past the plan's grace: `allowed: false`, `reason` and `code` `customer_payment_overdue`. */
+            /** @description Engine 2.22.0. `customer_payment_overdue`: the customer's unpaid invoices are past the grace of their plan and their [dunning policy](/guides/billing/dunning) blocks them. The body carries the denial (`allowed`, `reason`) and the error (`code`, `error`). Checked once the customer's subscription is found. The Node SDK 0.23.0 returns it from `can()` as a denial. A suspended workspace gets `workspace_suspended` (`code` and `error` only), which the SDKs throw. */
             402: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlatformCanResponse"] & components["schemas"]["EngineError"];
+                    /**
+                     * @example {
+                     *       "allowed": false,
+                     *       "reason": "customer_payment_overdue",
+                     *       "code": "customer_payment_overdue",
+                     *       "error": "This customer's invoices are unpaid past their grace period. Usage resumes once they are paid."
+                     *     }
+                     */
+                    "application/json": {
+                        /** @enum {boolean} */
+                        allowed: false;
+                        /** @enum {string} */
+                        reason: "customer_payment_overdue";
+                        /** @enum {string} */
+                        code: "customer_payment_overdue";
+                        error: string;
+                    };
                 };
             };
+            403: components["responses"]["EngineForbidden"];
             /** @description A dependency is unavailable. With `code: usage_unavailable` the usage counter could not be read; retry after the `Retry-After` seconds and quote `request_id` to support. Subscription access and API key verification failures return an `error` without a `code`. */
             503: {
                 headers: {
@@ -29722,6 +31675,10 @@ export interface operations {
                 page?: components["parameters"]["page"];
                 /** @description Number of records per page. */
                 per_page?: components["parameters"]["per_page"];
+                /** @description Core 11.10.0 (on the Engine host, Engine 2.21.0). ISO 4217 code. Lists only plans in this currency, with or without a plan family. An unknown currency returns `422` with `currency: [value_is_invalid]`. On the Engine, a repeated value, one longer than 255 bytes or one with a control character returns `400 invalid_request`. */
+                currency?: components["parameters"]["plans_currency"];
+                /** @description Core 11.10.0 (on the Engine host, Engine 2.21.0). Secret keys only. Without `currency`, lists plans in this customer's locked currency. Ignored for an unknown customer, a customer without a currency yet, and an organization that allows several currencies per customer. A publishable key never reads a customer (the Engine drops the parameter). A customer-scoped Engine request lists for its own customer and returns `403 customer_scope_mismatch` when this names another one. */
+                external_customer_id?: components["parameters"]["plans_external_customer_id"];
             };
             header?: never;
             path?: never;
@@ -29793,24 +31750,11 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            400: components["responses"]["EngineBadRequest"];
-            401: components["responses"]["EngineUnauthorized"];
-            403: components["responses"]["EngineForbidden"];
-            /** @description No subscription to bill. `active_subscription_not_found` when the customer is unknown, has no active subscription, or `X-Nozle-Subscription` names no active subscription of the customer; `active_subscription_ambiguous` when the customer has several active subscriptions and no `X-Nozle-Subscription`. The provider is not called. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "code": "active_subscription_ambiguous",
-                     *       "error": "customer has multiple active subscriptions; set X-Nozle-Subscription"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["EngineError"];
-                };
-            };
+            400: components["responses"]["OpenAIProxyBadRequest"];
+            401: components["responses"]["OpenAIProxyUnauthorized"];
+            402: components["responses"]["OpenAIProxyPaymentRequired"];
+            403: components["responses"]["OpenAIProxyForbidden"];
+            422: components["responses"]["OpenAIProxyNoSubscription"];
             /** @description Engine could not reach the provider or read its response. The body is empty. */
             502: {
                 headers: {
@@ -29818,7 +31762,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            503: components["responses"]["EngineUnavailable"];
+            503: components["responses"]["OpenAIProxyUnavailable"];
             /** @description The provider's response, passed through unchanged with the provider's status code, headers and body (JSON, or `text/event-stream` when streaming). Provider errors keep the provider's own error shape. */
             default: {
                 headers: {
@@ -29881,24 +31825,11 @@ export interface operations {
             };
         };
         responses: {
-            400: components["responses"]["EngineBadRequest"];
-            401: components["responses"]["EngineUnauthorized"];
-            403: components["responses"]["EngineForbidden"];
-            /** @description No subscription to bill. `active_subscription_not_found` when the customer is unknown, has no active subscription, or `X-Nozle-Subscription` names no active subscription of the customer; `active_subscription_ambiguous` when the customer has several active subscriptions and no `X-Nozle-Subscription`. The provider is not called. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "code": "active_subscription_ambiguous",
-                     *       "error": "customer has multiple active subscriptions; set X-Nozle-Subscription"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["EngineError"];
-                };
-            };
+            400: components["responses"]["OpenAIProxyBadRequest"];
+            401: components["responses"]["OpenAIProxyUnauthorized"];
+            402: components["responses"]["OpenAIProxyPaymentRequired"];
+            403: components["responses"]["OpenAIProxyForbidden"];
+            422: components["responses"]["OpenAIProxyNoSubscription"];
             /** @description Engine could not reach the provider or read its response. The body is empty. */
             502: {
                 headers: {
@@ -29906,7 +31837,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            503: components["responses"]["EngineUnavailable"];
+            503: components["responses"]["OpenAIProxyUnavailable"];
             /** @description The provider's response, passed through unchanged with the provider's status code, headers and body (JSON, or `text/event-stream` when streaming). Provider errors keep the provider's own error shape. */
             default: {
                 headers: {
@@ -29958,24 +31889,11 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            400: components["responses"]["EngineBadRequest"];
-            401: components["responses"]["EngineUnauthorized"];
-            403: components["responses"]["EngineForbidden"];
-            /** @description No subscription to bill. `active_subscription_not_found` when the customer is unknown, has no active subscription, or `X-Nozle-Subscription` names no active subscription of the customer; `active_subscription_ambiguous` when the customer has several active subscriptions and no `X-Nozle-Subscription`. The provider is not called. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "code": "active_subscription_ambiguous",
-                     *       "error": "customer has multiple active subscriptions; set X-Nozle-Subscription"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["EngineError"];
-                };
-            };
+            400: components["responses"]["AnthropicProxyBadRequest"];
+            401: components["responses"]["AnthropicProxyUnauthorized"];
+            402: components["responses"]["AnthropicProxyPaymentRequired"];
+            403: components["responses"]["AnthropicProxyForbidden"];
+            422: components["responses"]["AnthropicProxyNoSubscription"];
             /** @description Engine could not reach the provider or read its response. The body is empty. */
             502: {
                 headers: {
@@ -29983,7 +31901,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            503: components["responses"]["EngineUnavailable"];
+            503: components["responses"]["AnthropicProxyUnavailable"];
             /** @description The provider's response, passed through unchanged with the provider's status code, headers and body (JSON, or `text/event-stream` when streaming). Provider errors keep the provider's own error shape. */
             default: {
                 headers: {
@@ -30052,24 +31970,11 @@ export interface operations {
             };
         };
         responses: {
-            400: components["responses"]["EngineBadRequest"];
-            401: components["responses"]["EngineUnauthorized"];
-            403: components["responses"]["EngineForbidden"];
-            /** @description No subscription to bill. `active_subscription_not_found` when the customer is unknown, has no active subscription, or `X-Nozle-Subscription` names no active subscription of the customer; `active_subscription_ambiguous` when the customer has several active subscriptions and no `X-Nozle-Subscription`. The provider is not called. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "code": "active_subscription_ambiguous",
-                     *       "error": "customer has multiple active subscriptions; set X-Nozle-Subscription"
-                     *     }
-                     */
-                    "application/json": components["schemas"]["EngineError"];
-                };
-            };
+            400: components["responses"]["AnthropicProxyBadRequest"];
+            401: components["responses"]["AnthropicProxyUnauthorized"];
+            402: components["responses"]["AnthropicProxyPaymentRequired"];
+            403: components["responses"]["AnthropicProxyForbidden"];
+            422: components["responses"]["AnthropicProxyNoSubscription"];
             /** @description Engine could not reach the provider or read its response. The body is empty. */
             502: {
                 headers: {
@@ -30077,7 +31982,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            503: components["responses"]["EngineUnavailable"];
+            503: components["responses"]["AnthropicProxyUnavailable"];
             /** @description The provider's response, passed through unchanged with the provider's status code, headers and body (JSON, or `text/event-stream` when streaming). Provider errors keep the provider's own error shape. */
             default: {
                 headers: {
@@ -30253,12 +32158,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30266,6 +32171,39 @@ export interface operations {
         /** @description Details of the triggered alert */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "alert.triggered",
+                 *       "object_type": "triggered_alert",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "triggered_alert": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "alert_id": "00000000-0000-4000-8000-000000000003",
+                 *         "subscription_id": "00000000-0000-4000-8000-000000000004",
+                 *         "external_subscription_id": "00000000-0000-4000-8000-000000000005",
+                 *         "wallet_id": null,
+                 *         "external_customer_id": "live_9909",
+                 *         "feature_code": null,
+                 *         "alert_name": null,
+                 *         "alert_code": "live_code_134831",
+                 *         "alert_type": "current_usage_amount",
+                 *         "current_value": "7.0",
+                 *         "previous_value": "0.0",
+                 *         "crossed_thresholds": [
+                 *           {
+                 *             "code": null,
+                 *             "value": "5.0",
+                 *             "recurring": false
+                 *           }
+                 *         ],
+                 *         "triggered_at": "2026-10-22T07:14:58Z",
+                 *         "subscription_external_id": "00000000-0000-4000-8000-000000000005",
+                 *         "customer_external_id": "live_9909"
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "alert.triggered";
@@ -30277,12 +32215,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     triggered_alert: components["schemas"]["TriggeredAlertObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30295,12 +32238,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30308,6 +32251,23 @@ export interface operations {
         /** @description Details of the new feature */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "feature.created",
+                 *       "object_type": "feature",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "feature": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "name": "Copilot FE workflow flag mtsu96o5",
+                 *         "code": "copilot_fe_wf_feature_mtsu96o5",
+                 *         "description": null,
+                 *         "feature_type": "boolean",
+                 *         "created_at": "2026-09-08T15:42:55Z",
+                 *         "privileges": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "feature.created";
@@ -30319,12 +32279,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     feature: components["schemas"]["FeatureObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30337,12 +32302,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30350,6 +32315,23 @@ export interface operations {
         /** @description Details of the feature */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "feature.updated",
+                 *       "object_type": "feature",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "feature": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "name": "Copilot FE workflow flag mtsu96o5",
+                 *         "code": "copilot_fe_wf_feature_mtsu96o5",
+                 *         "description": null,
+                 *         "feature_type": "boolean",
+                 *         "created_at": "2026-09-08T15:42:55Z",
+                 *         "privileges": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "feature.updated";
@@ -30361,12 +32343,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     feature: components["schemas"]["FeatureObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30379,12 +32366,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30392,6 +32379,23 @@ export interface operations {
         /** @description Details of the feature */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "feature.deleted",
+                 *       "object_type": "feature",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "feature": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "name": "Copilot FE workflow flag mtsu96o5",
+                 *         "code": "copilot_fe_wf_feature_mtsu96o5",
+                 *         "description": null,
+                 *         "feature_type": "boolean",
+                 *         "created_at": "2026-09-08T15:42:55Z",
+                 *         "privileges": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "feature.deleted";
@@ -30403,12 +32407,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     feature: components["schemas"]["FeatureObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30421,12 +32430,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30434,6 +32443,71 @@ export interface operations {
         /** @description Details of the new customer */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "customer.created",
+                 *       "object_type": "customer",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "customer": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "external_id": "wrrk-pullse-demo-v2",
+                 *         "account_type": "customer",
+                 *         "name": "Wrrk.ai Demo Workspace",
+                 *         "firstname": null,
+                 *         "lastname": null,
+                 *         "customer_type": null,
+                 *         "sequential_id": 126,
+                 *         "slug": "PUL-CDDE-126",
+                 *         "created_at": "2026-08-06T16:20:05Z",
+                 *         "updated_at": "2026-08-06T16:23:13Z",
+                 *         "country": "US",
+                 *         "address_line1": "123 Market Street",
+                 *         "address_line2": null,
+                 *         "state": "CA",
+                 *         "zipcode": "94107",
+                 *         "email": "jane@example.com",
+                 *         "city": "San Francisco",
+                 *         "url": null,
+                 *         "phone": null,
+                 *         "logo_url": null,
+                 *         "legal_name": null,
+                 *         "legal_number": null,
+                 *         "currency": "USD",
+                 *         "tax_identification_number": null,
+                 *         "timezone": "America/New_York",
+                 *         "applicable_timezone": "America/New_York",
+                 *         "net_payment_term": null,
+                 *         "external_salesforce_id": null,
+                 *         "finalize_zero_amount_invoice": "inherit",
+                 *         "billing_configuration": {
+                 *           "invoice_grace_period": null,
+                 *           "payment_provider": "stripe",
+                 *           "payment_provider_code": "test",
+                 *           "document_locale": null,
+                 *           "subscription_invoice_issuing_date_anchor": null,
+                 *           "subscription_invoice_issuing_date_adjustment": null,
+                 *           "provider_customer_id": "cus_example",
+                 *           "provider_payment_methods": [
+                 *             "card"
+                 *           ],
+                 *           "sync_with_provider": true
+                 *         },
+                 *         "shipping_address": {
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "city": null,
+                 *           "zipcode": null,
+                 *           "state": null,
+                 *           "country": null
+                 *         },
+                 *         "skip_invoice_custom_sections": false,
+                 *         "metadata": [],
+                 *         "integration_customers": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "customer.created";
@@ -30445,12 +32519,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     customer: components["schemas"]["CustomerObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30463,12 +32542,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30476,6 +32555,71 @@ export interface operations {
         /** @description Details of the customer */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "customer.updated",
+                 *       "object_type": "customer",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "customer": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "external_id": "wrrk-pullse-demo-v2",
+                 *         "account_type": "customer",
+                 *         "name": "Wrrk.ai Demo Workspace",
+                 *         "firstname": null,
+                 *         "lastname": null,
+                 *         "customer_type": null,
+                 *         "sequential_id": 126,
+                 *         "slug": "PUL-CDDE-126",
+                 *         "created_at": "2026-08-06T16:20:05Z",
+                 *         "updated_at": "2026-08-06T16:23:13Z",
+                 *         "country": "US",
+                 *         "address_line1": "123 Market Street",
+                 *         "address_line2": null,
+                 *         "state": "CA",
+                 *         "zipcode": "94107",
+                 *         "email": "jane@example.com",
+                 *         "city": "San Francisco",
+                 *         "url": null,
+                 *         "phone": null,
+                 *         "logo_url": null,
+                 *         "legal_name": null,
+                 *         "legal_number": null,
+                 *         "currency": "USD",
+                 *         "tax_identification_number": null,
+                 *         "timezone": "America/New_York",
+                 *         "applicable_timezone": "America/New_York",
+                 *         "net_payment_term": null,
+                 *         "external_salesforce_id": null,
+                 *         "finalize_zero_amount_invoice": "inherit",
+                 *         "billing_configuration": {
+                 *           "invoice_grace_period": null,
+                 *           "payment_provider": "stripe",
+                 *           "payment_provider_code": "test",
+                 *           "document_locale": null,
+                 *           "subscription_invoice_issuing_date_anchor": null,
+                 *           "subscription_invoice_issuing_date_adjustment": null,
+                 *           "provider_customer_id": "cus_example",
+                 *           "provider_payment_methods": [
+                 *             "card"
+                 *           ],
+                 *           "sync_with_provider": true
+                 *         },
+                 *         "shipping_address": {
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "city": null,
+                 *           "zipcode": null,
+                 *           "state": null,
+                 *           "country": null
+                 *         },
+                 *         "skip_invoice_custom_sections": false,
+                 *         "metadata": [],
+                 *         "integration_customers": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "customer.updated";
@@ -30487,12 +32631,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id?: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     customer: components["schemas"]["CustomerObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30505,12 +32654,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30518,6 +32667,71 @@ export interface operations {
         /** @description Details of the customer */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "customer.accounting_provider_created",
+                 *       "object_type": "customer",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "customer": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "external_id": "wrrk-pullse-demo-v2",
+                 *         "account_type": "customer",
+                 *         "name": "Wrrk.ai Demo Workspace",
+                 *         "firstname": null,
+                 *         "lastname": null,
+                 *         "customer_type": null,
+                 *         "sequential_id": 126,
+                 *         "slug": "PUL-CDDE-126",
+                 *         "created_at": "2026-08-06T16:20:05Z",
+                 *         "updated_at": "2026-08-06T16:23:13Z",
+                 *         "country": "US",
+                 *         "address_line1": "123 Market Street",
+                 *         "address_line2": null,
+                 *         "state": "CA",
+                 *         "zipcode": "94107",
+                 *         "email": "jane@example.com",
+                 *         "city": "San Francisco",
+                 *         "url": null,
+                 *         "phone": null,
+                 *         "logo_url": null,
+                 *         "legal_name": null,
+                 *         "legal_number": null,
+                 *         "currency": "USD",
+                 *         "tax_identification_number": null,
+                 *         "timezone": "America/New_York",
+                 *         "applicable_timezone": "America/New_York",
+                 *         "net_payment_term": null,
+                 *         "external_salesforce_id": null,
+                 *         "finalize_zero_amount_invoice": "inherit",
+                 *         "billing_configuration": {
+                 *           "invoice_grace_period": null,
+                 *           "payment_provider": "stripe",
+                 *           "payment_provider_code": "test",
+                 *           "document_locale": null,
+                 *           "subscription_invoice_issuing_date_anchor": null,
+                 *           "subscription_invoice_issuing_date_adjustment": null,
+                 *           "provider_customer_id": "cus_example",
+                 *           "provider_payment_methods": [
+                 *             "card"
+                 *           ],
+                 *           "sync_with_provider": true
+                 *         },
+                 *         "shipping_address": {
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "city": null,
+                 *           "zipcode": null,
+                 *           "state": null,
+                 *           "country": null
+                 *         },
+                 *         "skip_invoice_custom_sections": false,
+                 *         "metadata": [],
+                 *         "integration_customers": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "customer.accounting_provider_created";
@@ -30529,12 +32743,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     customer: components["schemas"]["CustomerObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30547,12 +32766,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30560,6 +32779,24 @@ export interface operations {
         /** @description Details of the customer and of the provider error */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "customer.accounting_provider_error",
+                 *       "object_type": "accounting_provider_customer_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "accounting_provider_customer_error": {
+                 *         "customer_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_customer_id": "wrrk-pullse-demo-v2",
+                 *         "accounting_provider": "netsuite",
+                 *         "accounting_provider_code": "netsuite-prod",
+                 *         "provider_error": {
+                 *           "message": "Invalid credentials",
+                 *           "error_code": "provider_error"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "customer.accounting_provider_error";
@@ -30571,12 +32808,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     accounting_provider_customer_error: components["schemas"]["CustomerIntegratrionErrorObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30589,12 +32831,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30602,6 +32844,70 @@ export interface operations {
         /** @description Details of the customer */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "customer.payment_provider_created",
+                 *       "object_type": "customer",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "customer": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "external_id": "wrrk-pullse-demo-v2",
+                 *         "account_type": "customer",
+                 *         "name": "Wrrk.ai Demo Workspace",
+                 *         "firstname": null,
+                 *         "lastname": null,
+                 *         "customer_type": null,
+                 *         "sequential_id": 126,
+                 *         "slug": "PUL-CDDE-126",
+                 *         "created_at": "2026-08-06T16:20:05Z",
+                 *         "updated_at": "2026-08-06T16:23:13Z",
+                 *         "country": "US",
+                 *         "address_line1": "123 Market Street",
+                 *         "address_line2": null,
+                 *         "state": "CA",
+                 *         "zipcode": "94107",
+                 *         "email": "jane@example.com",
+                 *         "city": "San Francisco",
+                 *         "url": null,
+                 *         "phone": null,
+                 *         "logo_url": null,
+                 *         "legal_name": null,
+                 *         "legal_number": null,
+                 *         "currency": "USD",
+                 *         "tax_identification_number": null,
+                 *         "timezone": "America/New_York",
+                 *         "applicable_timezone": "America/New_York",
+                 *         "net_payment_term": null,
+                 *         "external_salesforce_id": null,
+                 *         "finalize_zero_amount_invoice": "inherit",
+                 *         "billing_configuration": {
+                 *           "invoice_grace_period": null,
+                 *           "payment_provider": "stripe",
+                 *           "payment_provider_code": "test",
+                 *           "document_locale": null,
+                 *           "subscription_invoice_issuing_date_anchor": null,
+                 *           "subscription_invoice_issuing_date_adjustment": null,
+                 *           "provider_customer_id": "cus_example",
+                 *           "provider_payment_methods": [
+                 *             "card"
+                 *           ],
+                 *           "sync_with_provider": true
+                 *         },
+                 *         "shipping_address": {
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "city": null,
+                 *           "zipcode": null,
+                 *           "state": null,
+                 *           "country": null
+                 *         },
+                 *         "skip_invoice_custom_sections": false,
+                 *         "metadata": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "customer.payment_provider_created";
@@ -30613,12 +32919,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     customer: components["schemas"]["CustomerObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30631,12 +32942,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30644,6 +32955,24 @@ export interface operations {
         /** @description Details of the customer and of the payment provider error */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "customer.payment_provider_error",
+                 *       "object_type": "payment_provider_customer_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment_provider_customer_error": {
+                 *         "customer_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_customer_id": "wrrk-pullse-demo-v2",
+                 *         "payment_provider": "stripe",
+                 *         "payment_provider_code": "test",
+                 *         "provider_error": {
+                 *           "message": "Your card was declined.",
+                 *           "error_code": "card_declined"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "customer.payment_provider_error";
@@ -30655,12 +32984,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     payment_provider_customer_error: components["schemas"]["CustomerPaymentProviderErrorObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30673,12 +33007,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30686,6 +33020,21 @@ export interface operations {
         /** @description Details of the customer with the generated checkout URL */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "customer.checkout_url_generated",
+                 *       "object_type": "payment_provider_customer_checkout_url",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment_provider_customer_checkout_url": {
+                 *         "customer_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_customer_id": "wrrk-pullse-demo-v2",
+                 *         "payment_provider": "stripe",
+                 *         "payment_provider_code": "test",
+                 *         "checkout_url": "https://checkout.stripe.com/c/pay/cs_test_example"
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "customer.checkout_url_generated";
@@ -30697,12 +33046,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     payment_provider_customer_checkout_url: components["schemas"]["CustomerCheckoutUrl"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30715,12 +33069,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30728,6 +33082,24 @@ export interface operations {
         /** @description Details of the customer and of the tax provider error */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "customer.tax_provider_error",
+                 *       "object_type": "tax_provider_customer_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "tax_provider_customer_error": {
+                 *         "customer_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_customer_id": "wrrk-pullse-demo-v2",
+                 *         "tax_provider": "anrok",
+                 *         "tax_provider_code": "anrok-prod",
+                 *         "provider_error": {
+                 *           "message": "Tax calculation failed",
+                 *           "error_code": "taxDateTooFarInFuture"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "customer.tax_provider_error";
@@ -30739,12 +33111,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     tax_provider_customer_error: components["schemas"]["CustomerTaxProviderErrorObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30757,12 +33134,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30770,6 +33147,78 @@ export interface operations {
         /** @description Details of the customer with the VIES VAT check status */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "customer.vies_check",
+                 *       "object_type": "customer",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "customer": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "external_id": "wrrk-pullse-demo-v2",
+                 *         "account_type": "customer",
+                 *         "name": "Wrrk.ai Demo Workspace",
+                 *         "firstname": null,
+                 *         "lastname": null,
+                 *         "customer_type": null,
+                 *         "sequential_id": 126,
+                 *         "slug": "PUL-CDDE-126",
+                 *         "created_at": "2026-08-06T16:20:05Z",
+                 *         "updated_at": "2026-08-06T16:23:13Z",
+                 *         "country": "US",
+                 *         "address_line1": "123 Market Street",
+                 *         "address_line2": null,
+                 *         "state": "CA",
+                 *         "zipcode": "94107",
+                 *         "email": "jane@example.com",
+                 *         "city": "San Francisco",
+                 *         "url": null,
+                 *         "phone": null,
+                 *         "logo_url": null,
+                 *         "legal_name": null,
+                 *         "legal_number": null,
+                 *         "currency": "USD",
+                 *         "tax_identification_number": null,
+                 *         "timezone": "America/New_York",
+                 *         "applicable_timezone": "America/New_York",
+                 *         "net_payment_term": null,
+                 *         "external_salesforce_id": null,
+                 *         "finalize_zero_amount_invoice": "inherit",
+                 *         "billing_configuration": {
+                 *           "invoice_grace_period": null,
+                 *           "payment_provider": "stripe",
+                 *           "payment_provider_code": "test",
+                 *           "document_locale": null,
+                 *           "subscription_invoice_issuing_date_anchor": null,
+                 *           "subscription_invoice_issuing_date_adjustment": null,
+                 *           "provider_customer_id": "cus_example",
+                 *           "provider_payment_methods": [
+                 *             "card"
+                 *           ],
+                 *           "sync_with_provider": true
+                 *         },
+                 *         "shipping_address": {
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "city": null,
+                 *           "zipcode": null,
+                 *           "state": null,
+                 *           "country": null
+                 *         },
+                 *         "skip_invoice_custom_sections": false,
+                 *         "metadata": [],
+                 *         "vies_check": {
+                 *           "valid": true,
+                 *           "country_code": "FR",
+                 *           "vat_number": "12345678901",
+                 *           "request_date": "2026-10-22",
+                 *           "name": "Example SARL",
+                 *           "address": "1 Rue Exemple 75000 Paris"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "customer.vies_check";
@@ -30781,12 +33230,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     customer: components["schemas"]["CustomerViesCheckObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30799,12 +33253,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30812,6 +33266,167 @@ export interface operations {
         /** @description Details of the new credit note */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "credit_note.created",
+                 *       "object_type": "credit_note",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "credit_note": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "sequential_id": 1,
+                 *         "number": "PUL-CDDE-202610-441-CN001",
+                 *         "invoice_id": "00000000-0000-4000-8000-000000000003",
+                 *         "invoice_number": "PUL-CDDE-202610-441",
+                 *         "issuing_date": "2026-10-13",
+                 *         "credit_status": "consumed",
+                 *         "refund_status": null,
+                 *         "reason": "order_cancellation",
+                 *         "description": null,
+                 *         "currency": "USD",
+                 *         "total_amount_cents": 919,
+                 *         "precise_total_amount_cents": "918.74193",
+                 *         "taxes_amount_cents": 0,
+                 *         "precise_taxes_amount_cents": "0.0",
+                 *         "sub_total_excluding_taxes_amount_cents": 919,
+                 *         "balance_amount_cents": 0,
+                 *         "credit_amount_cents": 919,
+                 *         "refund_amount_cents": 0,
+                 *         "offset_amount_cents": 0,
+                 *         "coupons_adjustment_amount_cents": 0,
+                 *         "taxes_rate": 0,
+                 *         "created_at": "2026-10-13T03:57:48Z",
+                 *         "updated_at": "2026-10-13T03:57:48Z",
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "self_billed": false,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "sdkv3x-1791863030",
+                 *           "account_type": "customer",
+                 *           "name": "sdkv3 real stripe",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 481,
+                 *           "slug": "PUL-CDDE-481",
+                 *           "created_at": "2026-10-13T03:43:50Z",
+                 *           "updated_at": "2026-10-13T03:43:50Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": "jane@example.com",
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": "stripe",
+                 *             "payment_provider_code": "stripe_sdkv3_test",
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null,
+                 *             "provider_customer_id": "cus_example",
+                 *             "provider_payment_methods": [
+                 *               "card"
+                 *             ],
+                 *             "sync_with_provider": true
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "items": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000005",
+                 *             "amount_cents": 919,
+                 *             "precise_amount_cents": "918.74193",
+                 *             "amount_currency": "USD",
+                 *             "fee": {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000006",
+                 *               "charge_id": null,
+                 *               "charge_filter_id": null,
+                 *               "fixed_charge_id": null,
+                 *               "invoice_id": "00000000-0000-4000-8000-000000000003",
+                 *               "true_up_fee_id": null,
+                 *               "true_up_parent_fee_id": null,
+                 *               "original_fee_id": null,
+                 *               "subscription_id": "00000000-0000-4000-8000-000000000007",
+                 *               "external_subscription_id": "sub-sdkv3x-1791863030",
+                 *               "customer_id": "00000000-0000-4000-8000-000000000004",
+                 *               "external_customer_id": "sdkv3x-1791863030",
+                 *               "item": {
+                 *                 "type": "subscription",
+                 *                 "code": "pro",
+                 *                 "name": "Pro",
+                 *                 "description": "For teams replacing their sales, communication, and automation stack.",
+                 *                 "invoice_display_name": "Wrrk Pro",
+                 *                 "filters": null,
+                 *                 "filter_invoice_display_name": null,
+                 *                 "item_id": "00000000-0000-4000-8000-000000000007",
+                 *                 "item_type": "Subscription",
+                 *                 "grouped_by": {}
+                 *               },
+                 *               "pay_in_advance": true,
+                 *               "invoiceable": true,
+                 *               "amount_cents": 919,
+                 *               "amount_currency": "USD",
+                 *               "precise_amount": "9.187419354838709",
+                 *               "precise_total_amount": "9.187419354838709",
+                 *               "taxes_amount_cents": 0,
+                 *               "taxes_precise_amount": "0.0",
+                 *               "taxes_rate": 0,
+                 *               "total_aggregated_units": null,
+                 *               "total_amount_cents": 919,
+                 *               "total_amount_currency": "USD",
+                 *               "units": "1.0",
+                 *               "description": null,
+                 *               "precise_unit_amount": "9.19",
+                 *               "precise_coupons_amount_cents": "0.0",
+                 *               "sub_total_excluding_taxes_amount_cents": 919,
+                 *               "sub_total_excluding_taxes_precise_amount_cents": "918.7419354838709",
+                 *               "events_count": null,
+                 *               "payment_status": "succeeded",
+                 *               "created_at": "2026-10-13T03:43:54Z",
+                 *               "succeeded_at": null,
+                 *               "failed_at": null,
+                 *               "refunded_at": null,
+                 *               "amount_details": {
+                 *                 "plan_amount_cents": 1499
+                 *               },
+                 *               "self_billed": false,
+                 *               "pricing_unit_details": null,
+                 *               "presentation_breakdowns": [],
+                 *               "from_date": "2026-10-12T18:30:00+00:00",
+                 *               "to_date": "2026-10-31T18:29:59+00:00"
+                 *             }
+                 *           }
+                 *         ],
+                 *         "applied_taxes": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "credit_note.created";
@@ -30823,12 +33438,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     credit_note: components["schemas"]["CreditNoteExtendedObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30841,12 +33461,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30854,6 +33474,100 @@ export interface operations {
         /** @description Details of the credit note */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "credit_note.generated",
+                 *       "object_type": "credit_note",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "credit_note": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "sequential_id": 1,
+                 *         "number": "PUL-CDDE-202610-441-CN001",
+                 *         "invoice_id": "00000000-0000-4000-8000-000000000003",
+                 *         "invoice_number": "PUL-CDDE-202610-441",
+                 *         "issuing_date": "2026-10-13",
+                 *         "credit_status": "consumed",
+                 *         "refund_status": null,
+                 *         "reason": "order_cancellation",
+                 *         "description": null,
+                 *         "currency": "USD",
+                 *         "total_amount_cents": 919,
+                 *         "precise_total_amount_cents": "918.74193",
+                 *         "taxes_amount_cents": 0,
+                 *         "precise_taxes_amount_cents": "0.0",
+                 *         "sub_total_excluding_taxes_amount_cents": 919,
+                 *         "balance_amount_cents": 0,
+                 *         "credit_amount_cents": 919,
+                 *         "refund_amount_cents": 0,
+                 *         "offset_amount_cents": 0,
+                 *         "coupons_adjustment_amount_cents": 0,
+                 *         "taxes_rate": 0,
+                 *         "created_at": "2026-10-13T03:57:48Z",
+                 *         "updated_at": "2026-10-13T03:57:48Z",
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "self_billed": false,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "sdkv3x-1791863030",
+                 *           "account_type": "customer",
+                 *           "name": "sdkv3 real stripe",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 481,
+                 *           "slug": "PUL-CDDE-481",
+                 *           "created_at": "2026-10-13T03:43:50Z",
+                 *           "updated_at": "2026-10-13T03:43:50Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": "jane@example.com",
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": "stripe",
+                 *             "payment_provider_code": "stripe_sdkv3_test",
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null,
+                 *             "provider_customer_id": "cus_example",
+                 *             "provider_payment_methods": [
+                 *               "card"
+                 *             ],
+                 *             "sync_with_provider": true
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "credit_note.generated";
@@ -30865,12 +33579,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     credit_note: components["schemas"]["CreditNoteExtendedObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30883,12 +33602,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30896,17 +33615,40 @@ export interface operations {
         /** @description Details of the credit note and of the provider error */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "credit_note.refund_failure",
+                 *       "object_type": "credit_note_payment_provider_refund_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "credit_note_payment_provider_refund_error": {
+                 *         "credit_note_id": "00000000-0000-4000-8000-000000000002",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "sdkv3x-1791863030",
+                 *         "provider_customer_id": "cust_example",
+                 *         "payment_provider": "stripe",
+                 *         "payment_provider_code": "stripe_sdkv3_test",
+                 *         "provider_error": "Refund could not be processed"
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "credit_note.refund_failure";
                     /** @enum {string} */
                     object_type: "credit_note_payment_provider_refund_error";
                     credit_note_payment_provider_refund_error: components["schemas"]["CreditNotePaymentProviderRefundError"];
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30919,12 +33661,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30932,6 +33674,21 @@ export interface operations {
         /** @description Details of the finished dunning campaign and the overdue balance */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "dunning_campaign.finished",
+                 *       "object_type": "dunning_campaign",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "dunning_campaign": {
+                 *         "external_customer_id": "wrrk-pullse-demo-v2",
+                 *         "dunning_campaign_code": "qa_fm_1011034156_dunning_campaign_conflict_1",
+                 *         "overdue_balance_cents": 19492,
+                 *         "overdue_balance_currency": "USD",
+                 *         "customer_external_id": "wrrk-pullse-demo-v2"
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "dunning_campaign.finished";
@@ -30943,12 +33700,89 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     dunning_campaign: components["schemas"]["DunningCampaignFinishedObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dunningStep: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The step, the invoice it ran for and where the timeline stands */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "dunning.step",
+                 *       "object_type": "dunning_step",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "dunning_step": {
+                 *         "invoice_id": "00000000-0000-4000-8000-000000000006",
+                 *         "invoice_number": "ACME-47DD-012-001",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "customer_123",
+                 *         "dunning_campaign_code": "block_after_grace",
+                 *         "step": "reminder",
+                 *         "day": 3,
+                 *         "grace_days": 7,
+                 *         "end_action": "block",
+                 *         "started_at": "2026-10-20T09:00:00Z",
+                 *         "deadline_at": "2026-10-27T09:00:00Z",
+                 *         "next_action": "retry",
+                 *         "next_action_at": "2026-10-25T09:00:00Z",
+                 *         "total_due_amount_cents": 4900,
+                 *         "currency": "USD"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "dunning.step";
+                    /** @enum {string} */
+                    object_type: "dunning_step";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    dunning_step: components["schemas"]["DunningStepObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -30961,12 +33795,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -30974,6 +33808,31 @@ export interface operations {
         /** @description Details of the event and of the error */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "event.error",
+                 *       "object_type": "event_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "event_error": {
+                 *         "status": 422,
+                 *         "error": "Unprocessable entity",
+                 *         "message": "{\"transaction_id\":\"smoke-test-1782567996\",\"error\":\"Missing billable metric code\"}",
+                 *         "event": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *           "transaction_id": "smoke-test-1782567996",
+                 *           "customer_id": null,
+                 *           "code": "api_calls",
+                 *           "timestamp": "2026-06-27T13:46:36.870Z",
+                 *           "precise_total_amount_cents": null,
+                 *           "properties": {},
+                 *           "subscription_id": null,
+                 *           "external_subscription_id": null,
+                 *           "created_at": "2026-06-27T13:46:36Z"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "event.error";
@@ -30985,12 +33844,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     event_error: components["schemas"]["EventErrorsObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31003,12 +33867,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31016,6 +33880,22 @@ export interface operations {
         /** @description Details of the events errors */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "events.errors",
+                 *       "object_type": "events_errors",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "events_errors": {
+                 *         "invalid_code": [
+                 *           "00000000-0000-4000-8000-000000000002"
+                 *         ],
+                 *         "missing_aggregation_property": [],
+                 *         "missing_group_key": null,
+                 *         "invalid_filter_values": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "events.errors";
@@ -31027,12 +33907,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     events_errors: components["schemas"]["EventsErrorsObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31045,12 +33930,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31058,6 +33943,70 @@ export interface operations {
         /** @description Details of the new fee */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "fee.created",
+                 *       "object_type": "fee",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "fee": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "charge_id": "00000000-0000-4000-8000-000000000003",
+                 *         "charge_filter_id": null,
+                 *         "fixed_charge_id": null,
+                 *         "invoice_id": "00000000-0000-4000-8000-000000000004",
+                 *         "true_up_fee_id": null,
+                 *         "true_up_parent_fee_id": null,
+                 *         "original_fee_id": null,
+                 *         "subscription_id": "00000000-0000-4000-8000-000000000005",
+                 *         "external_subscription_id": "swarm-046-sub",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000006",
+                 *         "external_customer_id": "swarm-046",
+                 *         "item": {
+                 *           "type": "charge",
+                 *           "code": "api_calls",
+                 *           "name": "API Calls",
+                 *           "description": "Count of API calls",
+                 *           "invoice_display_name": "API Calls",
+                 *           "filters": null,
+                 *           "filter_invoice_display_name": null,
+                 *           "item_id": "00000000-0000-4000-8000-000000000007",
+                 *           "item_type": "Feature",
+                 *           "grouped_by": {}
+                 *         },
+                 *         "pay_in_advance": false,
+                 *         "invoiceable": true,
+                 *         "amount_cents": 25,
+                 *         "amount_currency": "USD",
+                 *         "precise_amount": "0.25",
+                 *         "precise_total_amount": "0.25",
+                 *         "taxes_amount_cents": 0,
+                 *         "taxes_precise_amount": "0.0",
+                 *         "taxes_rate": 0,
+                 *         "total_aggregated_units": "25.0",
+                 *         "total_amount_cents": 25,
+                 *         "total_amount_currency": "USD",
+                 *         "units": "25.0",
+                 *         "description": null,
+                 *         "precise_unit_amount": "0.01",
+                 *         "precise_coupons_amount_cents": "0.0",
+                 *         "sub_total_excluding_taxes_amount_cents": 25,
+                 *         "sub_total_excluding_taxes_precise_amount_cents": "25.0",
+                 *         "events_count": 25,
+                 *         "payment_status": "pending",
+                 *         "created_at": "2026-07-01T00:10:06Z",
+                 *         "succeeded_at": null,
+                 *         "failed_at": null,
+                 *         "refunded_at": null,
+                 *         "amount_details": {},
+                 *         "self_billed": false,
+                 *         "pricing_unit_details": null,
+                 *         "presentation_breakdowns": [],
+                 *         "from_date": "2026-06-27T14:19:51+00:00",
+                 *         "to_date": "2026-06-30T23:59:59+00:00"
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "fee.created";
@@ -31069,12 +34018,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     fee: components["schemas"]["FeeObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31087,12 +34041,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31100,6 +34054,23 @@ export interface operations {
         /** @description Details of the fee and of the tax provider error */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "fee.tax_provider_error",
+                 *       "object_type": "tax_provider_fee_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "tax_provider_fee_error": {
+                 *         "tax_provider_code": "anrok-prod",
+                 *         "charge_id": "00000000-0000-4000-8000-000000000002",
+                 *         "event_transaction_id": "txn_example",
+                 *         "provider_error": {
+                 *           "message": "Tax calculation failed",
+                 *           "error_code": "taxDateTooFarInFuture"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "fee.tax_provider_error";
@@ -31111,12 +34082,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     tax_provider_fee_error: components["schemas"]["FeeTaxProviderErrorObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31129,12 +34105,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31142,6 +34118,217 @@ export interface operations {
         /** @description Details of the new invoice */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.created",
+                 *       "object_type": "invoice",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "invoice": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "sequential_id": 1,
+                 *         "number": "PUL-CDDE-202610-448",
+                 *         "issuing_date": "2026-10-18",
+                 *         "payment_due_date": "2026-10-18",
+                 *         "net_payment_term": 0,
+                 *         "invoice_type": "subscription",
+                 *         "status": "finalized",
+                 *         "payment_status": "succeeded",
+                 *         "payment_dispute_lost_at": null,
+                 *         "payment_overdue": false,
+                 *         "currency": "INR",
+                 *         "fees_amount_cents": 30584,
+                 *         "taxes_amount_cents": 0,
+                 *         "progressive_billing_credit_amount_cents": 0,
+                 *         "coupons_amount_cents": 0,
+                 *         "credit_notes_amount_cents": 0,
+                 *         "sub_total_excluding_taxes_amount_cents": 30584,
+                 *         "sub_total_including_taxes_amount_cents": 30584,
+                 *         "total_amount_cents": 30584,
+                 *         "total_due_amount_cents": 0,
+                 *         "total_paid_amount_cents": 30584,
+                 *         "total_offsetted_credit_note_amount_cents": 0,
+                 *         "prepaid_credit_amount_cents": 0,
+                 *         "prepaid_granted_credit_amount_cents": null,
+                 *         "prepaid_purchased_credit_amount_cents": null,
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "version_number": 4,
+                 *         "self_billed": false,
+                 *         "created_at": "2026-10-13T04:32:10Z",
+                 *         "updated_at": "2026-10-13T04:32:54Z",
+                 *         "voided_at": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "sdkv3rw-1791865926",
+                 *           "account_type": "customer",
+                 *           "name": "sdkv3 rzp webhook",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 495,
+                 *           "slug": "PUL-CDDE-495",
+                 *           "created_at": "2026-10-13T04:32:06Z",
+                 *           "updated_at": "2026-10-13T04:32:06Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": "jane@example.com",
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "INR",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": "razorpay",
+                 *             "payment_provider_code": "rzp_sdkv3_test",
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null,
+                 *             "provider_customer_id": null,
+                 *             "sync_with_provider": true
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "subscriptions": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *             "external_id": "sub-sdkv3rw-1791865926",
+                 *             "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *             "external_customer_id": "sdkv3rw-1791865926",
+                 *             "name": "",
+                 *             "plan_code": "sdkv3_inr_a",
+                 *             "plan_amount_cents": 49900,
+                 *             "plan_amount_currency": "INR",
+                 *             "status": "active",
+                 *             "billing_authority": "nozle",
+                 *             "credit_import_completed_at": null,
+                 *             "billing_time": "calendar",
+                 *             "subscription_at": "2026-10-13T04:32:10Z",
+                 *             "started_at": "2026-10-13T04:32:10.406Z",
+                 *             "trial_ended_at": null,
+                 *             "ending_at": null,
+                 *             "terminated_at": null,
+                 *             "canceled_at": null,
+                 *             "created_at": "2026-10-13T04:32:10Z",
+                 *             "previous_plan_code": null,
+                 *             "next_plan_code": null,
+                 *             "downgrade_plan_date": null,
+                 *             "current_billing_period_started_at": "2026-10-13T04:32:10Z",
+                 *             "current_billing_period_ending_at": "2026-10-31T18:29:59Z",
+                 *             "on_termination_credit_note": null,
+                 *             "on_termination_invoice": "generate",
+                 *             "progressive_billing_disabled": false,
+                 *             "consolidate_invoice": true,
+                 *             "purchase_order_number": null,
+                 *             "payment_method": {
+                 *               "payment_method_id": null,
+                 *               "payment_method_type": "provider"
+                 *             }
+                 *           }
+                 *         ],
+                 *         "billing_periods": [
+                 *           {
+                 *             "subscription_id": "00000000-0000-4000-8000-000000000004",
+                 *             "external_subscription_id": "sub-sdkv3rw-1791865926",
+                 *             "plan_id": "00000000-0000-4000-8000-000000000005",
+                 *             "subscription_from_datetime": "2026-10-12T18:30:00Z",
+                 *             "subscription_to_datetime": "2026-10-31T18:29:59Z",
+                 *             "charges_from_datetime": "2026-10-13T04:32:10Z",
+                 *             "charges_to_datetime": "2026-10-13T04:32:10Z",
+                 *             "fixed_charges_from_datetime": "2026-10-13T04:32:10Z",
+                 *             "fixed_charges_to_datetime": "2026-10-13T04:32:10Z",
+                 *             "invoicing_reason": "subscription_starting"
+                 *           }
+                 *         ],
+                 *         "fees": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000006",
+                 *             "charge_id": null,
+                 *             "charge_filter_id": null,
+                 *             "fixed_charge_id": null,
+                 *             "invoice_id": "00000000-0000-4000-8000-000000000002",
+                 *             "true_up_fee_id": null,
+                 *             "true_up_parent_fee_id": null,
+                 *             "original_fee_id": null,
+                 *             "subscription_id": "00000000-0000-4000-8000-000000000004",
+                 *             "external_subscription_id": "sub-sdkv3rw-1791865926",
+                 *             "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *             "external_customer_id": "sdkv3rw-1791865926",
+                 *             "item": {
+                 *               "type": "subscription",
+                 *               "code": "sdkv3_inr_a",
+                 *               "name": "sdkv3 inr a",
+                 *               "description": null,
+                 *               "invoice_display_name": "sdkv3 inr a",
+                 *               "filters": null,
+                 *               "filter_invoice_display_name": null,
+                 *               "item_id": "00000000-0000-4000-8000-000000000004",
+                 *               "item_type": "Subscription",
+                 *               "grouped_by": {}
+                 *             },
+                 *             "pay_in_advance": true,
+                 *             "invoiceable": true,
+                 *             "amount_cents": 30584,
+                 *             "amount_currency": "INR",
+                 *             "precise_amount": "305.8387096774193",
+                 *             "precise_total_amount": "305.8387096774193",
+                 *             "taxes_amount_cents": 0,
+                 *             "taxes_precise_amount": "0.0",
+                 *             "taxes_rate": 0,
+                 *             "total_aggregated_units": null,
+                 *             "total_amount_cents": 30584,
+                 *             "total_amount_currency": "INR",
+                 *             "units": "1.0",
+                 *             "description": null,
+                 *             "precise_unit_amount": "305.84",
+                 *             "precise_coupons_amount_cents": "0.0",
+                 *             "sub_total_excluding_taxes_amount_cents": 30584,
+                 *             "sub_total_excluding_taxes_precise_amount_cents": "30583.87096774193",
+                 *             "events_count": null,
+                 *             "payment_status": "succeeded",
+                 *             "created_at": "2026-10-13T04:32:10Z",
+                 *             "succeeded_at": null,
+                 *             "failed_at": null,
+                 *             "refunded_at": null,
+                 *             "amount_details": {
+                 *               "plan_amount_cents": 49900
+                 *             },
+                 *             "self_billed": false,
+                 *             "pricing_unit_details": null,
+                 *             "presentation_breakdowns": [],
+                 *             "from_date": "2026-10-12T18:30:00+00:00",
+                 *             "to_date": "2026-10-31T18:29:59+00:00"
+                 *           }
+                 *         ],
+                 *         "credits": [],
+                 *         "applied_taxes": [],
+                 *         "applied_invoice_custom_sections": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "invoice.created";
@@ -31153,12 +34340,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     invoice: components["schemas"]["InvoiceObjectExtended"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31171,12 +34363,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31184,6 +34376,161 @@ export interface operations {
         /** @description Details of the new invoice */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.one_off_created",
+                 *       "object_type": "invoice",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "invoice": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "sequential_id": 5,
+                 *         "number": "PUL-CDDE-202610-311",
+                 *         "issuing_date": "2026-10-11",
+                 *         "payment_due_date": "2026-10-11",
+                 *         "net_payment_term": 0,
+                 *         "invoice_type": "one_off",
+                 *         "status": "finalized",
+                 *         "payment_status": "succeeded",
+                 *         "payment_dispute_lost_at": null,
+                 *         "payment_overdue": false,
+                 *         "currency": "USD",
+                 *         "fees_amount_cents": 500,
+                 *         "taxes_amount_cents": 0,
+                 *         "progressive_billing_credit_amount_cents": 0,
+                 *         "coupons_amount_cents": 0,
+                 *         "credit_notes_amount_cents": 0,
+                 *         "sub_total_excluding_taxes_amount_cents": 500,
+                 *         "sub_total_including_taxes_amount_cents": 500,
+                 *         "total_amount_cents": 500,
+                 *         "total_due_amount_cents": 0,
+                 *         "total_paid_amount_cents": 500,
+                 *         "total_offsetted_credit_note_amount_cents": 0,
+                 *         "prepaid_credit_amount_cents": 0,
+                 *         "prepaid_granted_credit_amount_cents": null,
+                 *         "prepaid_purchased_credit_amount_cents": null,
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "version_number": 4,
+                 *         "self_billed": false,
+                 *         "created_at": "2026-10-11T04:54:17Z",
+                 *         "updated_at": "2026-10-11T05:46:24Z",
+                 *         "voided_at": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "qa_fm_1011034156_1",
+                 *           "account_type": "customer",
+                 *           "name": "QA-FM-1011034156 customer dup",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 340,
+                 *           "slug": "PUL-CDDE-340",
+                 *           "created_at": "2026-10-11T03:47:44Z",
+                 *           "updated_at": "2026-10-11T03:52:40Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "fees": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *             "charge_id": null,
+                 *             "charge_filter_id": null,
+                 *             "fixed_charge_id": null,
+                 *             "invoice_id": "00000000-0000-4000-8000-000000000002",
+                 *             "true_up_fee_id": null,
+                 *             "true_up_parent_fee_id": null,
+                 *             "original_fee_id": null,
+                 *             "subscription_id": null,
+                 *             "external_subscription_id": null,
+                 *             "customer_id": null,
+                 *             "external_customer_id": null,
+                 *             "item": {
+                 *               "type": "add_on",
+                 *               "code": "qa_fm_1011044759_add_on_conflict_1",
+                 *               "name": "QA-FM-1011044759 add_on dup",
+                 *               "description": null,
+                 *               "invoice_display_name": "QA-FM-1011044759 add_on dup",
+                 *               "filters": null,
+                 *               "filter_invoice_display_name": null,
+                 *               "item_id": "00000000-0000-4000-8000-000000000005",
+                 *               "item_type": "AddOn",
+                 *               "grouped_by": {}
+                 *             },
+                 *             "pay_in_advance": false,
+                 *             "invoiceable": true,
+                 *             "amount_cents": 500,
+                 *             "amount_currency": "USD",
+                 *             "precise_amount": "5.0",
+                 *             "precise_total_amount": "5.0",
+                 *             "taxes_amount_cents": 0,
+                 *             "taxes_precise_amount": "0.0",
+                 *             "taxes_rate": 0,
+                 *             "total_aggregated_units": null,
+                 *             "total_amount_cents": 500,
+                 *             "total_amount_currency": "USD",
+                 *             "units": "1.0",
+                 *             "description": null,
+                 *             "precise_unit_amount": "5.0",
+                 *             "precise_coupons_amount_cents": "0.0",
+                 *             "sub_total_excluding_taxes_amount_cents": 500,
+                 *             "sub_total_excluding_taxes_precise_amount_cents": "500.0",
+                 *             "events_count": null,
+                 *             "payment_status": "succeeded",
+                 *             "created_at": "2026-10-11T04:54:17Z",
+                 *             "succeeded_at": null,
+                 *             "failed_at": null,
+                 *             "refunded_at": null,
+                 *             "amount_details": {},
+                 *             "self_billed": false,
+                 *             "pricing_unit_details": null,
+                 *             "presentation_breakdowns": [],
+                 *             "from_date": "2026-10-11T00:00:00+00:00",
+                 *             "to_date": "2026-10-11T23:59:59+00:00"
+                 *           }
+                 *         ],
+                 *         "applied_taxes": [],
+                 *         "applied_invoice_custom_sections": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "invoice.one_off_created";
@@ -31195,54 +34542,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
-                    invoice: components["schemas"]["InvoiceObjectExtended"];
-                };
-            };
-        };
-        responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    invoiceAddOnAdded: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Details of the new invoice */
-        requestBody?: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    webhook_type: "invoice.add_on_added";
-                    /** @enum {string} */
-                    object_type: "invoice";
                     /**
-                     * Format: uuid
-                     * @description Unique identifier of the organization, created by Nozle.
-                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
                      */
-                    organization_id: string;
+                    livemode: boolean;
                     invoice: components["schemas"]["InvoiceObjectExtended"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31255,12 +34565,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31268,6 +34578,159 @@ export interface operations {
         /** @description Details of the new invoice */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.paid_credit_added",
+                 *       "object_type": "invoice",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "invoice": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "sequential_id": 1,
+                 *         "number": "PUL-CDDE-202610-289",
+                 *         "issuing_date": "2026-10-07",
+                 *         "payment_due_date": "2026-10-07",
+                 *         "net_payment_term": 0,
+                 *         "invoice_type": "credit",
+                 *         "status": "finalized",
+                 *         "payment_status": "pending",
+                 *         "payment_dispute_lost_at": null,
+                 *         "payment_overdue": true,
+                 *         "currency": "AED",
+                 *         "fees_amount_cents": 2500,
+                 *         "taxes_amount_cents": 0,
+                 *         "progressive_billing_credit_amount_cents": 0,
+                 *         "coupons_amount_cents": 0,
+                 *         "credit_notes_amount_cents": 0,
+                 *         "sub_total_excluding_taxes_amount_cents": 2500,
+                 *         "sub_total_including_taxes_amount_cents": 2500,
+                 *         "total_amount_cents": 2500,
+                 *         "total_due_amount_cents": 2500,
+                 *         "total_paid_amount_cents": 0,
+                 *         "total_offsetted_credit_note_amount_cents": 0,
+                 *         "prepaid_credit_amount_cents": 0,
+                 *         "prepaid_granted_credit_amount_cents": null,
+                 *         "prepaid_purchased_credit_amount_cents": null,
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "version_number": 4,
+                 *         "self_billed": false,
+                 *         "created_at": "2026-10-07T17:52:57Z",
+                 *         "updated_at": "2026-10-08T00:25:00Z",
+                 *         "voided_at": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "live_95516",
+                 *           "account_type": "customer",
+                 *           "name": "Live Name 95516",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 306,
+                 *           "slug": "PUL-CDDE-306",
+                 *           "created_at": "2026-10-07T17:52:00Z",
+                 *           "updated_at": "2026-10-18T19:14:42Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "AED",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "fees": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *             "charge_id": null,
+                 *             "charge_filter_id": null,
+                 *             "fixed_charge_id": null,
+                 *             "invoice_id": "00000000-0000-4000-8000-000000000002",
+                 *             "true_up_fee_id": null,
+                 *             "true_up_parent_fee_id": null,
+                 *             "original_fee_id": null,
+                 *             "subscription_id": null,
+                 *             "external_subscription_id": null,
+                 *             "customer_id": null,
+                 *             "external_customer_id": null,
+                 *             "item": {
+                 *               "type": "credit",
+                 *               "code": "credit",
+                 *               "name": "credit",
+                 *               "description": "credit",
+                 *               "invoice_display_name": "credit",
+                 *               "filters": null,
+                 *               "filter_invoice_display_name": null,
+                 *               "item_id": "00000000-0000-4000-8000-000000000005",
+                 *               "item_type": "WalletTransaction",
+                 *               "grouped_by": {}
+                 *             },
+                 *             "pay_in_advance": false,
+                 *             "invoiceable": true,
+                 *             "amount_cents": 2500,
+                 *             "amount_currency": "AED",
+                 *             "precise_amount": "25.0",
+                 *             "precise_total_amount": "25.0",
+                 *             "taxes_amount_cents": 0,
+                 *             "taxes_precise_amount": "0.0",
+                 *             "taxes_rate": 0,
+                 *             "total_aggregated_units": null,
+                 *             "total_amount_cents": 2500,
+                 *             "total_amount_currency": "AED",
+                 *             "units": "5.0",
+                 *             "description": null,
+                 *             "precise_unit_amount": "5.0",
+                 *             "precise_coupons_amount_cents": "0.0",
+                 *             "sub_total_excluding_taxes_amount_cents": 2500,
+                 *             "sub_total_excluding_taxes_precise_amount_cents": "2500.0",
+                 *             "events_count": null,
+                 *             "payment_status": "pending",
+                 *             "created_at": "2026-10-07T17:52:57Z",
+                 *             "succeeded_at": null,
+                 *             "failed_at": null,
+                 *             "refunded_at": null,
+                 *             "amount_details": {},
+                 *             "self_billed": false,
+                 *             "pricing_unit_details": null,
+                 *             "presentation_breakdowns": []
+                 *           }
+                 *         ],
+                 *         "applied_taxes": [],
+                 *         "applied_invoice_custom_sections": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "invoice.paid_credit_added";
@@ -31279,12 +34742,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     invoice: components["schemas"]["InvoiceObjectExtended"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31297,12 +34765,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31310,6 +34778,103 @@ export interface operations {
         /** @description Details of the invoice */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.generated",
+                 *       "object_type": "invoice",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "invoice": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "sequential_id": 1,
+                 *         "number": "PUL-CDDE-202610-448",
+                 *         "issuing_date": "2026-10-18",
+                 *         "payment_due_date": "2026-10-18",
+                 *         "net_payment_term": 0,
+                 *         "invoice_type": "subscription",
+                 *         "status": "finalized",
+                 *         "payment_status": "succeeded",
+                 *         "payment_dispute_lost_at": null,
+                 *         "payment_overdue": false,
+                 *         "currency": "INR",
+                 *         "fees_amount_cents": 30584,
+                 *         "taxes_amount_cents": 0,
+                 *         "progressive_billing_credit_amount_cents": 0,
+                 *         "coupons_amount_cents": 0,
+                 *         "credit_notes_amount_cents": 0,
+                 *         "sub_total_excluding_taxes_amount_cents": 30584,
+                 *         "sub_total_including_taxes_amount_cents": 30584,
+                 *         "total_amount_cents": 30584,
+                 *         "total_due_amount_cents": 0,
+                 *         "total_paid_amount_cents": 30584,
+                 *         "total_offsetted_credit_note_amount_cents": 0,
+                 *         "prepaid_credit_amount_cents": 0,
+                 *         "prepaid_granted_credit_amount_cents": null,
+                 *         "prepaid_purchased_credit_amount_cents": null,
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "version_number": 4,
+                 *         "self_billed": false,
+                 *         "created_at": "2026-10-13T04:32:10Z",
+                 *         "updated_at": "2026-10-13T04:32:54Z",
+                 *         "voided_at": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "sdkv3rw-1791865926",
+                 *           "account_type": "customer",
+                 *           "name": "sdkv3 rzp webhook",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 495,
+                 *           "slug": "PUL-CDDE-495",
+                 *           "created_at": "2026-10-13T04:32:06Z",
+                 *           "updated_at": "2026-10-13T04:32:06Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": "jane@example.com",
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "INR",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": "razorpay",
+                 *             "payment_provider_code": "rzp_sdkv3_test",
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null,
+                 *             "provider_customer_id": null,
+                 *             "sync_with_provider": true
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "invoice.generated";
@@ -31321,12 +34886,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     invoice: components["schemas"]["InvoiceObjectExtended"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31339,12 +34909,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31352,6 +34922,215 @@ export interface operations {
         /** @description Details of the new invoice */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.drafted",
+                 *       "object_type": "invoice",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "invoice": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "sequential_id": null,
+                 *         "number": "PUL-CDDE-DRAFT",
+                 *         "issuing_date": "2026-10-21",
+                 *         "payment_due_date": "2026-10-21",
+                 *         "net_payment_term": 0,
+                 *         "invoice_type": "subscription",
+                 *         "status": "draft",
+                 *         "payment_status": "succeeded",
+                 *         "payment_dispute_lost_at": null,
+                 *         "payment_overdue": false,
+                 *         "currency": "USD",
+                 *         "fees_amount_cents": 0,
+                 *         "taxes_amount_cents": 0,
+                 *         "progressive_billing_credit_amount_cents": 0,
+                 *         "coupons_amount_cents": 0,
+                 *         "credit_notes_amount_cents": 0,
+                 *         "sub_total_excluding_taxes_amount_cents": 0,
+                 *         "sub_total_including_taxes_amount_cents": 0,
+                 *         "total_amount_cents": 0,
+                 *         "total_due_amount_cents": 0,
+                 *         "total_paid_amount_cents": 0,
+                 *         "total_offsetted_credit_note_amount_cents": 0,
+                 *         "prepaid_credit_amount_cents": 0,
+                 *         "prepaid_granted_credit_amount_cents": null,
+                 *         "prepaid_purchased_credit_amount_cents": null,
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "version_number": 4,
+                 *         "self_billed": false,
+                 *         "created_at": "2026-10-16T16:30:47Z",
+                 *         "updated_at": "2026-10-16T16:30:47Z",
+                 *         "voided_at": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "st_cancel_no_replacement_1792168246841157576",
+                 *           "account_type": "customer",
+                 *           "name": "cancel_no_replacement",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 507,
+                 *           "slug": "PUL-CDDE-507",
+                 *           "created_at": "2026-10-16T16:30:46Z",
+                 *           "updated_at": "2026-10-16T16:30:46Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "subscriptions": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *             "external_id": "st_cancel_no_replacement_sub_1792168246841157576",
+                 *             "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *             "external_customer_id": "st_cancel_no_replacement_1792168246841157576",
+                 *             "name": "",
+                 *             "plan_code": "qa_top_rev_10110831",
+                 *             "plan_amount_cents": 0,
+                 *             "plan_amount_currency": "USD",
+                 *             "status": "terminated",
+                 *             "billing_authority": "nozle",
+                 *             "credit_import_completed_at": null,
+                 *             "billing_time": "calendar",
+                 *             "subscription_at": "2026-10-16T16:30:46Z",
+                 *             "started_at": "2026-10-16T16:30:46.902Z",
+                 *             "trial_ended_at": null,
+                 *             "ending_at": null,
+                 *             "terminated_at": "2026-10-16T16:30:47Z",
+                 *             "canceled_at": null,
+                 *             "created_at": "2026-10-16T16:30:46Z",
+                 *             "previous_plan_code": null,
+                 *             "next_plan_code": null,
+                 *             "downgrade_plan_date": null,
+                 *             "current_billing_period_started_at": "2026-10-16T16:30:46Z",
+                 *             "current_billing_period_ending_at": "2026-10-16T16:30:47Z",
+                 *             "on_termination_credit_note": null,
+                 *             "on_termination_invoice": "generate",
+                 *             "progressive_billing_disabled": false,
+                 *             "consolidate_invoice": true,
+                 *             "purchase_order_number": null,
+                 *             "payment_method": {
+                 *               "payment_method_id": null,
+                 *               "payment_method_type": "provider"
+                 *             }
+                 *           }
+                 *         ],
+                 *         "billing_periods": [
+                 *           {
+                 *             "subscription_id": "00000000-0000-4000-8000-000000000004",
+                 *             "external_subscription_id": "st_cancel_no_replacement_sub_1792168246841157576",
+                 *             "plan_id": "00000000-0000-4000-8000-000000000005",
+                 *             "subscription_from_datetime": "2026-10-15T18:30:00Z",
+                 *             "subscription_to_datetime": "2026-10-16T16:30:47Z",
+                 *             "charges_from_datetime": "2026-10-16T16:30:46Z",
+                 *             "charges_to_datetime": "2026-10-16T16:30:47Z",
+                 *             "fixed_charges_from_datetime": "2026-10-16T16:30:46Z",
+                 *             "fixed_charges_to_datetime": "2026-10-16T16:30:47Z",
+                 *             "invoicing_reason": "subscription_terminating"
+                 *           }
+                 *         ],
+                 *         "fees": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000006",
+                 *             "charge_id": null,
+                 *             "charge_filter_id": null,
+                 *             "fixed_charge_id": null,
+                 *             "invoice_id": "00000000-0000-4000-8000-000000000002",
+                 *             "true_up_fee_id": null,
+                 *             "true_up_parent_fee_id": null,
+                 *             "original_fee_id": null,
+                 *             "subscription_id": "00000000-0000-4000-8000-000000000004",
+                 *             "external_subscription_id": "st_cancel_no_replacement_sub_1792168246841157576",
+                 *             "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *             "external_customer_id": "st_cancel_no_replacement_1792168246841157576",
+                 *             "item": {
+                 *               "type": "subscription",
+                 *               "code": "qa_top_rev_10110831",
+                 *               "name": "QA Top Rev Usage",
+                 *               "description": null,
+                 *               "invoice_display_name": "QA Top Rev Usage",
+                 *               "filters": null,
+                 *               "filter_invoice_display_name": null,
+                 *               "item_id": "00000000-0000-4000-8000-000000000004",
+                 *               "item_type": "Subscription",
+                 *               "grouped_by": {}
+                 *             },
+                 *             "pay_in_advance": false,
+                 *             "invoiceable": true,
+                 *             "amount_cents": 0,
+                 *             "amount_currency": "USD",
+                 *             "precise_amount": "0.0",
+                 *             "precise_total_amount": "0.0",
+                 *             "taxes_amount_cents": 0,
+                 *             "taxes_precise_amount": "0.0",
+                 *             "taxes_rate": 0,
+                 *             "total_aggregated_units": null,
+                 *             "total_amount_cents": 0,
+                 *             "total_amount_currency": "USD",
+                 *             "units": "1.0",
+                 *             "description": null,
+                 *             "precise_unit_amount": "0.0",
+                 *             "precise_coupons_amount_cents": "0.0",
+                 *             "sub_total_excluding_taxes_amount_cents": 0,
+                 *             "sub_total_excluding_taxes_precise_amount_cents": "0.0",
+                 *             "events_count": null,
+                 *             "payment_status": "pending",
+                 *             "created_at": "2026-10-16T16:30:47Z",
+                 *             "succeeded_at": null,
+                 *             "failed_at": null,
+                 *             "refunded_at": null,
+                 *             "amount_details": {
+                 *               "plan_amount_cents": 0
+                 *             },
+                 *             "self_billed": false,
+                 *             "pricing_unit_details": null,
+                 *             "presentation_breakdowns": [],
+                 *             "from_date": "2026-10-15T18:30:00+00:00",
+                 *             "to_date": "2026-10-16T16:30:47+00:00"
+                 *           }
+                 *         ],
+                 *         "credits": [],
+                 *         "applied_taxes": [],
+                 *         "error_details": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "invoice.drafted";
@@ -31363,12 +35142,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     invoice: components["schemas"]["InvoiceObjectExtended"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31381,12 +35165,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31394,6 +35178,163 @@ export interface operations {
         /** @description Details of the invoice */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.voided",
+                 *       "object_type": "invoice",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "invoice": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "sequential_id": 2,
+                 *         "number": "PUL-CDDE-202610-294",
+                 *         "issuing_date": "2026-10-07",
+                 *         "payment_due_date": "2026-10-07",
+                 *         "net_payment_term": 0,
+                 *         "invoice_type": "one_off",
+                 *         "status": "voided",
+                 *         "payment_status": "pending",
+                 *         "payment_dispute_lost_at": null,
+                 *         "payment_overdue": false,
+                 *         "currency": "AED",
+                 *         "fees_amount_cents": 25,
+                 *         "taxes_amount_cents": 0,
+                 *         "progressive_billing_credit_amount_cents": 0,
+                 *         "coupons_amount_cents": 0,
+                 *         "credit_notes_amount_cents": 0,
+                 *         "sub_total_excluding_taxes_amount_cents": 25,
+                 *         "sub_total_including_taxes_amount_cents": 25,
+                 *         "total_amount_cents": 25,
+                 *         "total_due_amount_cents": 0,
+                 *         "total_paid_amount_cents": 5,
+                 *         "total_offsetted_credit_note_amount_cents": 0,
+                 *         "prepaid_credit_amount_cents": 0,
+                 *         "prepaid_granted_credit_amount_cents": null,
+                 *         "prepaid_purchased_credit_amount_cents": null,
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "version_number": 4,
+                 *         "self_billed": false,
+                 *         "created_at": "2026-10-07T21:53:36Z",
+                 *         "updated_at": "2026-10-08T21:57:41Z",
+                 *         "voided_at": "2026-10-08T21:57:41Z",
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "live_9909",
+                 *           "account_type": "customer",
+                 *           "name": "Live Name 9909",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 307,
+                 *           "slug": "PUL-CDDE-307",
+                 *           "created_at": "2026-10-07T21:51:52Z",
+                 *           "updated_at": "2026-10-07T21:56:14Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "AED",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "subscriptions": [],
+                 *         "billing_periods": [],
+                 *         "fees": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *             "charge_id": null,
+                 *             "charge_filter_id": null,
+                 *             "fixed_charge_id": null,
+                 *             "invoice_id": "00000000-0000-4000-8000-000000000002",
+                 *             "true_up_fee_id": null,
+                 *             "true_up_parent_fee_id": null,
+                 *             "original_fee_id": null,
+                 *             "subscription_id": null,
+                 *             "external_subscription_id": null,
+                 *             "customer_id": null,
+                 *             "external_customer_id": null,
+                 *             "item": {
+                 *               "type": "add_on",
+                 *               "code": "live_code_9909",
+                 *               "name": "Live Name 9909",
+                 *               "description": null,
+                 *               "invoice_display_name": "Live Name 9909",
+                 *               "filters": null,
+                 *               "filter_invoice_display_name": null,
+                 *               "item_id": "00000000-0000-4000-8000-000000000005",
+                 *               "item_type": "AddOn",
+                 *               "grouped_by": {}
+                 *             },
+                 *             "pay_in_advance": false,
+                 *             "invoiceable": true,
+                 *             "amount_cents": 25,
+                 *             "amount_currency": "AED",
+                 *             "precise_amount": "0.25",
+                 *             "precise_total_amount": "0.25",
+                 *             "taxes_amount_cents": 0,
+                 *             "taxes_precise_amount": "0.0",
+                 *             "taxes_rate": 0,
+                 *             "total_aggregated_units": null,
+                 *             "total_amount_cents": 25,
+                 *             "total_amount_currency": "AED",
+                 *             "units": "5.0",
+                 *             "description": null,
+                 *             "precise_unit_amount": "0.05",
+                 *             "precise_coupons_amount_cents": "0.0",
+                 *             "sub_total_excluding_taxes_amount_cents": 25,
+                 *             "sub_total_excluding_taxes_precise_amount_cents": "25.0",
+                 *             "events_count": null,
+                 *             "payment_status": "pending",
+                 *             "created_at": "2026-10-07T21:53:36Z",
+                 *             "succeeded_at": null,
+                 *             "failed_at": null,
+                 *             "refunded_at": null,
+                 *             "amount_details": {},
+                 *             "self_billed": false,
+                 *             "pricing_unit_details": null,
+                 *             "presentation_breakdowns": [],
+                 *             "from_date": "2026-10-07T00:00:00+00:00",
+                 *             "to_date": "2026-10-07T23:59:59+00:00"
+                 *           }
+                 *         ],
+                 *         "credits": [],
+                 *         "applied_taxes": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "invoice.voided";
@@ -31405,12 +35346,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     invoice: components["schemas"]["InvoiceObjectExtended"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31423,12 +35369,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31436,6 +35382,106 @@ export interface operations {
         /** @description Details of the invoice and of the payment dispute */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.payment_dispute_lost",
+                 *       "object_type": "payment_dispute_lost",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment_dispute_lost": {
+                 *         "invoice": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "sequential_id": 1,
+                 *           "number": "PUL-CDDE-202610-448",
+                 *           "issuing_date": "2026-10-18",
+                 *           "payment_due_date": "2026-10-18",
+                 *           "net_payment_term": 0,
+                 *           "invoice_type": "subscription",
+                 *           "status": "finalized",
+                 *           "payment_status": "succeeded",
+                 *           "payment_dispute_lost_at": null,
+                 *           "payment_overdue": false,
+                 *           "currency": "INR",
+                 *           "fees_amount_cents": 30584,
+                 *           "taxes_amount_cents": 0,
+                 *           "progressive_billing_credit_amount_cents": 0,
+                 *           "coupons_amount_cents": 0,
+                 *           "credit_notes_amount_cents": 0,
+                 *           "sub_total_excluding_taxes_amount_cents": 30584,
+                 *           "sub_total_including_taxes_amount_cents": 30584,
+                 *           "total_amount_cents": 30584,
+                 *           "total_due_amount_cents": 0,
+                 *           "total_paid_amount_cents": 30584,
+                 *           "total_offsetted_credit_note_amount_cents": 0,
+                 *           "prepaid_credit_amount_cents": 0,
+                 *           "prepaid_granted_credit_amount_cents": null,
+                 *           "prepaid_purchased_credit_amount_cents": null,
+                 *           "file_url": null,
+                 *           "xml_url": null,
+                 *           "version_number": 4,
+                 *           "self_billed": false,
+                 *           "created_at": "2026-10-13T04:32:10Z",
+                 *           "updated_at": "2026-10-13T04:32:54Z",
+                 *           "voided_at": null,
+                 *           "customer": {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *             "billing_entity_code": "pullse_testing",
+                 *             "external_id": "sdkv3rw-1791865926",
+                 *             "account_type": "customer",
+                 *             "name": "sdkv3 rzp webhook",
+                 *             "firstname": null,
+                 *             "lastname": null,
+                 *             "customer_type": null,
+                 *             "sequential_id": 495,
+                 *             "slug": "PUL-CDDE-495",
+                 *             "created_at": "2026-10-13T04:32:06Z",
+                 *             "updated_at": "2026-10-13T04:32:06Z",
+                 *             "country": null,
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "state": null,
+                 *             "zipcode": null,
+                 *             "email": "jane@example.com",
+                 *             "city": null,
+                 *             "url": null,
+                 *             "phone": null,
+                 *             "logo_url": null,
+                 *             "legal_name": null,
+                 *             "legal_number": null,
+                 *             "currency": "INR",
+                 *             "tax_identification_number": null,
+                 *             "timezone": null,
+                 *             "applicable_timezone": "Asia/Kolkata",
+                 *             "net_payment_term": null,
+                 *             "external_salesforce_id": null,
+                 *             "finalize_zero_amount_invoice": "inherit",
+                 *             "billing_configuration": {
+                 *               "invoice_grace_period": null,
+                 *               "payment_provider": "razorpay",
+                 *               "payment_provider_code": "rzp_sdkv3_test",
+                 *               "document_locale": null,
+                 *               "subscription_invoice_issuing_date_anchor": null,
+                 *               "subscription_invoice_issuing_date_adjustment": null,
+                 *               "provider_customer_id": null,
+                 *               "sync_with_provider": true
+                 *             },
+                 *             "shipping_address": {
+                 *               "address_line1": null,
+                 *               "address_line2": null,
+                 *               "city": null,
+                 *               "zipcode": null,
+                 *               "state": null,
+                 *               "country": null
+                 *             },
+                 *             "skip_invoice_custom_sections": false,
+                 *             "metadata": []
+                 *           }
+                 *         },
+                 *         "provider_error": "fraudulent"
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "invoice.payment_dispute_lost";
@@ -31447,12 +35493,165 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     payment_dispute_lost: components["schemas"]["InvoicePaymentDisputeLostObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    invoicePaymentDisputeUpdated: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the invoice and of the payment dispute */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.payment_dispute_updated",
+                 *       "object_type": "payment_dispute_lost",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "payment_dispute_updated": {
+                 *         "invoice": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "sequential_id": 1,
+                 *           "number": "PUL-CDDE-202610-448",
+                 *           "issuing_date": "2026-10-18",
+                 *           "payment_due_date": "2026-10-18",
+                 *           "net_payment_term": 0,
+                 *           "invoice_type": "subscription",
+                 *           "status": "finalized",
+                 *           "payment_status": "succeeded",
+                 *           "payment_dispute_lost_at": null,
+                 *           "payment_overdue": false,
+                 *           "currency": "INR",
+                 *           "fees_amount_cents": 30584,
+                 *           "taxes_amount_cents": 0,
+                 *           "progressive_billing_credit_amount_cents": 0,
+                 *           "coupons_amount_cents": 0,
+                 *           "credit_notes_amount_cents": 0,
+                 *           "sub_total_excluding_taxes_amount_cents": 30584,
+                 *           "sub_total_including_taxes_amount_cents": 30584,
+                 *           "total_amount_cents": 30584,
+                 *           "total_due_amount_cents": 0,
+                 *           "total_paid_amount_cents": 30584,
+                 *           "total_offsetted_credit_note_amount_cents": 0,
+                 *           "prepaid_credit_amount_cents": 0,
+                 *           "prepaid_granted_credit_amount_cents": null,
+                 *           "prepaid_purchased_credit_amount_cents": null,
+                 *           "file_url": null,
+                 *           "xml_url": null,
+                 *           "version_number": 4,
+                 *           "self_billed": false,
+                 *           "created_at": "2026-10-13T04:32:10Z",
+                 *           "updated_at": "2026-10-13T04:32:54Z",
+                 *           "voided_at": null,
+                 *           "customer": {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *             "billing_entity_code": "pullse_testing",
+                 *             "external_id": "sdkv3rw-1791865926",
+                 *             "account_type": "customer",
+                 *             "name": "sdkv3 rzp webhook",
+                 *             "firstname": null,
+                 *             "lastname": null,
+                 *             "customer_type": null,
+                 *             "sequential_id": 495,
+                 *             "slug": "PUL-CDDE-495",
+                 *             "created_at": "2026-10-13T04:32:06Z",
+                 *             "updated_at": "2026-10-13T04:32:06Z",
+                 *             "country": null,
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "state": null,
+                 *             "zipcode": null,
+                 *             "email": "jane@example.com",
+                 *             "city": null,
+                 *             "url": null,
+                 *             "phone": null,
+                 *             "logo_url": null,
+                 *             "legal_name": null,
+                 *             "legal_number": null,
+                 *             "currency": "INR",
+                 *             "tax_identification_number": null,
+                 *             "timezone": null,
+                 *             "applicable_timezone": "Asia/Kolkata",
+                 *             "net_payment_term": null,
+                 *             "external_salesforce_id": null,
+                 *             "finalize_zero_amount_invoice": "inherit",
+                 *             "billing_configuration": {
+                 *               "invoice_grace_period": null,
+                 *               "payment_provider": "razorpay",
+                 *               "payment_provider_code": "rzp_sdkv3_test",
+                 *               "document_locale": null,
+                 *               "subscription_invoice_issuing_date_anchor": null,
+                 *               "subscription_invoice_issuing_date_adjustment": null,
+                 *               "provider_customer_id": null,
+                 *               "sync_with_provider": true
+                 *             },
+                 *             "shipping_address": {
+                 *               "address_line1": null,
+                 *               "address_line2": null,
+                 *               "city": null,
+                 *               "zipcode": null,
+                 *               "state": null,
+                 *               "country": null
+                 *             },
+                 *             "skip_invoice_custom_sections": false,
+                 *             "metadata": []
+                 *           }
+                 *         },
+                 *         "dispute": {
+                 *           "id": "disp_Nozle0000000001",
+                 *           "event": "action_required",
+                 *           "status": "open",
+                 *           "reason_code": "fraudulent",
+                 *           "phase": "chargeback",
+                 *           "respond_by": 1793500000
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "invoice.payment_dispute_updated";
+                    /** @enum {string} */
+                    object_type: "payment_dispute_updated";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    payment_dispute_updated: components["schemas"]["InvoicePaymentDisputeUpdatedObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31465,12 +35664,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31478,6 +35677,163 @@ export interface operations {
         /** @description Details of the invoice */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.payment_status_updated",
+                 *       "object_type": "invoice",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "invoice": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "sequential_id": 1,
+                 *         "number": "PUL-CDDE-202610-448",
+                 *         "issuing_date": "2026-10-18",
+                 *         "payment_due_date": "2026-10-18",
+                 *         "net_payment_term": 0,
+                 *         "invoice_type": "subscription",
+                 *         "status": "finalized",
+                 *         "payment_status": "succeeded",
+                 *         "payment_dispute_lost_at": null,
+                 *         "payment_overdue": false,
+                 *         "currency": "INR",
+                 *         "fees_amount_cents": 30584,
+                 *         "taxes_amount_cents": 0,
+                 *         "progressive_billing_credit_amount_cents": 0,
+                 *         "coupons_amount_cents": 0,
+                 *         "credit_notes_amount_cents": 0,
+                 *         "sub_total_excluding_taxes_amount_cents": 30584,
+                 *         "sub_total_including_taxes_amount_cents": 30584,
+                 *         "total_amount_cents": 30584,
+                 *         "total_due_amount_cents": 0,
+                 *         "total_paid_amount_cents": 30584,
+                 *         "total_offsetted_credit_note_amount_cents": 0,
+                 *         "prepaid_credit_amount_cents": 0,
+                 *         "prepaid_granted_credit_amount_cents": null,
+                 *         "prepaid_purchased_credit_amount_cents": null,
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "version_number": 4,
+                 *         "self_billed": false,
+                 *         "created_at": "2026-10-13T04:32:10Z",
+                 *         "updated_at": "2026-10-13T04:32:54Z",
+                 *         "voided_at": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "sdkv3rw-1791865926",
+                 *           "account_type": "customer",
+                 *           "name": "sdkv3 rzp webhook",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 495,
+                 *           "slug": "PUL-CDDE-495",
+                 *           "created_at": "2026-10-13T04:32:06Z",
+                 *           "updated_at": "2026-10-13T04:32:06Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": "jane@example.com",
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "INR",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": "razorpay",
+                 *             "payment_provider_code": "rzp_sdkv3_test",
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null,
+                 *             "provider_customer_id": null,
+                 *             "sync_with_provider": true
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "fees": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *             "charge_id": null,
+                 *             "charge_filter_id": null,
+                 *             "fixed_charge_id": null,
+                 *             "invoice_id": "00000000-0000-4000-8000-000000000002",
+                 *             "true_up_fee_id": null,
+                 *             "true_up_parent_fee_id": null,
+                 *             "original_fee_id": null,
+                 *             "subscription_id": "00000000-0000-4000-8000-000000000005",
+                 *             "external_subscription_id": "sub-sdkv3rw-1791865926",
+                 *             "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *             "external_customer_id": "sdkv3rw-1791865926",
+                 *             "item": {
+                 *               "type": "subscription",
+                 *               "code": "sdkv3_inr_a",
+                 *               "name": "sdkv3 inr a",
+                 *               "description": null,
+                 *               "invoice_display_name": "sdkv3 inr a",
+                 *               "filters": null,
+                 *               "filter_invoice_display_name": null,
+                 *               "item_id": "00000000-0000-4000-8000-000000000005",
+                 *               "item_type": "Subscription",
+                 *               "grouped_by": {}
+                 *             },
+                 *             "pay_in_advance": true,
+                 *             "invoiceable": true,
+                 *             "amount_cents": 30584,
+                 *             "amount_currency": "INR",
+                 *             "precise_amount": "305.8387096774193",
+                 *             "precise_total_amount": "305.8387096774193",
+                 *             "taxes_amount_cents": 0,
+                 *             "taxes_precise_amount": "0.0",
+                 *             "taxes_rate": 0,
+                 *             "total_aggregated_units": null,
+                 *             "total_amount_cents": 30584,
+                 *             "total_amount_currency": "INR",
+                 *             "units": "1.0",
+                 *             "description": null,
+                 *             "precise_unit_amount": "305.84",
+                 *             "precise_coupons_amount_cents": "0.0",
+                 *             "sub_total_excluding_taxes_amount_cents": 30584,
+                 *             "sub_total_excluding_taxes_precise_amount_cents": "30583.87096774193",
+                 *             "events_count": null,
+                 *             "payment_status": "succeeded",
+                 *             "created_at": "2026-10-13T04:32:10Z",
+                 *             "succeeded_at": null,
+                 *             "failed_at": null,
+                 *             "refunded_at": null,
+                 *             "amount_details": {
+                 *               "plan_amount_cents": 49900
+                 *             },
+                 *             "self_billed": false,
+                 *             "pricing_unit_details": null,
+                 *             "presentation_breakdowns": [],
+                 *             "from_date": "2026-10-12T18:30:00+00:00",
+                 *             "to_date": "2026-10-31T18:29:59+00:00"
+                 *           }
+                 *         ]
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "invoice.payment_status_updated";
@@ -31489,12 +35845,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     invoice: components["schemas"]["InvoiceObjectExtended"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31507,12 +35868,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31520,6 +35881,164 @@ export interface operations {
         /** @description Details of the invoice */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.payment_overdue",
+                 *       "object_type": "invoice",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "invoice": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "sequential_id": 1,
+                 *         "number": "PUL-CDDE-202610-448",
+                 *         "issuing_date": "2026-10-18",
+                 *         "payment_due_date": "2026-10-18",
+                 *         "net_payment_term": 0,
+                 *         "invoice_type": "subscription",
+                 *         "status": "finalized",
+                 *         "payment_status": "succeeded",
+                 *         "payment_dispute_lost_at": null,
+                 *         "payment_overdue": false,
+                 *         "currency": "INR",
+                 *         "fees_amount_cents": 30584,
+                 *         "taxes_amount_cents": 0,
+                 *         "progressive_billing_credit_amount_cents": 0,
+                 *         "coupons_amount_cents": 0,
+                 *         "credit_notes_amount_cents": 0,
+                 *         "sub_total_excluding_taxes_amount_cents": 30584,
+                 *         "sub_total_including_taxes_amount_cents": 30584,
+                 *         "total_amount_cents": 30584,
+                 *         "total_due_amount_cents": 0,
+                 *         "total_paid_amount_cents": 30584,
+                 *         "total_offsetted_credit_note_amount_cents": 0,
+                 *         "prepaid_credit_amount_cents": 0,
+                 *         "prepaid_granted_credit_amount_cents": null,
+                 *         "prepaid_purchased_credit_amount_cents": null,
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "version_number": 4,
+                 *         "self_billed": false,
+                 *         "created_at": "2026-10-13T04:32:10Z",
+                 *         "updated_at": "2026-10-13T04:32:54Z",
+                 *         "voided_at": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "sdkv3rw-1791865926",
+                 *           "account_type": "customer",
+                 *           "name": "sdkv3 rzp webhook",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 495,
+                 *           "slug": "PUL-CDDE-495",
+                 *           "created_at": "2026-10-13T04:32:06Z",
+                 *           "updated_at": "2026-10-13T04:32:06Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": "jane@example.com",
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "INR",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": "razorpay",
+                 *             "payment_provider_code": "rzp_sdkv3_test",
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null,
+                 *             "provider_customer_id": null,
+                 *             "sync_with_provider": true
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "fees": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *             "charge_id": null,
+                 *             "charge_filter_id": null,
+                 *             "fixed_charge_id": null,
+                 *             "invoice_id": "00000000-0000-4000-8000-000000000002",
+                 *             "true_up_fee_id": null,
+                 *             "true_up_parent_fee_id": null,
+                 *             "original_fee_id": null,
+                 *             "subscription_id": "00000000-0000-4000-8000-000000000005",
+                 *             "external_subscription_id": "sub-sdkv3rw-1791865926",
+                 *             "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *             "external_customer_id": "sdkv3rw-1791865926",
+                 *             "item": {
+                 *               "type": "subscription",
+                 *               "code": "sdkv3_inr_a",
+                 *               "name": "sdkv3 inr a",
+                 *               "description": null,
+                 *               "invoice_display_name": "sdkv3 inr a",
+                 *               "filters": null,
+                 *               "filter_invoice_display_name": null,
+                 *               "item_id": "00000000-0000-4000-8000-000000000005",
+                 *               "item_type": "Subscription",
+                 *               "grouped_by": {}
+                 *             },
+                 *             "pay_in_advance": true,
+                 *             "invoiceable": true,
+                 *             "amount_cents": 30584,
+                 *             "amount_currency": "INR",
+                 *             "precise_amount": "305.8387096774193",
+                 *             "precise_total_amount": "305.8387096774193",
+                 *             "taxes_amount_cents": 0,
+                 *             "taxes_precise_amount": "0.0",
+                 *             "taxes_rate": 0,
+                 *             "total_aggregated_units": null,
+                 *             "total_amount_cents": 30584,
+                 *             "total_amount_currency": "INR",
+                 *             "units": "1.0",
+                 *             "description": null,
+                 *             "precise_unit_amount": "305.84",
+                 *             "precise_coupons_amount_cents": "0.0",
+                 *             "sub_total_excluding_taxes_amount_cents": 30584,
+                 *             "sub_total_excluding_taxes_precise_amount_cents": "30583.87096774193",
+                 *             "events_count": null,
+                 *             "payment_status": "succeeded",
+                 *             "created_at": "2026-10-13T04:32:10Z",
+                 *             "succeeded_at": null,
+                 *             "failed_at": null,
+                 *             "refunded_at": null,
+                 *             "amount_details": {
+                 *               "plan_amount_cents": 49900
+                 *             },
+                 *             "self_billed": false,
+                 *             "pricing_unit_details": null,
+                 *             "presentation_breakdowns": [],
+                 *             "from_date": "2026-10-12T18:30:00+00:00",
+                 *             "to_date": "2026-10-31T18:29:59+00:00"
+                 *           }
+                 *         ],
+                 *         "applied_taxes": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "invoice.payment_overdue";
@@ -31531,12 +36050,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     invoice: components["schemas"]["InvoiceObjectExtended"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31549,12 +36073,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31562,6 +36086,27 @@ export interface operations {
         /** @description Details of the invoice and of the payment provider error */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.payment_failure",
+                 *       "object_type": "payment_provider_invoice_payment_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment_provider_invoice_payment_error": {
+                 *         "invoice_id": "00000000-0000-4000-8000-000000000002",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "sdkv3rw-1791865926",
+                 *         "provider_customer_id": "cus_example",
+                 *         "payment_provider": "razorpay",
+                 *         "payment_provider_code": "rzp_sdkv3_test",
+                 *         "provider_error": {
+                 *           "message": "Your card was declined.",
+                 *           "error_code": "card_declined"
+                 *         },
+                 *         "error_details": {}
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "invoice.payment_failure";
@@ -31573,12 +36118,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     payment_provider_invoice_payment_error: components["schemas"]["InvoicePaymentFailureObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31591,12 +36141,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31604,6 +36154,23 @@ export interface operations {
         /** @description Details of the integration and of the integration error */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "integration.provider_error",
+                 *       "object_type": "provider_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "provider_error": {
+                 *         "integration_id": "00000000-0000-4000-8000-000000000002",
+                 *         "provider": "anrok",
+                 *         "provider_code": "anrok-prod",
+                 *         "provider_error": {
+                 *           "message": "Invalid API key",
+                 *           "error_code": "provider_error"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "integration.provider_error";
@@ -31615,12 +36182,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     provider_error: components["schemas"]["IntegrationProviderErrorObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31633,12 +36205,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31646,9 +36218,43 @@ export interface operations {
         /** @description Details of the payment and of the required action */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "payment.requires_action",
+                 *       "object_type": "payment",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "sdkv3u-1791843258",
+                 *         "invoice_ids": [
+                 *           "00000000-0000-4000-8000-000000000004"
+                 *         ],
+                 *         "invoice_numbers": [
+                 *           "PUL-CDDE-202610-318"
+                 *         ],
+                 *         "payable_id": "00000000-0000-4000-8000-000000000004",
+                 *         "payable_type": "Invoice",
+                 *         "amount_cents": 919,
+                 *         "amount_currency": "USD",
+                 *         "status": "succeeded",
+                 *         "payment_status": "succeeded",
+                 *         "type": "provider",
+                 *         "reference": null,
+                 *         "payment_provider_code": "stripe_sync_canary",
+                 *         "payment_provider_type": "PaymentProviders::StripeProvider",
+                 *         "external_payment_id": "pi_example",
+                 *         "provider_payment_id": "pi_example",
+                 *         "provider_customer_id": "cus_example",
+                 *         "next_action": {},
+                 *         "created_at": "2026-10-12T22:17:08Z"
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
-                    webhook_type: "payment.requires_action";
+                    webhook_type: "payment.requires_action" | "payment.scheduled" | "payment.schedule_cancelled";
                     /** @enum {string} */
                     object_type: "payment";
                     /**
@@ -31657,12 +36263,171 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     payment: components["schemas"]["PaymentObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    paymentScheduled: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the payment and of the automatic debit */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "payment.scheduled",
+                 *       "object_type": "payment",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "payment": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "sdkv3u-1791843258",
+                 *         "invoice_ids": [
+                 *           "00000000-0000-4000-8000-000000000004"
+                 *         ],
+                 *         "invoice_numbers": [
+                 *           "PUL-CDDE-202610-318"
+                 *         ],
+                 *         "payable_id": "00000000-0000-4000-8000-000000000004",
+                 *         "payable_type": "Invoice",
+                 *         "amount_cents": 919,
+                 *         "amount_currency": "USD",
+                 *         "status": "processing",
+                 *         "payment_status": "pending",
+                 *         "type": "provider",
+                 *         "reference": null,
+                 *         "payment_provider_code": "stripe_sync_canary",
+                 *         "payment_provider_type": "PaymentProviders::StripeProvider",
+                 *         "external_payment_id": "pi_example",
+                 *         "provider_payment_id": "pi_example",
+                 *         "provider_customer_id": "cus_example",
+                 *         "next_action": {},
+                 *         "created_at": "2026-10-12T22:17:08Z",
+                 *         "scheduled_at": "2026-10-30T14:30:00Z",
+                 *         "method_type": "card"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "payment.scheduled";
+                    /** @enum {string} */
+                    object_type: "payment";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    payment: components["schemas"]["PaymentScheduledObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    paymentScheduleCancelled: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the payment and of the automatic debit */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "payment.schedule_cancelled",
+                 *       "object_type": "payment",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "payment": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "sdkv3u-1791843258",
+                 *         "invoice_ids": [
+                 *           "00000000-0000-4000-8000-000000000004"
+                 *         ],
+                 *         "invoice_numbers": [
+                 *           "PUL-CDDE-202610-318"
+                 *         ],
+                 *         "payable_id": "00000000-0000-4000-8000-000000000004",
+                 *         "payable_type": "Invoice",
+                 *         "amount_cents": 919,
+                 *         "amount_currency": "USD",
+                 *         "status": "succeeded",
+                 *         "payment_status": "succeeded",
+                 *         "type": "provider",
+                 *         "reference": null,
+                 *         "payment_provider_code": "stripe_sync_canary",
+                 *         "payment_provider_type": "PaymentProviders::StripeProvider",
+                 *         "external_payment_id": "pi_example",
+                 *         "provider_payment_id": "pi_example",
+                 *         "provider_customer_id": "cus_example",
+                 *         "next_action": {},
+                 *         "created_at": "2026-10-12T22:17:08Z",
+                 *         "scheduled_at": "2026-10-30T14:30:00Z",
+                 *         "reason": "invoice_paid"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "payment.schedule_cancelled";
+                    /** @enum {string} */
+                    object_type: "payment";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    payment: components["schemas"]["PaymentScheduleCancelledObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31675,12 +36440,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31688,6 +36453,40 @@ export interface operations {
         /** @description Details of the successfully processed payment */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "payment.succeeded",
+                 *       "object_type": "payment",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "sdkv3u-1791843258",
+                 *         "invoice_ids": [
+                 *           "00000000-0000-4000-8000-000000000004"
+                 *         ],
+                 *         "invoice_numbers": [
+                 *           "PUL-CDDE-202610-318"
+                 *         ],
+                 *         "payable_id": "00000000-0000-4000-8000-000000000004",
+                 *         "payable_type": "Invoice",
+                 *         "amount_cents": 919,
+                 *         "amount_currency": "USD",
+                 *         "status": "succeeded",
+                 *         "payment_status": "succeeded",
+                 *         "type": "provider",
+                 *         "reference": null,
+                 *         "payment_provider_code": "stripe_sync_canary",
+                 *         "payment_provider_type": "PaymentProviders::StripeProvider",
+                 *         "external_payment_id": "pi_example",
+                 *         "provider_payment_id": "pi_example",
+                 *         "provider_customer_id": "cus_example",
+                 *         "next_action": {},
+                 *         "created_at": "2026-10-12T22:17:08Z"
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "payment.succeeded";
@@ -31699,12 +36498,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     payment: components["schemas"]["PaymentObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31717,12 +36521,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31730,6 +36534,25 @@ export interface operations {
         /** @description Details of the payment provider and of the error */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "payment_provider.error",
+                 *       "object_type": "payment_provider_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment_provider_error": {
+                 *         "payment_provider_id": "00000000-0000-4000-8000-000000000002",
+                 *         "payment_provider_code": "test",
+                 *         "payment_provider_name": "test",
+                 *         "source": null,
+                 *         "action": null,
+                 *         "provider_error": {
+                 *           "message": "Invalid API key provided",
+                 *           "error_code": "stripe_error"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "payment_provider.error";
@@ -31741,12 +36564,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     payment_provider_error: components["schemas"]["PaymentProviderErrorObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31759,12 +36587,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31772,6 +36600,120 @@ export interface operations {
         /** @description Details of the new payment request */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "payment_request.created",
+                 *       "object_type": "payment_request",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment_request": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "amount_cents": 330,
+                 *         "amount_currency": "USD",
+                 *         "email": "jane@example.com",
+                 *         "payment_status": "pending",
+                 *         "automatic": false,
+                 *         "created_at": "2026-10-13T00:20:30Z",
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "vfy-rest-c1",
+                 *           "account_type": "customer",
+                 *           "name": "upd",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 389,
+                 *           "slug": "PUL-CDDE-389",
+                 *           "created_at": "2026-10-13T00:16:44Z",
+                 *           "updated_at": "2026-10-13T00:23:11Z",
+                 *           "country": "US",
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": "jane@example.com",
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": 0,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": "en",
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": [
+                 *             {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *               "key": "vfy",
+                 *               "value": "2",
+                 *               "display_in_invoice": true,
+                 *               "created_at": "2026-10-13T00:16:44Z"
+                 *             }
+                 *           ]
+                 *         },
+                 *         "invoices": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000005",
+                 *             "billing_entity_code": "pullse_testing",
+                 *             "sequential_id": 3,
+                 *             "number": "PUL-CDDE-202610-346",
+                 *             "issuing_date": "2026-10-13",
+                 *             "payment_due_date": "2026-10-10",
+                 *             "net_payment_term": 0,
+                 *             "invoice_type": "one_off",
+                 *             "status": "finalized",
+                 *             "payment_status": "pending",
+                 *             "payment_dispute_lost_at": "2026-10-13T00:22:22.806Z",
+                 *             "payment_overdue": false,
+                 *             "currency": "USD",
+                 *             "fees_amount_cents": 300,
+                 *             "taxes_amount_cents": 30,
+                 *             "progressive_billing_credit_amount_cents": 0,
+                 *             "coupons_amount_cents": 0,
+                 *             "credit_notes_amount_cents": 0,
+                 *             "sub_total_excluding_taxes_amount_cents": 300,
+                 *             "sub_total_including_taxes_amount_cents": 330,
+                 *             "total_amount_cents": 330,
+                 *             "total_due_amount_cents": 330,
+                 *             "total_paid_amount_cents": 0,
+                 *             "total_offsetted_credit_note_amount_cents": 0,
+                 *             "prepaid_credit_amount_cents": 0,
+                 *             "prepaid_granted_credit_amount_cents": null,
+                 *             "prepaid_purchased_credit_amount_cents": null,
+                 *             "file_url": null,
+                 *             "xml_url": null,
+                 *             "version_number": 4,
+                 *             "self_billed": false,
+                 *             "created_at": "2026-10-13T00:20:25Z",
+                 *             "updated_at": "2026-10-13T00:22:22Z",
+                 *             "voided_at": null
+                 *           }
+                 *         ]
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "payment_request.created";
@@ -31783,12 +36725,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     payment_request: components["schemas"]["PaymentRequestObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31801,12 +36748,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31814,6 +36761,29 @@ export interface operations {
         /** @description Details of the payment request and of the provider error */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "payment_request.payment_failure",
+                 *       "object_type": "payment_provider_payment_request_payment_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment_provider_payment_request_payment_error": {
+                 *         "payment_request_id": "00000000-0000-4000-8000-000000000002",
+                 *         "invoice_ids": [
+                 *           "00000000-0000-4000-8000-000000000003"
+                 *         ],
+                 *         "customer_id": "00000000-0000-4000-8000-000000000004",
+                 *         "external_customer_id": "vfy-rest-c1",
+                 *         "provider_customer_id": "cus_example",
+                 *         "payment_provider": null,
+                 *         "payment_provider_code": null,
+                 *         "provider_error": {
+                 *           "message": "Your card was declined.",
+                 *           "error_code": "card_declined"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "payment_request.payment_failure";
@@ -31825,12 +36795,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     payment_provider_payment_request_payment_error: components["schemas"]["PaymentRequestPaymentFailureObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31843,12 +36818,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31856,6 +36831,120 @@ export interface operations {
         /** @description Details of the payment request */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "payment_request.payment_status_updated",
+                 *       "object_type": "payment_request",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment_request": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "amount_cents": 330,
+                 *         "amount_currency": "USD",
+                 *         "email": "jane@example.com",
+                 *         "payment_status": "succeeded",
+                 *         "automatic": false,
+                 *         "created_at": "2026-10-13T00:20:30Z",
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "vfy-rest-c1",
+                 *           "account_type": "customer",
+                 *           "name": "upd",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 389,
+                 *           "slug": "PUL-CDDE-389",
+                 *           "created_at": "2026-10-13T00:16:44Z",
+                 *           "updated_at": "2026-10-13T00:23:11Z",
+                 *           "country": "US",
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": "jane@example.com",
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": 0,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": "en",
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": [
+                 *             {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *               "key": "vfy",
+                 *               "value": "2",
+                 *               "display_in_invoice": true,
+                 *               "created_at": "2026-10-13T00:16:44Z"
+                 *             }
+                 *           ]
+                 *         },
+                 *         "invoices": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000005",
+                 *             "billing_entity_code": "pullse_testing",
+                 *             "sequential_id": 3,
+                 *             "number": "PUL-CDDE-202610-346",
+                 *             "issuing_date": "2026-10-13",
+                 *             "payment_due_date": "2026-10-10",
+                 *             "net_payment_term": 0,
+                 *             "invoice_type": "one_off",
+                 *             "status": "finalized",
+                 *             "payment_status": "pending",
+                 *             "payment_dispute_lost_at": "2026-10-13T00:22:22.806Z",
+                 *             "payment_overdue": false,
+                 *             "currency": "USD",
+                 *             "fees_amount_cents": 300,
+                 *             "taxes_amount_cents": 30,
+                 *             "progressive_billing_credit_amount_cents": 0,
+                 *             "coupons_amount_cents": 0,
+                 *             "credit_notes_amount_cents": 0,
+                 *             "sub_total_excluding_taxes_amount_cents": 300,
+                 *             "sub_total_including_taxes_amount_cents": 330,
+                 *             "total_amount_cents": 330,
+                 *             "total_due_amount_cents": 330,
+                 *             "total_paid_amount_cents": 0,
+                 *             "total_offsetted_credit_note_amount_cents": 0,
+                 *             "prepaid_credit_amount_cents": 0,
+                 *             "prepaid_granted_credit_amount_cents": null,
+                 *             "prepaid_purchased_credit_amount_cents": null,
+                 *             "file_url": null,
+                 *             "xml_url": null,
+                 *             "version_number": 4,
+                 *             "self_billed": false,
+                 *             "created_at": "2026-10-13T00:20:25Z",
+                 *             "updated_at": "2026-10-13T00:22:22Z",
+                 *             "voided_at": null
+                 *           }
+                 *         ]
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "payment_request.payment_status_updated";
@@ -31867,12 +36956,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     payment_request: components["schemas"]["PaymentRequestObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31885,12 +36979,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31898,6 +36992,59 @@ export interface operations {
         /** @description Details of the new plan */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "plan.created",
+                 *       "object_type": "plan",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "plan": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "name": "Issue11 LLM plan",
+                 *         "invoice_display_name": null,
+                 *         "created_at": "2026-10-17T02:02:31Z",
+                 *         "code": "issue11_llm_plan",
+                 *         "interval": "monthly",
+                 *         "description": null,
+                 *         "amount_cents": 0,
+                 *         "amount_currency": "USD",
+                 *         "trial_period": null,
+                 *         "pay_in_advance": false,
+                 *         "bill_charges_monthly": null,
+                 *         "bill_fixed_charges_monthly": null,
+                 *         "parent_id": null,
+                 *         "pending_deletion": false,
+                 *         "plan_family_code": "issue11_llm_plan",
+                 *         "charges": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *             "feature_id": "00000000-0000-4000-8000-000000000004",
+                 *             "code": "llm_tokens",
+                 *             "invoice_display_name": null,
+                 *             "feature_code": "llm_tokens",
+                 *             "created_at": "2026-10-17T02:02:31Z",
+                 *             "charge_model": "standard",
+                 *             "invoiceable": true,
+                 *             "regroup_paid_fees": null,
+                 *             "pay_in_advance": false,
+                 *             "prorated": false,
+                 *             "min_amount_cents": 0,
+                 *             "accepts_target_wallet": false,
+                 *             "properties": {
+                 *               "amount": "0.001"
+                 *             },
+                 *             "applied_pricing_unit": null,
+                 *             "parent_id": null,
+                 *             "filters": [],
+                 *             "taxes": []
+                 *           }
+                 *         ],
+                 *         "entitlements": [],
+                 *         "usage_thresholds": [],
+                 *         "taxes": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "plan.created";
@@ -31909,12 +37056,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     plan: components["schemas"]["PlanObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31927,12 +37079,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31940,6 +37092,59 @@ export interface operations {
         /** @description Details of the plan */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "plan.updated",
+                 *       "object_type": "plan",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "plan": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "name": "Issue11 LLM plan",
+                 *         "invoice_display_name": null,
+                 *         "created_at": "2026-10-17T02:02:31Z",
+                 *         "code": "issue11_llm_plan",
+                 *         "interval": "monthly",
+                 *         "description": null,
+                 *         "amount_cents": 0,
+                 *         "amount_currency": "USD",
+                 *         "trial_period": null,
+                 *         "pay_in_advance": false,
+                 *         "bill_charges_monthly": null,
+                 *         "bill_fixed_charges_monthly": null,
+                 *         "parent_id": null,
+                 *         "pending_deletion": false,
+                 *         "plan_family_code": "issue11_llm_plan",
+                 *         "charges": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *             "feature_id": "00000000-0000-4000-8000-000000000004",
+                 *             "code": "llm_tokens",
+                 *             "invoice_display_name": null,
+                 *             "feature_code": "llm_tokens",
+                 *             "created_at": "2026-10-17T02:02:31Z",
+                 *             "charge_model": "standard",
+                 *             "invoiceable": true,
+                 *             "regroup_paid_fees": null,
+                 *             "pay_in_advance": false,
+                 *             "prorated": false,
+                 *             "min_amount_cents": 0,
+                 *             "accepts_target_wallet": false,
+                 *             "properties": {
+                 *               "amount": "0.001"
+                 *             },
+                 *             "applied_pricing_unit": null,
+                 *             "parent_id": null,
+                 *             "filters": [],
+                 *             "taxes": []
+                 *           }
+                 *         ],
+                 *         "entitlements": [],
+                 *         "usage_thresholds": [],
+                 *         "taxes": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "plan.updated";
@@ -31951,12 +37156,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     plan: components["schemas"]["PlanObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -31969,12 +37179,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -31993,12 +37203,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     plan: components["schemas"]["PlanObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32011,12 +37226,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32024,6 +37239,58 @@ export interface operations {
         /** @description Details of the plan */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "plan.deleted",
+                 *       "object_type": "plan",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "plan": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "name": "Issue11 LLM plan",
+                 *         "invoice_display_name": null,
+                 *         "created_at": "2026-10-17T02:02:31Z",
+                 *         "code": "issue11_llm_plan",
+                 *         "interval": "monthly",
+                 *         "description": null,
+                 *         "amount_cents": 0,
+                 *         "amount_currency": "USD",
+                 *         "trial_period": null,
+                 *         "pay_in_advance": false,
+                 *         "bill_charges_monthly": null,
+                 *         "bill_fixed_charges_monthly": null,
+                 *         "parent_id": null,
+                 *         "pending_deletion": false,
+                 *         "plan_family_code": "issue11_llm_plan",
+                 *         "charges": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *             "feature_id": "00000000-0000-4000-8000-000000000004",
+                 *             "code": "llm_tokens",
+                 *             "invoice_display_name": null,
+                 *             "feature_code": "llm_tokens",
+                 *             "created_at": "2026-10-17T02:02:31Z",
+                 *             "charge_model": "standard",
+                 *             "invoiceable": true,
+                 *             "regroup_paid_fees": null,
+                 *             "pay_in_advance": false,
+                 *             "prorated": false,
+                 *             "min_amount_cents": 0,
+                 *             "accepts_target_wallet": false,
+                 *             "properties": {
+                 *               "amount": "0.001"
+                 *             },
+                 *             "applied_pricing_unit": null,
+                 *             "parent_id": null,
+                 *             "filters": [],
+                 *             "taxes": []
+                 *           }
+                 *         ],
+                 *         "usage_thresholds": [],
+                 *         "taxes": []
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "plan.deleted";
@@ -32035,12 +37302,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     plan: components["schemas"]["PlanObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32053,12 +37325,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32066,6 +37338,145 @@ export interface operations {
         /** @description Details of the subscription */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "subscription.terminated",
+                 *       "object_type": "subscription",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "subscription": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_id": "issue11_llm_sub",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "issue11_llm_cust",
+                 *         "name": "",
+                 *         "plan_code": "issue11_llm_plan",
+                 *         "plan_amount_cents": 0,
+                 *         "plan_amount_currency": "USD",
+                 *         "status": "active",
+                 *         "billing_authority": "nozle",
+                 *         "credit_import_completed_at": null,
+                 *         "billing_time": "calendar",
+                 *         "subscription_at": "2026-10-17T02:02:32Z",
+                 *         "started_at": "2026-10-17T02:02:32.080Z",
+                 *         "trial_ended_at": null,
+                 *         "ending_at": null,
+                 *         "terminated_at": null,
+                 *         "canceled_at": null,
+                 *         "created_at": "2026-10-17T02:02:32Z",
+                 *         "previous_plan_code": null,
+                 *         "next_plan_code": null,
+                 *         "downgrade_plan_date": null,
+                 *         "current_billing_period_started_at": "2026-10-17T02:02:32Z",
+                 *         "current_billing_period_ending_at": "2026-10-31T18:29:59Z",
+                 *         "on_termination_credit_note": null,
+                 *         "on_termination_invoice": "generate",
+                 *         "progressive_billing_disabled": false,
+                 *         "consolidate_invoice": true,
+                 *         "purchase_order_number": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "issue11_llm_cust",
+                 *           "account_type": "customer",
+                 *           "name": "Issue11 LLM customer",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 509,
+                 *           "slug": "PUL-CDDE-509",
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "updated_at": "2026-10-17T02:02:31Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         },
+                 *         "plan": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "name": "Issue11 LLM plan",
+                 *           "invoice_display_name": null,
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "code": "issue11_llm_plan",
+                 *           "interval": "monthly",
+                 *           "description": null,
+                 *           "amount_cents": 0,
+                 *           "amount_currency": "USD",
+                 *           "trial_period": null,
+                 *           "pay_in_advance": false,
+                 *           "bill_charges_monthly": null,
+                 *           "bill_fixed_charges_monthly": null,
+                 *           "parent_id": null,
+                 *           "pending_deletion": false,
+                 *           "plan_family_code": "issue11_llm_plan",
+                 *           "charges": [
+                 *             {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000005",
+                 *               "feature_id": "00000000-0000-4000-8000-000000000006",
+                 *               "code": "llm_tokens",
+                 *               "invoice_display_name": null,
+                 *               "feature_code": "llm_tokens",
+                 *               "created_at": "2026-10-17T02:02:31Z",
+                 *               "charge_model": "standard",
+                 *               "invoiceable": true,
+                 *               "regroup_paid_fees": null,
+                 *               "pay_in_advance": false,
+                 *               "prorated": false,
+                 *               "min_amount_cents": 0,
+                 *               "accepts_target_wallet": false,
+                 *               "properties": {
+                 *                 "amount": "0.001"
+                 *               },
+                 *               "applied_pricing_unit": null,
+                 *               "parent_id": null,
+                 *               "filters": [],
+                 *               "taxes": []
+                 *             }
+                 *           ],
+                 *           "usage_thresholds": [],
+                 *           "applicable_usage_thresholds": [],
+                 *           "taxes": []
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "subscription.terminated";
@@ -32077,12 +37488,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     subscription: components["schemas"]["SubscriptionWithCustomerObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32095,12 +37511,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32108,6 +37524,145 @@ export interface operations {
         /** @description Details of the subscription */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "subscription.incomplete",
+                 *       "object_type": "subscription",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "subscription": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_id": "issue11_llm_sub",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "issue11_llm_cust",
+                 *         "name": "",
+                 *         "plan_code": "issue11_llm_plan",
+                 *         "plan_amount_cents": 0,
+                 *         "plan_amount_currency": "USD",
+                 *         "status": "active",
+                 *         "billing_authority": "nozle",
+                 *         "credit_import_completed_at": null,
+                 *         "billing_time": "calendar",
+                 *         "subscription_at": "2026-10-17T02:02:32Z",
+                 *         "started_at": "2026-10-17T02:02:32.080Z",
+                 *         "trial_ended_at": null,
+                 *         "ending_at": null,
+                 *         "terminated_at": null,
+                 *         "canceled_at": null,
+                 *         "created_at": "2026-10-17T02:02:32Z",
+                 *         "previous_plan_code": null,
+                 *         "next_plan_code": null,
+                 *         "downgrade_plan_date": null,
+                 *         "current_billing_period_started_at": "2026-10-17T02:02:32Z",
+                 *         "current_billing_period_ending_at": "2026-10-31T18:29:59Z",
+                 *         "on_termination_credit_note": null,
+                 *         "on_termination_invoice": "generate",
+                 *         "progressive_billing_disabled": false,
+                 *         "consolidate_invoice": true,
+                 *         "purchase_order_number": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "issue11_llm_cust",
+                 *           "account_type": "customer",
+                 *           "name": "Issue11 LLM customer",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 509,
+                 *           "slug": "PUL-CDDE-509",
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "updated_at": "2026-10-17T02:02:31Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         },
+                 *         "plan": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "name": "Issue11 LLM plan",
+                 *           "invoice_display_name": null,
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "code": "issue11_llm_plan",
+                 *           "interval": "monthly",
+                 *           "description": null,
+                 *           "amount_cents": 0,
+                 *           "amount_currency": "USD",
+                 *           "trial_period": null,
+                 *           "pay_in_advance": false,
+                 *           "bill_charges_monthly": null,
+                 *           "bill_fixed_charges_monthly": null,
+                 *           "parent_id": null,
+                 *           "pending_deletion": false,
+                 *           "plan_family_code": "issue11_llm_plan",
+                 *           "charges": [
+                 *             {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000005",
+                 *               "feature_id": "00000000-0000-4000-8000-000000000006",
+                 *               "code": "llm_tokens",
+                 *               "invoice_display_name": null,
+                 *               "feature_code": "llm_tokens",
+                 *               "created_at": "2026-10-17T02:02:31Z",
+                 *               "charge_model": "standard",
+                 *               "invoiceable": true,
+                 *               "regroup_paid_fees": null,
+                 *               "pay_in_advance": false,
+                 *               "prorated": false,
+                 *               "min_amount_cents": 0,
+                 *               "accepts_target_wallet": false,
+                 *               "properties": {
+                 *                 "amount": "0.001"
+                 *               },
+                 *               "applied_pricing_unit": null,
+                 *               "parent_id": null,
+                 *               "filters": [],
+                 *               "taxes": []
+                 *             }
+                 *           ],
+                 *           "usage_thresholds": [],
+                 *           "applicable_usage_thresholds": [],
+                 *           "taxes": []
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "subscription.incomplete";
@@ -32119,12 +37674,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     subscription: components["schemas"]["SubscriptionWithCustomerObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32137,12 +37697,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32150,6 +37710,145 @@ export interface operations {
         /** @description Details of the subscription */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "subscription.canceled",
+                 *       "object_type": "subscription",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "subscription": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_id": "issue11_llm_sub",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "issue11_llm_cust",
+                 *         "name": "",
+                 *         "plan_code": "issue11_llm_plan",
+                 *         "plan_amount_cents": 0,
+                 *         "plan_amount_currency": "USD",
+                 *         "status": "active",
+                 *         "billing_authority": "nozle",
+                 *         "credit_import_completed_at": null,
+                 *         "billing_time": "calendar",
+                 *         "subscription_at": "2026-10-17T02:02:32Z",
+                 *         "started_at": "2026-10-17T02:02:32.080Z",
+                 *         "trial_ended_at": null,
+                 *         "ending_at": null,
+                 *         "terminated_at": null,
+                 *         "canceled_at": null,
+                 *         "created_at": "2026-10-17T02:02:32Z",
+                 *         "previous_plan_code": null,
+                 *         "next_plan_code": null,
+                 *         "downgrade_plan_date": null,
+                 *         "current_billing_period_started_at": "2026-10-17T02:02:32Z",
+                 *         "current_billing_period_ending_at": "2026-10-31T18:29:59Z",
+                 *         "on_termination_credit_note": null,
+                 *         "on_termination_invoice": "generate",
+                 *         "progressive_billing_disabled": false,
+                 *         "consolidate_invoice": true,
+                 *         "purchase_order_number": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "issue11_llm_cust",
+                 *           "account_type": "customer",
+                 *           "name": "Issue11 LLM customer",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 509,
+                 *           "slug": "PUL-CDDE-509",
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "updated_at": "2026-10-17T02:02:31Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         },
+                 *         "plan": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "name": "Issue11 LLM plan",
+                 *           "invoice_display_name": null,
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "code": "issue11_llm_plan",
+                 *           "interval": "monthly",
+                 *           "description": null,
+                 *           "amount_cents": 0,
+                 *           "amount_currency": "USD",
+                 *           "trial_period": null,
+                 *           "pay_in_advance": false,
+                 *           "bill_charges_monthly": null,
+                 *           "bill_fixed_charges_monthly": null,
+                 *           "parent_id": null,
+                 *           "pending_deletion": false,
+                 *           "plan_family_code": "issue11_llm_plan",
+                 *           "charges": [
+                 *             {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000005",
+                 *               "feature_id": "00000000-0000-4000-8000-000000000006",
+                 *               "code": "llm_tokens",
+                 *               "invoice_display_name": null,
+                 *               "feature_code": "llm_tokens",
+                 *               "created_at": "2026-10-17T02:02:31Z",
+                 *               "charge_model": "standard",
+                 *               "invoiceable": true,
+                 *               "regroup_paid_fees": null,
+                 *               "pay_in_advance": false,
+                 *               "prorated": false,
+                 *               "min_amount_cents": 0,
+                 *               "accepts_target_wallet": false,
+                 *               "properties": {
+                 *                 "amount": "0.001"
+                 *               },
+                 *               "applied_pricing_unit": null,
+                 *               "parent_id": null,
+                 *               "filters": [],
+                 *               "taxes": []
+                 *             }
+                 *           ],
+                 *           "usage_thresholds": [],
+                 *           "applicable_usage_thresholds": [],
+                 *           "taxes": []
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "subscription.canceled";
@@ -32161,12 +37860,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     subscription: components["schemas"]["SubscriptionWithCustomerObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32179,12 +37883,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32192,6 +37896,146 @@ export interface operations {
         /** @description Details of the subscription */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "subscription.started",
+                 *       "object_type": "subscription",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "subscription": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_id": "issue11_llm_sub",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "issue11_llm_cust",
+                 *         "name": "",
+                 *         "plan_code": "issue11_llm_plan",
+                 *         "plan_amount_cents": 0,
+                 *         "plan_amount_currency": "USD",
+                 *         "status": "active",
+                 *         "billing_authority": "nozle",
+                 *         "credit_import_completed_at": null,
+                 *         "billing_time": "calendar",
+                 *         "subscription_at": "2026-10-17T02:02:32Z",
+                 *         "started_at": "2026-10-17T02:02:32.080Z",
+                 *         "trial_ended_at": null,
+                 *         "ending_at": null,
+                 *         "terminated_at": null,
+                 *         "canceled_at": null,
+                 *         "created_at": "2026-10-17T02:02:32Z",
+                 *         "previous_plan_code": null,
+                 *         "next_plan_code": null,
+                 *         "downgrade_plan_date": null,
+                 *         "current_billing_period_started_at": "2026-10-17T02:02:32Z",
+                 *         "current_billing_period_ending_at": "2026-10-31T18:29:59Z",
+                 *         "on_termination_credit_note": null,
+                 *         "on_termination_invoice": "generate",
+                 *         "progressive_billing_disabled": false,
+                 *         "consolidate_invoice": true,
+                 *         "purchase_order_number": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "issue11_llm_cust",
+                 *           "account_type": "customer",
+                 *           "name": "Issue11 LLM customer",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 509,
+                 *           "slug": "PUL-CDDE-509",
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "updated_at": "2026-10-17T02:02:31Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "entitlements": [],
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         },
+                 *         "plan": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "name": "Issue11 LLM plan",
+                 *           "invoice_display_name": null,
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "code": "issue11_llm_plan",
+                 *           "interval": "monthly",
+                 *           "description": null,
+                 *           "amount_cents": 0,
+                 *           "amount_currency": "USD",
+                 *           "trial_period": null,
+                 *           "pay_in_advance": false,
+                 *           "bill_charges_monthly": null,
+                 *           "bill_fixed_charges_monthly": null,
+                 *           "parent_id": null,
+                 *           "pending_deletion": false,
+                 *           "plan_family_code": "issue11_llm_plan",
+                 *           "charges": [
+                 *             {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000005",
+                 *               "feature_id": "00000000-0000-4000-8000-000000000006",
+                 *               "code": "llm_tokens",
+                 *               "invoice_display_name": null,
+                 *               "feature_code": "llm_tokens",
+                 *               "created_at": "2026-10-17T02:02:31Z",
+                 *               "charge_model": "standard",
+                 *               "invoiceable": true,
+                 *               "regroup_paid_fees": null,
+                 *               "pay_in_advance": false,
+                 *               "prorated": false,
+                 *               "min_amount_cents": 0,
+                 *               "accepts_target_wallet": false,
+                 *               "properties": {
+                 *                 "amount": "0.001"
+                 *               },
+                 *               "applied_pricing_unit": null,
+                 *               "parent_id": null,
+                 *               "filters": [],
+                 *               "taxes": []
+                 *             }
+                 *           ],
+                 *           "usage_thresholds": [],
+                 *           "applicable_usage_thresholds": [],
+                 *           "taxes": []
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "subscription.started";
@@ -32203,12 +38047,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     subscription: components["schemas"]["SubscriptionWithCustomerObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32221,12 +38070,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32234,6 +38083,146 @@ export interface operations {
         /** @description Details of the subscription */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "subscription.updated",
+                 *       "object_type": "subscription",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "subscription": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_id": "issue11_llm_sub",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "issue11_llm_cust",
+                 *         "name": "Renamed in capture",
+                 *         "plan_code": "issue11_llm_plan",
+                 *         "plan_amount_cents": 0,
+                 *         "plan_amount_currency": "USD",
+                 *         "status": "active",
+                 *         "billing_authority": "nozle",
+                 *         "credit_import_completed_at": null,
+                 *         "billing_time": "calendar",
+                 *         "subscription_at": "2026-10-17T02:02:32Z",
+                 *         "started_at": "2026-10-17T02:02:32.080Z",
+                 *         "trial_ended_at": null,
+                 *         "ending_at": null,
+                 *         "terminated_at": null,
+                 *         "canceled_at": null,
+                 *         "created_at": "2026-10-17T02:02:32Z",
+                 *         "previous_plan_code": null,
+                 *         "next_plan_code": null,
+                 *         "downgrade_plan_date": null,
+                 *         "current_billing_period_started_at": "2026-10-17T02:02:32Z",
+                 *         "current_billing_period_ending_at": "2026-10-31T18:29:59Z",
+                 *         "on_termination_credit_note": null,
+                 *         "on_termination_invoice": "generate",
+                 *         "progressive_billing_disabled": false,
+                 *         "consolidate_invoice": true,
+                 *         "purchase_order_number": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "issue11_llm_cust",
+                 *           "account_type": "customer",
+                 *           "name": "Issue11 LLM customer",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 509,
+                 *           "slug": "PUL-CDDE-509",
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "updated_at": "2026-10-17T02:02:31Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "entitlements": [],
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         },
+                 *         "plan": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "name": "Issue11 LLM plan",
+                 *           "invoice_display_name": null,
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "code": "issue11_llm_plan",
+                 *           "interval": "monthly",
+                 *           "description": null,
+                 *           "amount_cents": 0,
+                 *           "amount_currency": "USD",
+                 *           "trial_period": null,
+                 *           "pay_in_advance": false,
+                 *           "bill_charges_monthly": null,
+                 *           "bill_fixed_charges_monthly": null,
+                 *           "parent_id": null,
+                 *           "pending_deletion": false,
+                 *           "plan_family_code": "issue11_llm_plan",
+                 *           "charges": [
+                 *             {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000005",
+                 *               "feature_id": "00000000-0000-4000-8000-000000000006",
+                 *               "code": "llm_tokens",
+                 *               "invoice_display_name": null,
+                 *               "feature_code": "llm_tokens",
+                 *               "created_at": "2026-10-17T02:02:31Z",
+                 *               "charge_model": "standard",
+                 *               "invoiceable": true,
+                 *               "regroup_paid_fees": null,
+                 *               "pay_in_advance": false,
+                 *               "prorated": false,
+                 *               "min_amount_cents": 0,
+                 *               "accepts_target_wallet": false,
+                 *               "properties": {
+                 *                 "amount": "0.001"
+                 *               },
+                 *               "applied_pricing_unit": null,
+                 *               "parent_id": null,
+                 *               "filters": [],
+                 *               "taxes": []
+                 *             }
+                 *           ],
+                 *           "usage_thresholds": [],
+                 *           "applicable_usage_thresholds": [],
+                 *           "taxes": []
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "subscription.updated";
@@ -32245,12 +38234,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     subscription: components["schemas"]["SubscriptionWithCustomerObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32263,12 +38257,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32276,6 +38270,145 @@ export interface operations {
         /** @description Details of the subscription */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "subscription.termination_alert",
+                 *       "object_type": "subscription",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "subscription": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_id": "issue11_llm_sub",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "issue11_llm_cust",
+                 *         "name": "",
+                 *         "plan_code": "issue11_llm_plan",
+                 *         "plan_amount_cents": 0,
+                 *         "plan_amount_currency": "USD",
+                 *         "status": "active",
+                 *         "billing_authority": "nozle",
+                 *         "credit_import_completed_at": null,
+                 *         "billing_time": "calendar",
+                 *         "subscription_at": "2026-10-17T02:02:32Z",
+                 *         "started_at": "2026-10-17T02:02:32.080Z",
+                 *         "trial_ended_at": null,
+                 *         "ending_at": null,
+                 *         "terminated_at": null,
+                 *         "canceled_at": null,
+                 *         "created_at": "2026-10-17T02:02:32Z",
+                 *         "previous_plan_code": null,
+                 *         "next_plan_code": null,
+                 *         "downgrade_plan_date": null,
+                 *         "current_billing_period_started_at": "2026-10-17T02:02:32Z",
+                 *         "current_billing_period_ending_at": "2026-10-31T18:29:59Z",
+                 *         "on_termination_credit_note": null,
+                 *         "on_termination_invoice": "generate",
+                 *         "progressive_billing_disabled": false,
+                 *         "consolidate_invoice": true,
+                 *         "purchase_order_number": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "issue11_llm_cust",
+                 *           "account_type": "customer",
+                 *           "name": "Issue11 LLM customer",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 509,
+                 *           "slug": "PUL-CDDE-509",
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "updated_at": "2026-10-17T02:02:31Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         },
+                 *         "plan": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "name": "Issue11 LLM plan",
+                 *           "invoice_display_name": null,
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "code": "issue11_llm_plan",
+                 *           "interval": "monthly",
+                 *           "description": null,
+                 *           "amount_cents": 0,
+                 *           "amount_currency": "USD",
+                 *           "trial_period": null,
+                 *           "pay_in_advance": false,
+                 *           "bill_charges_monthly": null,
+                 *           "bill_fixed_charges_monthly": null,
+                 *           "parent_id": null,
+                 *           "pending_deletion": false,
+                 *           "plan_family_code": "issue11_llm_plan",
+                 *           "charges": [
+                 *             {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000005",
+                 *               "feature_id": "00000000-0000-4000-8000-000000000006",
+                 *               "code": "llm_tokens",
+                 *               "invoice_display_name": null,
+                 *               "feature_code": "llm_tokens",
+                 *               "created_at": "2026-10-17T02:02:31Z",
+                 *               "charge_model": "standard",
+                 *               "invoiceable": true,
+                 *               "regroup_paid_fees": null,
+                 *               "pay_in_advance": false,
+                 *               "prorated": false,
+                 *               "min_amount_cents": 0,
+                 *               "accepts_target_wallet": false,
+                 *               "properties": {
+                 *                 "amount": "0.001"
+                 *               },
+                 *               "applied_pricing_unit": null,
+                 *               "parent_id": null,
+                 *               "filters": [],
+                 *               "taxes": []
+                 *             }
+                 *           ],
+                 *           "usage_thresholds": [],
+                 *           "applicable_usage_thresholds": [],
+                 *           "taxes": []
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "subscription.termination_alert";
@@ -32287,12 +38420,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     subscription: components["schemas"]["SubscriptionWithCustomerObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32305,12 +38443,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32318,6 +38456,145 @@ export interface operations {
         /** @description Details of the subscription */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "subscription.trial_ended",
+                 *       "object_type": "subscription",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "subscription": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_id": "issue11_llm_sub",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "issue11_llm_cust",
+                 *         "name": "",
+                 *         "plan_code": "issue11_llm_plan",
+                 *         "plan_amount_cents": 0,
+                 *         "plan_amount_currency": "USD",
+                 *         "status": "active",
+                 *         "billing_authority": "nozle",
+                 *         "credit_import_completed_at": null,
+                 *         "billing_time": "calendar",
+                 *         "subscription_at": "2026-10-17T02:02:32Z",
+                 *         "started_at": "2026-10-17T02:02:32.080Z",
+                 *         "trial_ended_at": null,
+                 *         "ending_at": null,
+                 *         "terminated_at": null,
+                 *         "canceled_at": null,
+                 *         "created_at": "2026-10-17T02:02:32Z",
+                 *         "previous_plan_code": null,
+                 *         "next_plan_code": null,
+                 *         "downgrade_plan_date": null,
+                 *         "current_billing_period_started_at": "2026-10-17T02:02:32Z",
+                 *         "current_billing_period_ending_at": "2026-10-31T18:29:59Z",
+                 *         "on_termination_credit_note": null,
+                 *         "on_termination_invoice": "generate",
+                 *         "progressive_billing_disabled": false,
+                 *         "consolidate_invoice": true,
+                 *         "purchase_order_number": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "issue11_llm_cust",
+                 *           "account_type": "customer",
+                 *           "name": "Issue11 LLM customer",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 509,
+                 *           "slug": "PUL-CDDE-509",
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "updated_at": "2026-10-17T02:02:31Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         },
+                 *         "plan": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "name": "Issue11 LLM plan",
+                 *           "invoice_display_name": null,
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "code": "issue11_llm_plan",
+                 *           "interval": "monthly",
+                 *           "description": null,
+                 *           "amount_cents": 0,
+                 *           "amount_currency": "USD",
+                 *           "trial_period": null,
+                 *           "pay_in_advance": false,
+                 *           "bill_charges_monthly": null,
+                 *           "bill_fixed_charges_monthly": null,
+                 *           "parent_id": null,
+                 *           "pending_deletion": false,
+                 *           "plan_family_code": "issue11_llm_plan",
+                 *           "charges": [
+                 *             {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000005",
+                 *               "feature_id": "00000000-0000-4000-8000-000000000006",
+                 *               "code": "llm_tokens",
+                 *               "invoice_display_name": null,
+                 *               "feature_code": "llm_tokens",
+                 *               "created_at": "2026-10-17T02:02:31Z",
+                 *               "charge_model": "standard",
+                 *               "invoiceable": true,
+                 *               "regroup_paid_fees": null,
+                 *               "pay_in_advance": false,
+                 *               "prorated": false,
+                 *               "min_amount_cents": 0,
+                 *               "accepts_target_wallet": false,
+                 *               "properties": {
+                 *                 "amount": "0.001"
+                 *               },
+                 *               "applied_pricing_unit": null,
+                 *               "parent_id": null,
+                 *               "filters": [],
+                 *               "taxes": []
+                 *             }
+                 *           ],
+                 *           "usage_thresholds": [],
+                 *           "applicable_usage_thresholds": [],
+                 *           "taxes": []
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "subscription.trial_ended";
@@ -32329,12 +38606,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     subscription: components["schemas"]["SubscriptionWithCustomerObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32347,12 +38629,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32360,6 +38642,175 @@ export interface operations {
         /** @description Details of the subscription and of the reached threshold */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "subscription.usage_threshold_reached",
+                 *       "object_type": "subscription",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "subscription": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_id": "issue11_llm_sub",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "issue11_llm_cust",
+                 *         "name": "Renamed in capture",
+                 *         "plan_code": "issue11_llm_plan",
+                 *         "plan_amount_cents": 0,
+                 *         "plan_amount_currency": "USD",
+                 *         "status": "active",
+                 *         "billing_authority": "nozle",
+                 *         "credit_import_completed_at": null,
+                 *         "billing_time": "calendar",
+                 *         "subscription_at": "2026-10-17T02:02:32Z",
+                 *         "started_at": "2026-10-17T02:02:32.080Z",
+                 *         "trial_ended_at": null,
+                 *         "ending_at": null,
+                 *         "terminated_at": null,
+                 *         "canceled_at": null,
+                 *         "created_at": "2026-10-17T02:02:32Z",
+                 *         "previous_plan_code": null,
+                 *         "next_plan_code": null,
+                 *         "downgrade_plan_date": null,
+                 *         "current_billing_period_started_at": "2026-10-17T02:02:32Z",
+                 *         "current_billing_period_ending_at": "2026-10-31T18:29:59Z",
+                 *         "on_termination_credit_note": null,
+                 *         "on_termination_invoice": "generate",
+                 *         "progressive_billing_disabled": false,
+                 *         "consolidate_invoice": true,
+                 *         "purchase_order_number": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "issue11_llm_cust",
+                 *           "account_type": "customer",
+                 *           "name": "Issue11 LLM customer",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 509,
+                 *           "slug": "PUL-CDDE-509",
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "updated_at": "2026-10-17T02:02:31Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": null,
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "USD",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": null,
+                 *             "payment_provider_code": null,
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": []
+                 *         },
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         },
+                 *         "plan": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "name": "Issue11 LLM plan",
+                 *           "invoice_display_name": null,
+                 *           "created_at": "2026-10-17T02:02:31Z",
+                 *           "code": "issue11_llm_plan",
+                 *           "interval": "monthly",
+                 *           "description": null,
+                 *           "amount_cents": 0,
+                 *           "amount_currency": "USD",
+                 *           "trial_period": null,
+                 *           "pay_in_advance": false,
+                 *           "bill_charges_monthly": null,
+                 *           "bill_fixed_charges_monthly": null,
+                 *           "parent_id": null,
+                 *           "pending_deletion": false,
+                 *           "plan_family_code": "issue11_llm_plan",
+                 *           "charges": [
+                 *             {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000005",
+                 *               "feature_id": "00000000-0000-4000-8000-000000000006",
+                 *               "code": "llm_tokens",
+                 *               "invoice_display_name": null,
+                 *               "feature_code": "llm_tokens",
+                 *               "created_at": "2026-10-17T02:02:31Z",
+                 *               "charge_model": "standard",
+                 *               "invoiceable": true,
+                 *               "regroup_paid_fees": null,
+                 *               "pay_in_advance": false,
+                 *               "prorated": false,
+                 *               "min_amount_cents": 0,
+                 *               "accepts_target_wallet": false,
+                 *               "properties": {
+                 *                 "amount": "0.001"
+                 *               },
+                 *               "applied_pricing_unit": null,
+                 *               "parent_id": null,
+                 *               "filters": [],
+                 *               "taxes": []
+                 *             }
+                 *           ],
+                 *           "usage_thresholds": [
+                 *             {
+                 *               "nozle_id": "00000000-0000-4000-8000-000000000007",
+                 *               "threshold_display_name": "Fair use",
+                 *               "amount_cents": 10000,
+                 *               "recurring": false,
+                 *               "created_at": "2026-10-22T07:11:19Z",
+                 *               "updated_at": "2026-10-22T07:11:19Z"
+                 *             }
+                 *           ],
+                 *           "applicable_usage_thresholds": [
+                 *             {
+                 *               "threshold_display_name": "Fair use",
+                 *               "amount_cents": 10000,
+                 *               "recurring": false
+                 *             }
+                 *           ],
+                 *           "taxes": []
+                 *         },
+                 *         "usage_threshold": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000007",
+                 *           "threshold_display_name": "Fair use",
+                 *           "amount_cents": 10000,
+                 *           "recurring": false,
+                 *           "created_at": "2026-10-22T07:11:19Z",
+                 *           "updated_at": "2026-10-22T07:11:19Z"
+                 *         },
+                 *         "applicable_usage_thresholds": [
+                 *           {
+                 *             "threshold_display_name": "Fair use",
+                 *             "amount_cents": 10000,
+                 *             "recurring": false
+                 *           }
+                 *         ]
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "subscription.usage_threshold_reached";
@@ -32371,12 +38822,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     subscription: components["schemas"]["SubscriptionWithThresholdObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32389,12 +38845,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32402,6 +38858,44 @@ export interface operations {
         /** @description Details of the wallet */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "wallet.depleted_ongoing_balance",
+                 *       "object_type": "wallet",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "wallet": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "evalag1790953905_m1",
+                 *         "status": "active",
+                 *         "currency": "USD",
+                 *         "name": null,
+                 *         "code": "default",
+                 *         "rate_amount": "1.0",
+                 *         "credits_balance": "0.0",
+                 *         "credits_ongoing_balance": "0.0",
+                 *         "credits_ongoing_usage_balance": "0.0",
+                 *         "balance_cents": 0,
+                 *         "ongoing_balance_cents": 0,
+                 *         "ongoing_usage_balance_cents": 0,
+                 *         "consumed_credits": "0.0",
+                 *         "created_at": "2026-10-02T15:11:56Z",
+                 *         "expiration_at": null,
+                 *         "last_balance_sync_at": null,
+                 *         "last_consumed_credit_at": null,
+                 *         "terminated_at": null,
+                 *         "invoice_requires_successful_payment": false,
+                 *         "paid_top_up_min_amount_cents": null,
+                 *         "paid_top_up_max_amount_cents": null,
+                 *         "priority": 50,
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "wallet.depleted_ongoing_balance";
@@ -32413,12 +38907,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     wallet: components["schemas"]["WalletObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32431,12 +38930,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32444,6 +38943,70 @@ export interface operations {
         /** @description Details of the wallet transaction */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "wallet_transaction.created",
+                 *       "object_type": "wallet_transaction",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "wallet_transaction": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "wallet_id": "00000000-0000-4000-8000-000000000003",
+                 *         "invoice_id": null,
+                 *         "credit_note_id": null,
+                 *         "voided_invoice_id": null,
+                 *         "status": "settled",
+                 *         "source": "manual",
+                 *         "transaction_status": "granted",
+                 *         "transaction_type": "inbound",
+                 *         "amount": "10.0",
+                 *         "credit_amount": "10.0",
+                 *         "remaining_amount_cents": 1000,
+                 *         "remaining_credit_amount": "10.0",
+                 *         "priority": 50,
+                 *         "settled_at": "2026-10-13T00:18:38Z",
+                 *         "failed_at": null,
+                 *         "created_at": "2026-10-13T00:18:38Z",
+                 *         "invoice_requires_successful_payment": false,
+                 *         "metadata": [],
+                 *         "name": null,
+                 *         "wallet": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "customer_id": "00000000-0000-4000-8000-000000000004",
+                 *           "external_customer_id": "vfy-rest-c1",
+                 *           "status": "terminated",
+                 *           "currency": "USD",
+                 *           "name": "x4",
+                 *           "code": "vfy-rest-wallet",
+                 *           "rate_amount": "1.0",
+                 *           "credits_balance": "13.0",
+                 *           "credits_ongoing_balance": "13.0",
+                 *           "credits_ongoing_usage_balance": "0.0",
+                 *           "balance_cents": 1300,
+                 *           "ongoing_balance_cents": 1300,
+                 *           "ongoing_usage_balance_cents": 0,
+                 *           "consumed_credits": "0.0",
+                 *           "created_at": "2026-10-13T00:18:38Z",
+                 *           "expiration_at": null,
+                 *           "last_balance_sync_at": "2026-10-13T00:18:39Z",
+                 *           "last_consumed_credit_at": null,
+                 *           "terminated_at": "2026-10-13T00:23:07.431Z",
+                 *           "invoice_requires_successful_payment": false,
+                 *           "paid_top_up_min_amount_cents": null,
+                 *           "paid_top_up_max_amount_cents": null,
+                 *           "priority": 50,
+                 *           "payment_method": {
+                 *             "payment_method_id": null,
+                 *             "payment_method_type": "provider"
+                 *           }
+                 *         },
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "wallet_transaction.created";
@@ -32455,12 +39018,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     wallet_transaction: components["schemas"]["WalletTransactionObjectExtended"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32473,12 +39041,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32486,6 +39054,70 @@ export interface operations {
         /** @description Details of the wallet transaction */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "wallet_transaction.updated",
+                 *       "object_type": "wallet_transaction",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "wallet_transaction": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "wallet_id": "00000000-0000-4000-8000-000000000003",
+                 *         "invoice_id": null,
+                 *         "credit_note_id": null,
+                 *         "voided_invoice_id": null,
+                 *         "status": "settled",
+                 *         "source": "manual",
+                 *         "transaction_status": "granted",
+                 *         "transaction_type": "inbound",
+                 *         "amount": "10.0",
+                 *         "credit_amount": "10.0",
+                 *         "remaining_amount_cents": 1000,
+                 *         "remaining_credit_amount": "10.0",
+                 *         "priority": 50,
+                 *         "settled_at": "2026-10-13T00:18:38Z",
+                 *         "failed_at": null,
+                 *         "created_at": "2026-10-13T00:18:38Z",
+                 *         "invoice_requires_successful_payment": false,
+                 *         "metadata": [],
+                 *         "name": null,
+                 *         "wallet": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "customer_id": "00000000-0000-4000-8000-000000000004",
+                 *           "external_customer_id": "vfy-rest-c1",
+                 *           "status": "terminated",
+                 *           "currency": "USD",
+                 *           "name": "x4",
+                 *           "code": "vfy-rest-wallet",
+                 *           "rate_amount": "1.0",
+                 *           "credits_balance": "13.0",
+                 *           "credits_ongoing_balance": "13.0",
+                 *           "credits_ongoing_usage_balance": "0.0",
+                 *           "balance_cents": 1300,
+                 *           "ongoing_balance_cents": 1300,
+                 *           "ongoing_usage_balance_cents": 0,
+                 *           "consumed_credits": "0.0",
+                 *           "created_at": "2026-10-13T00:18:38Z",
+                 *           "expiration_at": null,
+                 *           "last_balance_sync_at": "2026-10-13T00:18:39Z",
+                 *           "last_consumed_credit_at": null,
+                 *           "terminated_at": "2026-10-13T00:23:07.431Z",
+                 *           "invoice_requires_successful_payment": false,
+                 *           "paid_top_up_min_amount_cents": null,
+                 *           "paid_top_up_max_amount_cents": null,
+                 *           "priority": 50,
+                 *           "payment_method": {
+                 *             "payment_method_id": null,
+                 *             "payment_method_type": "provider"
+                 *           }
+                 *         },
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "wallet_transaction.updated";
@@ -32497,12 +39129,17 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     wallet_transaction: components["schemas"]["WalletTransactionObjectExtended"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -32515,12 +39152,12 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Signature of the webhook payload */
-                "X-Nozle-Signature": components["parameters"]["webhook_signature"];
-                /** @description Algorithm used to generate the signature */
-                "X-Nozle-Signature-Algorithm": components["parameters"]["webhook_signature_algorithm"];
-                /** @description Unique id of the webhook. It can be used for idempotency */
-                "X-Nozle-Unique-Key": components["parameters"]["webhook_unique_key"];
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
             };
             path?: never;
             cookie?: never;
@@ -32528,6 +39165,26 @@ export interface operations {
         /** @description Details of the wallet transaction and of the provider error */
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "wallet_transaction.payment_failure",
+                 *       "object_type": "payment_provider_wallet_transaction_payment_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment_provider_wallet_transaction_payment_error": {
+                 *         "wallet_transaction_id": "00000000-0000-4000-8000-000000000002",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "vfy-rest-c1",
+                 *         "provider_customer_id": "cus_example",
+                 *         "payment_provider": null,
+                 *         "payment_provider_code": null,
+                 *         "provider_error": {
+                 *           "message": "Your card was declined.",
+                 *           "error_code": "card_declined"
+                 *         }
+                 *       }
+                 *     }
+                 */
                 "application/json": {
                     /** @enum {string} */
                     webhook_type: "wallet_transaction.payment_failure";
@@ -32539,12 +39196,1802 @@ export interface operations {
                      * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
                      */
                     organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
                     payment_provider_wallet_transaction_payment_error: components["schemas"]["WalletTransactionPaymentFailureObject"];
                 };
             };
         };
         responses: {
-            /** @description Return a 200 status to indicate that the data was received successfully */
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    customerCrmProviderCreated: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "customer.crm_provider_created",
+                 *       "object_type": "customer",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "customer": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "external_id": "wrrk-pullse-demo-v2",
+                 *         "account_type": "customer",
+                 *         "name": "Wrrk.ai Demo Workspace",
+                 *         "firstname": null,
+                 *         "lastname": null,
+                 *         "customer_type": null,
+                 *         "sequential_id": 126,
+                 *         "slug": "PUL-CDDE-126",
+                 *         "created_at": "2026-08-06T16:20:05Z",
+                 *         "updated_at": "2026-08-06T16:23:13Z",
+                 *         "country": "US",
+                 *         "address_line1": "123 Market Street",
+                 *         "address_line2": null,
+                 *         "state": "CA",
+                 *         "zipcode": "94107",
+                 *         "email": "jane@example.com",
+                 *         "city": "San Francisco",
+                 *         "url": null,
+                 *         "phone": null,
+                 *         "logo_url": null,
+                 *         "legal_name": null,
+                 *         "legal_number": null,
+                 *         "currency": "USD",
+                 *         "tax_identification_number": null,
+                 *         "timezone": "America/New_York",
+                 *         "applicable_timezone": "America/New_York",
+                 *         "net_payment_term": null,
+                 *         "external_salesforce_id": null,
+                 *         "finalize_zero_amount_invoice": "inherit",
+                 *         "billing_configuration": {
+                 *           "invoice_grace_period": null,
+                 *           "payment_provider": "stripe",
+                 *           "payment_provider_code": "test",
+                 *           "document_locale": null,
+                 *           "subscription_invoice_issuing_date_anchor": null,
+                 *           "subscription_invoice_issuing_date_adjustment": null,
+                 *           "provider_customer_id": "cus_example",
+                 *           "provider_payment_methods": [
+                 *             "card"
+                 *           ],
+                 *           "sync_with_provider": true
+                 *         },
+                 *         "shipping_address": {
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "city": null,
+                 *           "zipcode": null,
+                 *           "state": null,
+                 *           "country": null
+                 *         },
+                 *         "skip_invoice_custom_sections": false,
+                 *         "metadata": [],
+                 *         "integration_customers": []
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "customer.crm_provider_created";
+                    /** @enum {string} */
+                    object_type: "customer";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    customer: components["schemas"]["CustomerObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    customerCrmProviderError: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "customer.crm_provider_error",
+                 *       "object_type": "crm_provider_customer_error",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "crm_provider_customer_error": {
+                 *         "customer_id": "00000000-0000-4000-8000-000000000002",
+                 *         "external_customer_id": "wrrk-pullse-demo-v2",
+                 *         "accounting_provider": "hubspot",
+                 *         "accounting_provider_code": "hubspot-prod",
+                 *         "provider_error": {
+                 *           "message": "Rate limit exceeded",
+                 *           "error_code": "provider_error"
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "customer.crm_provider_error";
+                    /** @enum {string} */
+                    object_type: "crm_provider_customer_error";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    crm_provider_customer_error: components["schemas"]["CustomerIntegratrionErrorObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    invoiceResynced: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "invoice.resynced",
+                 *       "object_type": "invoice",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "invoice": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "billing_entity_code": "pullse_testing",
+                 *         "sequential_id": 1,
+                 *         "number": "PUL-CDDE-202610-448",
+                 *         "issuing_date": "2026-10-18",
+                 *         "payment_due_date": "2026-10-18",
+                 *         "net_payment_term": 0,
+                 *         "invoice_type": "subscription",
+                 *         "status": "finalized",
+                 *         "payment_status": "succeeded",
+                 *         "payment_dispute_lost_at": null,
+                 *         "payment_overdue": false,
+                 *         "currency": "INR",
+                 *         "fees_amount_cents": 30584,
+                 *         "taxes_amount_cents": 0,
+                 *         "progressive_billing_credit_amount_cents": 0,
+                 *         "coupons_amount_cents": 0,
+                 *         "credit_notes_amount_cents": 0,
+                 *         "sub_total_excluding_taxes_amount_cents": 30584,
+                 *         "sub_total_including_taxes_amount_cents": 30584,
+                 *         "total_amount_cents": 30584,
+                 *         "total_due_amount_cents": 0,
+                 *         "total_paid_amount_cents": 30584,
+                 *         "total_offsetted_credit_note_amount_cents": 0,
+                 *         "prepaid_credit_amount_cents": 0,
+                 *         "prepaid_granted_credit_amount_cents": null,
+                 *         "prepaid_purchased_credit_amount_cents": null,
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "version_number": 4,
+                 *         "self_billed": false,
+                 *         "created_at": "2026-10-13T04:32:10Z",
+                 *         "updated_at": "2026-10-13T04:32:54Z",
+                 *         "voided_at": null,
+                 *         "customer": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "external_id": "sdkv3rw-1791865926",
+                 *           "account_type": "customer",
+                 *           "name": "sdkv3 rzp webhook",
+                 *           "firstname": null,
+                 *           "lastname": null,
+                 *           "customer_type": null,
+                 *           "sequential_id": 495,
+                 *           "slug": "PUL-CDDE-495",
+                 *           "created_at": "2026-10-13T04:32:06Z",
+                 *           "updated_at": "2026-10-13T04:32:06Z",
+                 *           "country": null,
+                 *           "address_line1": null,
+                 *           "address_line2": null,
+                 *           "state": null,
+                 *           "zipcode": null,
+                 *           "email": "jane@example.com",
+                 *           "city": null,
+                 *           "url": null,
+                 *           "phone": null,
+                 *           "logo_url": null,
+                 *           "legal_name": null,
+                 *           "legal_number": null,
+                 *           "currency": "INR",
+                 *           "tax_identification_number": null,
+                 *           "timezone": null,
+                 *           "applicable_timezone": "Asia/Kolkata",
+                 *           "net_payment_term": null,
+                 *           "external_salesforce_id": null,
+                 *           "finalize_zero_amount_invoice": "inherit",
+                 *           "billing_configuration": {
+                 *             "invoice_grace_period": null,
+                 *             "payment_provider": "razorpay",
+                 *             "payment_provider_code": "rzp_sdkv3_test",
+                 *             "document_locale": null,
+                 *             "subscription_invoice_issuing_date_anchor": null,
+                 *             "subscription_invoice_issuing_date_adjustment": null,
+                 *             "provider_customer_id": null,
+                 *             "sync_with_provider": true
+                 *           },
+                 *           "shipping_address": {
+                 *             "address_line1": null,
+                 *             "address_line2": null,
+                 *             "city": null,
+                 *             "zipcode": null,
+                 *             "state": null,
+                 *             "country": null
+                 *           },
+                 *           "skip_invoice_custom_sections": false,
+                 *           "metadata": [],
+                 *           "integration_customers": []
+                 *         },
+                 *         "subscriptions": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *             "external_id": "sub-sdkv3rw-1791865926",
+                 *             "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *             "external_customer_id": "sdkv3rw-1791865926",
+                 *             "name": "",
+                 *             "plan_code": "sdkv3_inr_a",
+                 *             "plan_amount_cents": 49900,
+                 *             "plan_amount_currency": "INR",
+                 *             "status": "active",
+                 *             "billing_authority": "nozle",
+                 *             "credit_import_completed_at": null,
+                 *             "billing_time": "calendar",
+                 *             "subscription_at": "2026-10-13T04:32:10Z",
+                 *             "started_at": "2026-10-13T04:32:10.406Z",
+                 *             "trial_ended_at": null,
+                 *             "ending_at": null,
+                 *             "terminated_at": null,
+                 *             "canceled_at": null,
+                 *             "created_at": "2026-10-13T04:32:10Z",
+                 *             "previous_plan_code": null,
+                 *             "next_plan_code": null,
+                 *             "downgrade_plan_date": null,
+                 *             "current_billing_period_started_at": "2026-10-13T04:32:10Z",
+                 *             "current_billing_period_ending_at": "2026-10-31T18:29:59Z",
+                 *             "on_termination_credit_note": null,
+                 *             "on_termination_invoice": "generate",
+                 *             "progressive_billing_disabled": false,
+                 *             "consolidate_invoice": true,
+                 *             "purchase_order_number": null,
+                 *             "payment_method": {
+                 *               "payment_method_id": null,
+                 *               "payment_method_type": "provider"
+                 *             }
+                 *           }
+                 *         ],
+                 *         "billing_periods": [
+                 *           {
+                 *             "subscription_id": "00000000-0000-4000-8000-000000000004",
+                 *             "external_subscription_id": "sub-sdkv3rw-1791865926",
+                 *             "plan_id": "00000000-0000-4000-8000-000000000005",
+                 *             "subscription_from_datetime": "2026-10-12T18:30:00Z",
+                 *             "subscription_to_datetime": "2026-10-31T18:29:59Z",
+                 *             "charges_from_datetime": "2026-10-13T04:32:10Z",
+                 *             "charges_to_datetime": "2026-10-13T04:32:10Z",
+                 *             "fixed_charges_from_datetime": "2026-10-13T04:32:10Z",
+                 *             "fixed_charges_to_datetime": "2026-10-13T04:32:10Z",
+                 *             "invoicing_reason": "subscription_starting"
+                 *           }
+                 *         ],
+                 *         "fees": [
+                 *           {
+                 *             "nozle_id": "00000000-0000-4000-8000-000000000006",
+                 *             "charge_id": null,
+                 *             "charge_filter_id": null,
+                 *             "fixed_charge_id": null,
+                 *             "invoice_id": "00000000-0000-4000-8000-000000000002",
+                 *             "true_up_fee_id": null,
+                 *             "true_up_parent_fee_id": null,
+                 *             "original_fee_id": null,
+                 *             "subscription_id": "00000000-0000-4000-8000-000000000004",
+                 *             "external_subscription_id": "sub-sdkv3rw-1791865926",
+                 *             "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *             "external_customer_id": "sdkv3rw-1791865926",
+                 *             "item": {
+                 *               "type": "subscription",
+                 *               "code": "sdkv3_inr_a",
+                 *               "name": "sdkv3 inr a",
+                 *               "description": null,
+                 *               "invoice_display_name": "sdkv3 inr a",
+                 *               "filters": null,
+                 *               "filter_invoice_display_name": null,
+                 *               "item_id": "00000000-0000-4000-8000-000000000004",
+                 *               "item_type": "Subscription",
+                 *               "grouped_by": {}
+                 *             },
+                 *             "pay_in_advance": true,
+                 *             "invoiceable": true,
+                 *             "amount_cents": 30584,
+                 *             "amount_currency": "INR",
+                 *             "precise_amount": "305.8387096774193",
+                 *             "precise_total_amount": "305.8387096774193",
+                 *             "taxes_amount_cents": 0,
+                 *             "taxes_precise_amount": "0.0",
+                 *             "taxes_rate": 0,
+                 *             "total_aggregated_units": null,
+                 *             "total_amount_cents": 30584,
+                 *             "total_amount_currency": "INR",
+                 *             "units": "1.0",
+                 *             "description": null,
+                 *             "precise_unit_amount": "305.84",
+                 *             "precise_coupons_amount_cents": "0.0",
+                 *             "sub_total_excluding_taxes_amount_cents": 30584,
+                 *             "sub_total_excluding_taxes_precise_amount_cents": "30583.87096774193",
+                 *             "events_count": null,
+                 *             "payment_status": "succeeded",
+                 *             "created_at": "2026-10-13T04:32:10Z",
+                 *             "succeeded_at": null,
+                 *             "failed_at": null,
+                 *             "refunded_at": null,
+                 *             "amount_details": {
+                 *               "plan_amount_cents": 49900
+                 *             },
+                 *             "self_billed": false,
+                 *             "pricing_unit_details": null,
+                 *             "presentation_breakdowns": [],
+                 *             "from_date": "2026-10-12T18:30:00+00:00",
+                 *             "to_date": "2026-10-31T18:29:59+00:00"
+                 *           }
+                 *         ],
+                 *         "credits": [],
+                 *         "applied_taxes": []
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "invoice.resynced";
+                    /** @enum {string} */
+                    object_type: "invoice";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    invoice: components["schemas"]["InvoiceObjectExtended"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    orderCreated: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "order.created",
+                 *       "object_type": "order",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "order": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "OR-2026-0002",
+                 *         "status": "failed",
+                 *         "order_type": "subscription_creation",
+                 *         "execution_mode": "execute_in_nozle",
+                 *         "currency": "USD",
+                 *         "executed_at": null,
+                 *         "execution_record": {
+                 *           "executed_at": null,
+                 *           "execution_mode": "execute_in_nozle",
+                 *           "invoice_id": null,
+                 *           "subscription_ids": [],
+                 *           "terminated_subscription_ids": [],
+                 *           "applied_coupon_ids": [],
+                 *           "wallet_ids": [],
+                 *           "errors": [
+                 *             "incomplete_snapshot"
+                 *           ]
+                 *         },
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "order_form_id": "00000000-0000-4000-8000-000000000004",
+                 *         "created_at": "2026-10-07T23:45:00Z",
+                 *         "updated_at": "2026-10-07T23:45:10Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "order.created";
+                    /** @enum {string} */
+                    object_type: "order";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    order: components["schemas"]["OrderWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    orderExecuted: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "order.executed",
+                 *       "object_type": "order",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "order": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "OR-2026-0002",
+                 *         "status": "failed",
+                 *         "order_type": "subscription_creation",
+                 *         "execution_mode": "execute_in_nozle",
+                 *         "currency": "USD",
+                 *         "executed_at": null,
+                 *         "execution_record": {
+                 *           "executed_at": null,
+                 *           "execution_mode": "execute_in_nozle",
+                 *           "invoice_id": null,
+                 *           "subscription_ids": [],
+                 *           "terminated_subscription_ids": [],
+                 *           "applied_coupon_ids": [],
+                 *           "wallet_ids": [],
+                 *           "errors": [
+                 *             "incomplete_snapshot"
+                 *           ]
+                 *         },
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "order_form_id": "00000000-0000-4000-8000-000000000004",
+                 *         "created_at": "2026-10-07T23:45:00Z",
+                 *         "updated_at": "2026-10-07T23:45:10Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "order.executed";
+                    /** @enum {string} */
+                    object_type: "order";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    order: components["schemas"]["OrderWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    orderFailed: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "order.failed",
+                 *       "object_type": "order",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "order": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "OR-2026-0001",
+                 *         "status": "failed",
+                 *         "order_type": "subscription_creation",
+                 *         "execution_mode": "execute_in_nozle",
+                 *         "currency": "USD",
+                 *         "executed_at": null,
+                 *         "execution_record": {
+                 *           "executed_at": null,
+                 *           "execution_mode": "execute_in_nozle",
+                 *           "invoice_id": null,
+                 *           "subscription_ids": [],
+                 *           "terminated_subscription_ids": [],
+                 *           "applied_coupon_ids": [],
+                 *           "wallet_ids": [],
+                 *           "errors": [
+                 *             "customer_not_found"
+                 *           ]
+                 *         },
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "order_form_id": "00000000-0000-4000-8000-000000000004",
+                 *         "created_at": "2026-10-07T23:41:36Z",
+                 *         "updated_at": "2026-10-22T07:10:02Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "order.failed";
+                    /** @enum {string} */
+                    object_type: "order";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    order: components["schemas"]["OrderWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    orderFormCreated: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "order_form.created",
+                 *       "object_type": "order_form",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "order_form": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "OF-2026-0001",
+                 *         "status": "signed",
+                 *         "void_reason": null,
+                 *         "expires_at": null,
+                 *         "signed_at": "2026-10-07T23:41:36Z",
+                 *         "voided_at": null,
+                 *         "signed_document_url": null,
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "quote_id": "00000000-0000-4000-8000-000000000004",
+                 *         "quote_version_id": "00000000-0000-4000-8000-000000000005",
+                 *         "created_at": "2026-10-07T23:31:58Z",
+                 *         "updated_at": "2026-10-07T23:41:36Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "order_form.created";
+                    /** @enum {string} */
+                    object_type: "order_form";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    order_form: components["schemas"]["OrderFormWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    orderFormSigned: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "order_form.signed",
+                 *       "object_type": "order_form",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "order_form": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "OF-2026-0001",
+                 *         "status": "signed",
+                 *         "void_reason": null,
+                 *         "expires_at": null,
+                 *         "signed_at": "2026-10-07T23:41:36Z",
+                 *         "voided_at": null,
+                 *         "signed_document_url": null,
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "quote_id": "00000000-0000-4000-8000-000000000004",
+                 *         "quote_version_id": "00000000-0000-4000-8000-000000000005",
+                 *         "created_at": "2026-10-07T23:31:58Z",
+                 *         "updated_at": "2026-10-07T23:41:36Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "order_form.signed";
+                    /** @enum {string} */
+                    object_type: "order_form";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    order_form: components["schemas"]["OrderFormWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    orderFormExpired: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "order_form.expired",
+                 *       "object_type": "order_form",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "order_form": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "OF-2026-0001",
+                 *         "status": "signed",
+                 *         "void_reason": null,
+                 *         "expires_at": null,
+                 *         "signed_at": "2026-10-07T23:41:36Z",
+                 *         "voided_at": null,
+                 *         "signed_document_url": null,
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "quote_id": "00000000-0000-4000-8000-000000000004",
+                 *         "quote_version_id": "00000000-0000-4000-8000-000000000005",
+                 *         "created_at": "2026-10-07T23:31:58Z",
+                 *         "updated_at": "2026-10-07T23:41:36Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "order_form.expired";
+                    /** @enum {string} */
+                    object_type: "order_form";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    order_form: components["schemas"]["OrderFormWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    orderFormVoided: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "order_form.voided",
+                 *       "object_type": "order_form",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "order_form": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "OF-2026-0001",
+                 *         "status": "signed",
+                 *         "void_reason": null,
+                 *         "expires_at": null,
+                 *         "signed_at": "2026-10-07T23:41:36Z",
+                 *         "voided_at": null,
+                 *         "signed_document_url": null,
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "quote_id": "00000000-0000-4000-8000-000000000004",
+                 *         "quote_version_id": "00000000-0000-4000-8000-000000000005",
+                 *         "created_at": "2026-10-07T23:31:58Z",
+                 *         "updated_at": "2026-10-07T23:41:36Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "order_form.voided";
+                    /** @enum {string} */
+                    object_type: "order_form";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    order_form: components["schemas"]["OrderFormWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    paymentReceiptCreated: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "payment_receipt.created",
+                 *       "object_type": "payment_receipt",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment_receipt": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "PUL-CDDE-380-RCPT-000001",
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "payment": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "customer_id": "00000000-0000-4000-8000-000000000004",
+                 *           "external_customer_id": "sdkv3u-1791843258",
+                 *           "invoice_ids": [
+                 *             "00000000-0000-4000-8000-000000000005"
+                 *           ],
+                 *           "invoice_numbers": [
+                 *             "PUL-CDDE-202610-318"
+                 *           ],
+                 *           "payable_id": "00000000-0000-4000-8000-000000000005",
+                 *           "payable_type": "Invoice",
+                 *           "amount_cents": 919,
+                 *           "amount_currency": "USD",
+                 *           "status": "succeeded",
+                 *           "payment_status": "succeeded",
+                 *           "type": "provider",
+                 *           "reference": null,
+                 *           "payment_provider_code": "stripe_sync_canary",
+                 *           "payment_provider_type": "PaymentProviders::StripeProvider",
+                 *           "external_payment_id": "pi_example",
+                 *           "provider_payment_id": "pi_example",
+                 *           "provider_customer_id": "cus_example",
+                 *           "next_action": {},
+                 *           "created_at": "2026-10-12T22:17:08Z"
+                 *         },
+                 *         "created_at": "2026-10-22T07:11:01Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "payment_receipt.created";
+                    /** @enum {string} */
+                    object_type: "payment_receipt";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    payment_receipt: components["schemas"]["PaymentReceiptWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    paymentReceiptGenerated: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "payment_receipt.generated",
+                 *       "object_type": "payment_receipt",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "payment_receipt": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "PUL-CDDE-380-RCPT-000001",
+                 *         "file_url": null,
+                 *         "xml_url": null,
+                 *         "payment": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000003",
+                 *           "customer_id": "00000000-0000-4000-8000-000000000004",
+                 *           "external_customer_id": "sdkv3u-1791843258",
+                 *           "invoice_ids": [
+                 *             "00000000-0000-4000-8000-000000000005"
+                 *           ],
+                 *           "invoice_numbers": [
+                 *             "PUL-CDDE-202610-318"
+                 *           ],
+                 *           "payable_id": "00000000-0000-4000-8000-000000000005",
+                 *           "payable_type": "Invoice",
+                 *           "amount_cents": 919,
+                 *           "amount_currency": "USD",
+                 *           "status": "succeeded",
+                 *           "payment_status": "succeeded",
+                 *           "type": "provider",
+                 *           "reference": null,
+                 *           "payment_provider_code": "stripe_sync_canary",
+                 *           "payment_provider_type": "PaymentProviders::StripeProvider",
+                 *           "external_payment_id": "pi_example",
+                 *           "provider_payment_id": "pi_example",
+                 *           "provider_customer_id": "cus_example",
+                 *           "next_action": {},
+                 *           "created_at": "2026-10-12T22:17:08Z"
+                 *         },
+                 *         "created_at": "2026-10-22T07:11:01Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "payment_receipt.generated";
+                    /** @enum {string} */
+                    object_type: "payment_receipt";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    payment_receipt: components["schemas"]["PaymentReceiptWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    planUpgradeIntentNeedsReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "plan_upgrade_intent.needs_review",
+                 *       "object_type": "plan_upgrade_intent",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "plan_upgrade_intent": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "status": "needs_review",
+                 *         "error_code": "plan_upgrade_apply_failed",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "subscription_id": "00000000-0000-4000-8000-000000000004",
+                 *         "target_plan_id": "00000000-0000-4000-8000-000000000005",
+                 *         "amount_cents": 919,
+                 *         "currency": "USD",
+                 *         "provider_payment_id": "pi_example",
+                 *         "created_at": "2026-10-12T22:20:28Z",
+                 *         "updated_at": "2026-10-22T07:10:02Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "plan_upgrade_intent.needs_review";
+                    /** @enum {string} */
+                    object_type: "plan_upgrade_intent";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    plan_upgrade_intent: components["schemas"]["PlanUpgradeIntentWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    quoteCreated: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "quote.created",
+                 *       "object_type": "quote",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "quote": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "QT-2026-0002",
+                 *         "order_type": "subscription_creation",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "subscription_id": null,
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "created_at": "2026-09-30T07:24:25Z",
+                 *         "updated_at": "2026-09-30T07:24:25Z",
+                 *         "version": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "quote_id": "00000000-0000-4000-8000-000000000002",
+                 *           "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *           "version": 1,
+                 *           "status": "approved",
+                 *           "currency": "USD",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "void_reason": null,
+                 *           "approved_at": "2026-10-07T23:31:58Z",
+                 *           "voided_at": null,
+                 *           "created_at": "2026-09-30T07:24:25Z",
+                 *           "updated_at": "2026-10-07T23:31:58Z"
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "quote.created";
+                    /** @enum {string} */
+                    object_type: "quote";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    quote: components["schemas"]["QuoteWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    quoteApproved: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "quote.approved",
+                 *       "object_type": "quote",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "quote": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "QT-2026-0002",
+                 *         "order_type": "subscription_creation",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "subscription_id": null,
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "created_at": "2026-09-30T07:24:25Z",
+                 *         "updated_at": "2026-09-30T07:24:25Z",
+                 *         "version": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "quote_id": "00000000-0000-4000-8000-000000000002",
+                 *           "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *           "version": 1,
+                 *           "status": "approved",
+                 *           "currency": "USD",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "void_reason": null,
+                 *           "approved_at": "2026-10-07T23:31:58Z",
+                 *           "voided_at": null,
+                 *           "created_at": "2026-09-30T07:24:25Z",
+                 *           "updated_at": "2026-10-07T23:31:58Z"
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "quote.approved";
+                    /** @enum {string} */
+                    object_type: "quote";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    quote: components["schemas"]["QuoteWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    quoteVoided: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "quote.voided",
+                 *       "object_type": "quote",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "quote": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "number": "QT-2026-0002",
+                 *         "order_type": "subscription_creation",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "subscription_id": null,
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "created_at": "2026-09-30T07:24:25Z",
+                 *         "updated_at": "2026-09-30T07:24:25Z",
+                 *         "version": {
+                 *           "nozle_id": "00000000-0000-4000-8000-000000000004",
+                 *           "quote_id": "00000000-0000-4000-8000-000000000002",
+                 *           "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *           "version": 1,
+                 *           "status": "approved",
+                 *           "currency": "USD",
+                 *           "billing_entity_code": "pullse_testing",
+                 *           "void_reason": null,
+                 *           "approved_at": "2026-10-07T23:31:58Z",
+                 *           "voided_at": null,
+                 *           "created_at": "2026-09-30T07:24:25Z",
+                 *           "updated_at": "2026-10-07T23:31:58Z"
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "quote.voided";
+                    /** @enum {string} */
+                    object_type: "quote";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    quote: components["schemas"]["QuoteWebhookObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    creditTopUpPurchaseFulfilled: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "credit_top_up_purchase.fulfilled",
+                 *       "object_type": "credit_top_up_purchase",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "credit_top_up_purchase": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "customer_123",
+                 *         "credit_system_id": "00000000-0000-4000-8000-000000000004",
+                 *         "credit_system_code": "ai_credits",
+                 *         "top_up_package_id": "00000000-0000-4000-8000-000000000005",
+                 *         "package_code": "starter_pack",
+                 *         "package_name": "Starter pack",
+                 *         "credit_amount": "250.0",
+                 *         "amount_cents": 1000,
+                 *         "currency": "USD",
+                 *         "expires_after_days": null,
+                 *         "invoice_id": "00000000-0000-4000-8000-000000000006",
+                 *         "invoice_number": "FYN-47DD-008-001",
+                 *         "invoice_amount_cents": 1000,
+                 *         "payment_status": "succeeded",
+                 *         "fulfillment_status": "fulfilled",
+                 *         "fulfilled_at": "2026-10-27T14:12:39Z",
+                 *         "payment_id": null,
+                 *         "payment_provider": "stripe",
+                 *         "payment_provider_type": null,
+                 *         "payment_provider_code": null,
+                 *         "provider_payment_id": null,
+                 *         "payment_url": null,
+                 *         "replayed": false,
+                 *         "created_at": "2026-10-27T14:12:01Z"
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "credit_top_up_purchase.fulfilled";
+                    /** @enum {string} */
+                    object_type: "credit_top_up_purchase";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    credit_top_up_purchase: components["schemas"]["CreditsTopUpPurchase"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    walletCreated: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "wallet.created",
+                 *       "object_type": "wallet",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "wallet": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "evalag1790953905_m1",
+                 *         "status": "active",
+                 *         "currency": "USD",
+                 *         "name": null,
+                 *         "code": "default",
+                 *         "rate_amount": "1.0",
+                 *         "credits_balance": "0.0",
+                 *         "credits_ongoing_balance": "0.0",
+                 *         "credits_ongoing_usage_balance": "0.0",
+                 *         "balance_cents": 0,
+                 *         "ongoing_balance_cents": 0,
+                 *         "ongoing_usage_balance_cents": 0,
+                 *         "consumed_credits": "0.0",
+                 *         "created_at": "2026-10-02T15:11:56Z",
+                 *         "expiration_at": null,
+                 *         "last_balance_sync_at": null,
+                 *         "last_consumed_credit_at": null,
+                 *         "terminated_at": null,
+                 *         "invoice_requires_successful_payment": false,
+                 *         "paid_top_up_min_amount_cents": null,
+                 *         "paid_top_up_max_amount_cents": null,
+                 *         "priority": 50,
+                 *         "recurring_transaction_rules": [],
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "wallet.created";
+                    /** @enum {string} */
+                    object_type: "wallet";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    wallet: components["schemas"]["WalletObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    walletTerminated: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "wallet.terminated",
+                 *       "object_type": "wallet",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "wallet": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "evalag1790953905_m1",
+                 *         "status": "active",
+                 *         "currency": "USD",
+                 *         "name": null,
+                 *         "code": "default",
+                 *         "rate_amount": "1.0",
+                 *         "credits_balance": "0.0",
+                 *         "credits_ongoing_balance": "0.0",
+                 *         "credits_ongoing_usage_balance": "0.0",
+                 *         "balance_cents": 0,
+                 *         "ongoing_balance_cents": 0,
+                 *         "ongoing_usage_balance_cents": 0,
+                 *         "consumed_credits": "0.0",
+                 *         "created_at": "2026-10-02T15:11:56Z",
+                 *         "expiration_at": null,
+                 *         "last_balance_sync_at": null,
+                 *         "last_consumed_credit_at": null,
+                 *         "terminated_at": null,
+                 *         "invoice_requires_successful_payment": false,
+                 *         "paid_top_up_min_amount_cents": null,
+                 *         "paid_top_up_max_amount_cents": null,
+                 *         "priority": 50,
+                 *         "recurring_transaction_rules": [],
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "wallet.terminated";
+                    /** @enum {string} */
+                    object_type: "wallet";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    wallet: components["schemas"]["WalletObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    walletUpdated: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique id of the webhook. It is the same on every attempt, so use it to deduplicate. */
+                "webhook-id": components["parameters"]["webhook_id"];
+                /** @description Unix time in seconds of this attempt. Reject a request more than 300 seconds off your clock. */
+                "webhook-timestamp": components["parameters"]["webhook_timestamp"];
+                /** @description Space-separated list of signatures, each `v1,<base64>`, from the endpoint secret. Two are sent while a secret is being rotated. */
+                "webhook-signature": components["parameters"]["webhook_signature"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Details of the event */
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "webhook_type": "wallet.updated",
+                 *       "object_type": "wallet",
+                 *       "organization_id": "00000000-0000-4000-8000-000000000001",
+                 *       "livemode": true,
+                 *       "wallet": {
+                 *         "nozle_id": "00000000-0000-4000-8000-000000000002",
+                 *         "customer_id": "00000000-0000-4000-8000-000000000003",
+                 *         "external_customer_id": "evalag1790953905_m1",
+                 *         "status": "active",
+                 *         "currency": "USD",
+                 *         "name": "Renamed in capture",
+                 *         "code": "default",
+                 *         "rate_amount": "1.0",
+                 *         "credits_balance": "0.0",
+                 *         "credits_ongoing_balance": "0.0",
+                 *         "credits_ongoing_usage_balance": "0.0",
+                 *         "balance_cents": 0,
+                 *         "ongoing_balance_cents": 0,
+                 *         "ongoing_usage_balance_cents": 0,
+                 *         "consumed_credits": "0.0",
+                 *         "created_at": "2026-10-02T15:11:56Z",
+                 *         "expiration_at": null,
+                 *         "last_balance_sync_at": null,
+                 *         "last_consumed_credit_at": null,
+                 *         "terminated_at": null,
+                 *         "invoice_requires_successful_payment": false,
+                 *         "paid_top_up_min_amount_cents": null,
+                 *         "paid_top_up_max_amount_cents": null,
+                 *         "priority": 50,
+                 *         "recurring_transaction_rules": [],
+                 *         "payment_method": {
+                 *           "payment_method_id": null,
+                 *           "payment_method_type": "provider"
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": {
+                    /** @enum {string} */
+                    webhook_type: "wallet.updated";
+                    /** @enum {string} */
+                    object_type: "wallet";
+                    /**
+                     * Format: uuid
+                     * @description Unique identifier of the organization, created by Nozle.
+                     * @example 1a901a90-1a90-1a90-1a90-1a901a901a90
+                     */
+                    organization_id: string;
+                    /**
+                     * @description `true` for a live organization, `false` for a [sandbox](/guides/getting-started/sandbox) organization (test mode).
+                     * @example true
+                     */
+                    livemode: boolean;
+                    wallet: components["schemas"]["WalletObject"];
+                };
+            };
+        };
+        responses: {
+            /** @description Return a 2xx status within 30 seconds to acknowledge the delivery. Any other status, a timeout or a connection error is a failed attempt; Nozle makes up to 3 attempts. */
             200: {
                 headers: {
                     [name: string]: unknown;
