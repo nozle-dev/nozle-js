@@ -123,7 +123,7 @@ export class Nozle {
     this.entitySubscriptions = new EntitySubscriptionsNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.credits = new CreditsNamespace(this.baseUrl, this.apiKey, this.policy);
     this.usage = new UsageNamespace(this.baseUrl, this.apiKey, this.policy);
-    this.webhooks = new WebhooksNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.webhooks = new WebhooksNamespace();
     this.invoices = new InvoicesNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.alerts = new AlertsNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.planVersions = new PlanVersionsNamespace(this.eventsUrl, this.apiKey, this.policy);
