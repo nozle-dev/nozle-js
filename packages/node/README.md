@@ -415,7 +415,7 @@ const refused = refusedEventIndexes(body.error_details, CUSTOMER_PAYMENT_OVERDUE
 
 ## Webhooks
 
-`nozle.webhooks.verify({ body, headers, secret })` checks a delivery against the raw body and returns the parsed event, or throws `WebhookVerificationError`. For `standard` endpoints (the default for new endpoints) pass the endpoint's `whsec_` secret; during a rotation pass both secrets as an array. The check uses `webhook-id`, `webhook-timestamp` and `webhook-signature`, rejects timestamps more than 300 seconds off (`toleranceSeconds` changes this) and makes no network call. `hmac` endpoints take `hmacKey`; `jwt` endpoints need no secret.
+`nozle.webhooks.verify({ body, headers, secret })` checks a delivery against the raw body and returns the parsed event, or throws `WebhookVerificationError`. Pass the endpoint's `whsec_` secret; during a rotation pass both secrets as an array. The check uses `webhook-id`, `webhook-timestamp` and `webhook-signature`, rejects timestamps more than 300 seconds off (`toleranceSeconds` changes this) and makes no network call.
 
 ```ts
 import { createWebhookHandler } from "@nozle-js/node";

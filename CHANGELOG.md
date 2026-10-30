@@ -4,9 +4,9 @@
 
 ## Node.js 0.25.0 — 2026-10-30
 
-### Added
+### Changed
 
-- `webhooks.verify` and `createWebhookHandler` verify the `standard` signature scheme (Standard Webhooks, same as Svix): headers `webhook-id`, `webhook-timestamp`, `webhook-signature`, HMAC-SHA256 over `id.timestamp.body` keyed by the endpoint's `whsec_` secret. Pass `secret` (a string, or an array while a secret is rotating) and optionally `toleranceSeconds` (default 300). A header with several `v1,` signatures is accepted when any one matches any secret; other versions are ignored. It runs locally, with no call to Core. A missing header, a bad or stale timestamp or a missing secret throws `WebhookVerificationError` (`missing_signature`, `invalid_timestamp`, `missing_secret`, `invalid_signature`). `jwt` and `hmac` endpoints are unchanged.
+- `webhooks.verify` and `createWebhookHandler` verify the Standard Webhooks scheme (same as Svix) and nothing else: headers `webhook-id`, `webhook-timestamp`, `webhook-signature`, HMAC-SHA256 over `id.timestamp.body` keyed by the endpoint's `whsec_` secret. Pass `secret` (a string, or an array while a secret is rotating) and optionally `toleranceSeconds` (default 300). A header with several `v1,` signatures is accepted when any one matches any secret; other versions are ignored. Verification is local, with no call to Core. A missing header, a bad or stale timestamp or a missing secret throws `WebhookVerificationError` (`missing_signature`, `invalid_timestamp`, `missing_secret`, `invalid_signature`). The `hmacKey` option, the `X-Nozle-Signature` headers and the public-key read are removed; `NozleWebhookEvent.id` is `webhook-id`.
 
 ## Node.js 0.24.0 — 2026-10-29
 
