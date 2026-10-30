@@ -21,6 +21,8 @@ export type WebhookVerificationCode =
   | "missing_signature"
   | "unsupported_algorithm"
   | "missing_hmac_key"
+  | "missing_secret"
+  | "invalid_timestamp"
   | "invalid_signature"
   | "invalid_payload";
 
@@ -42,6 +44,10 @@ export interface VerifyWebhookInput {
   headers: WebhookHeaders;
   /** Needed for `hmac` endpoints: the organization's signing secret from Developers > Webhooks. */
   hmacKey?: string;
+  /** Needed for `standard` endpoints: the endpoint's `whsec_` secret. Pass several while a secret is being rotated. */
+  secret?: string | string[];
+  /** Largest accepted gap, in seconds, between `webhook-timestamp` and now for `standard`. Default 300. */
+  toleranceSeconds?: number;
 }
 
 function header(headers: WebhookHeaders, name: string): string | undefined {
@@ -61,6 +67,26 @@ function hmacMatches(body: Buffer, signature: string, key: string): boolean {
   const expected = createHmac("sha256", key).update(body).digest();
   const received = Buffer.from(signature, "base64");
   return received.length === expected.length && timingSafeEqual(received, expected);
+}
+
+// Standard Webhooks: HMAC-SHA256 over `id.timestamp.body`, keyed by the base64 part of the `whsec_` secret.
+// `signatures` is the space-separated `webhook-signature` list; entries of other versions are ignored.
+function standardMatches(body: Buffer, id: string, timestamp: string, signatures: string, secrets: string[]): boolean {
+  const received: Buffer[] = [];
+  for (const entry of signatures.split(" ")) {
+    const comma = entry.indexOf(",");
+    if (comma > 0 && entry.slice(0, comma) === "v1") received.push(Buffer.from(entry.slice(comma + 1), "base64"));
+  }
+  let ok = false;
+  for (const secret of secrets) {
+    const key = Buffer.from(secret.startsWith("whsec_") ? secret.slice(6) : secret, "base64");
+    const expected = createHmac("sha256", key).update(`${id}.${timestamp}.`).update(body).digest();
+    // No early exit: every candidate is compared.
+    for (const candidate of received) {
+      if (candidate.length === expected.length && timingSafeEqual(candidate, expected)) ok = true;
+    }
+  }
+  return ok;
 }
 
 // An RS256 JWT whose `data` claim is the body.
@@ -110,13 +136,15 @@ export class WebhooksNamespace {
   ) {}
 
   /**
-   * Checks `X-Nozle-Signature` against the raw body and returns the parsed event, or throws
+   * Checks `X-Nozle-Signature` (or, for `standard` endpoints, `webhook-id`, `webhook-timestamp` and `webhook-signature`) against the raw body and returns the parsed event, or throws
    * `WebhookVerificationError`. `jwt` endpoints need no secret: the public key is read once from
    * Core with your secret key and cached.
    */
   async verify(input: VerifyWebhookInput): Promise<NozleWebhookEvent> {
-    const signature = header(input.headers, "x-nozle-signature");
+    const standardSignature = header(input.headers, "webhook-signature");
     const algorithm = header(input.headers, "x-nozle-signature-algorithm");
+    if (algorithm === "standard" || (standardSignature && !algorithm)) return this.verifyStandard(input, standardSignature);
+    const signature = header(input.headers, "x-nozle-signature");
     const id = header(input.headers, "x-nozle-unique-key") ?? "";
     if (!signature || !algorithm) throw new WebhookVerificationError("missing_signature", "X-Nozle-Signature headers are missing");
     const body = bytes(input.body);
@@ -133,6 +161,28 @@ export class WebhooksNamespace {
       if (!valid) throw new WebhookVerificationError("invalid_signature", "webhook signature does not match");
     } else {
       throw new WebhookVerificationError("unsupported_algorithm", `unsupported signature algorithm ${algorithm}`);
+    }
+    return parseEvent(body, id);
+  }
+
+  // Local only: no network call.
+  private verifyStandard(input: VerifyWebhookInput, signatures: string | undefined): NozleWebhookEvent {
+    const id = header(input.headers, "webhook-id");
+    const timestamp = header(input.headers, "webhook-timestamp");
+    if (!id || !timestamp || !signatures) {
+      throw new WebhookVerificationError("missing_signature", "webhook-id, webhook-timestamp or webhook-signature header is missing");
+    }
+    const secrets = ([] as string[]).concat(input.secret ?? []).filter(Boolean);
+    if (!secrets.length) throw new WebhookVerificationError("missing_secret", "standard webhooks need the endpoint's whsec_ secret");
+    const seconds = Number(timestamp);
+    if (!timestamp.trim() || !Number.isFinite(seconds)) throw new WebhookVerificationError("invalid_timestamp", "webhook-timestamp is not a Unix timestamp");
+    const tolerance = input.toleranceSeconds ?? 300;
+    if (Math.abs(Date.now() / 1000 - seconds) > tolerance) {
+      throw new WebhookVerificationError("invalid_timestamp", "webhook-timestamp is outside the tolerance");
+    }
+    const body = bytes(input.body);
+    if (!standardMatches(body, id, timestamp, signatures, secrets)) {
+      throw new WebhookVerificationError("invalid_signature", "webhook signature does not match");
     }
     return parseEvent(body, id);
   }
@@ -160,6 +210,10 @@ export class WebhooksNamespace {
 export interface WebhookHandlerOptions {
   /** For `hmac` endpoints. */
   hmacKey?: string;
+  /** For `standard` endpoints: the `whsec_` secret, or several during rotation. */
+  secret?: string | string[];
+  /** Timestamp tolerance in seconds for `standard`. Default 300. */
+  toleranceSeconds?: number;
   /** Called once per verified delivery. Throw to answer 500, so Nozle tries again. */
   onEvent: (event: NozleWebhookEvent) => void | Promise<void>;
 }
@@ -178,7 +232,7 @@ export function createWebhookHandler(
     let event: NozleWebhookEvent;
     try {
       const body = new Uint8Array(await incoming.arrayBuffer());
-      event = await nozle.webhooks.verify({ body, headers: incoming.headers, hmacKey: options.hmacKey });
+      event = await nozle.webhooks.verify({ body, headers: incoming.headers, hmacKey: options.hmacKey, secret: options.secret, toleranceSeconds: options.toleranceSeconds });
     } catch (error) {
       if (error instanceof WebhookVerificationError) return Response.json({ code: error.code }, { status: 400 });
       throw error;
