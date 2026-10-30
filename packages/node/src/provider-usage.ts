@@ -24,7 +24,7 @@ interface CaptureProviderUsageParams {
   requestId?: unknown;
   usage: ProviderTokenUsage;
   latencyMs: number;
-  /** Receives delivery failures and a missing Feature for `featureCode`. Without it they are silent. */
+  /** Receives delivery failures and a missing Feature for `featureCode`. Without it they are emitted as a `NozleTrackingWarning` process warning. */
   onError?: (error: unknown) => void;
 }
 
@@ -192,13 +192,12 @@ export function captureProviderUsage(params: CaptureProviderUsageParams): Promis
   // Provider responses must never fail because telemetry delivery failed. Both
   // endpoints are durably acknowledged and support out-of-order parent linking.
   const settled = Promise.allSettled([featureEvent, ...detailedCostEvents]);
-  if (params.onError) {
-    const report = params.onError;
-    void settled.then((results) => {
-      for (const result of results) if (result.status === "rejected") safely(report, result.reason);
-    });
-    void checkFeatureOnce(params.nozle, params.featureCode, report);
-  }
+  const report = params.onError ?? warnTrackingFailure;
+  void settled.then((results) => {
+    for (const result of results) if (result.status === "rejected") safely(report, result.reason);
+  });
+  // The Feature probe is an extra request, so it stays opt-in with onError.
+  if (params.onError) void checkFeatureOnce(params.nozle, params.featureCode, report);
   return settled;
 }
 
@@ -228,6 +227,18 @@ async function checkFeatureOnce(nozle: Nozle, featureCode: string, report: (erro
     }
   } catch {
     // A failed check never affects recording.
+  }
+}
+
+/** Default for `onError`: a Node warning. Never throws; does nothing where `process.emitWarning` does not exist (edge, browser). */
+export function warnTrackingFailure(error: unknown): void {
+  try {
+    const detail = error instanceof Error ? error.message : String(error);
+    const code = (error as { code?: unknown } | null)?.code;
+    const message = `Nozle tracking failed after a successful LLM response: ${detail}`;
+    process.emitWarning(message, { type: "NozleTrackingWarning", ...(typeof code === "string" ? { code } : {}) });
+  } catch {
+    // No process, or a warning handler that throws: the provider response is unaffected.
   }
 }
 

@@ -99,7 +99,7 @@ export class Nozle {
   readonly planVersions: PlanVersionsNamespace;
 
   private readonly policy: RequestPolicy;
-  private subCache = new Map<string, string>();
+  private subCache = new Map<string, { id: string; expires: number }>();
 
   constructor(config: NozleConfig = {}) {
     const apiKey = config.apiKey ?? (typeof process === "undefined" ? undefined : process.env?.NOZLE_SECRET_KEY);
@@ -110,7 +110,7 @@ export class Nozle {
     this.eventsUrl = trimTrailingSlashes(config.eventsUrl ?? `${host}/core`);
     this.policy = {
       timeout: config.timeout ?? 10_000,
-      maxRetries: Math.max(0, Math.trunc(config.maxRetries ?? 0)),
+      maxRetries: Math.max(0, Math.trunc(config.maxRetries ?? 2)),
       retryDelayMs: config.retryDelayMs ?? 500,
     };
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.policy);
@@ -135,11 +135,8 @@ export class Nozle {
     metadata?: Record<string, unknown>,
     options?: TrackOptions,
   ): Promise<string> {
-    const opts = { ...options };
-    if (!opts.subscriptionId) {
-      opts.subscriptionId = await this.resolveSubscription(customerId);
-    }
-    return _track(this.baseUrl, this.apiKey, customerId, event, metadata, opts, this.policy);
+    // No client-side lookup: Engine resolves the customer's one active subscription itself.
+    return _track(this.baseUrl, this.apiKey, customerId, event, metadata, options, this.policy);
   }
 
   async can(customerId: string, feature: string, metadata?: Record<string, string | number | boolean>, options?: CanOptions): Promise<CanResult> {
@@ -619,7 +616,7 @@ export class Nozle {
 
   private async resolveSubscription(customerId: string): Promise<string> {
     const cached = this.subCache.get(customerId);
-    if (cached) return cached;
+    if (cached && cached.expires > Date.now()) return cached.id;
 
     const res = await request(this.policy, 
       `${this.eventsUrl}/api/v1/subscriptions?external_customer_id=${encodeURIComponent(customerId)}&status[]=active`,
@@ -643,7 +640,8 @@ export class Nozle {
     }
 
     const extId = subs[0].external_id;
-    this.subCache.set(customerId, extId);
+    // Short TTL: a plan change made outside this client (dashboard, another process) must not pin a stale id.
+    this.subCache.set(customerId, { id: extId, expires: Date.now() + 60_000 });
     return extId;
   }
 }

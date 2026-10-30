@@ -12,7 +12,7 @@ npm install @nozle-js/node@0.13.0
 
 Works with both JavaScript and TypeScript. Requires Node.js 18+.
 
-Version `0.13.0` adds `captureFetch` and `recordUsage` for usage from any LLM client, `createBillingHandler` to serve the React billing hooks, `webhooks.verify` and `createWebhookHandler`, invoices, usage and balance alerts, `currentUsage` and `pastUsage`, a `host` option and opt-in retries. `apiKey` is optional and falls back to `NOZLE_SECRET_KEY`, and every failed call throws `NozleApiError`. See the [changelog](../../CHANGELOG.md) and [docs.nozle.dev](https://docs.nozle.dev).
+Version `0.13.0` adds `captureFetch` and `recordUsage` for usage from any LLM client, `createBillingHandler` to serve the React billing hooks, `webhooks.verify` and `createWebhookHandler`, invoices, usage and balance alerts, `currentUsage` and `pastUsage`, a `host` option and retries (`maxRetries`, default 2, safe calls only). `apiKey` is optional and falls back to `NOZLE_SECRET_KEY`, and every failed call throws `NozleApiError`. See the [changelog](../../CHANGELOG.md) and [docs.nozle.dev](https://docs.nozle.dev).
 
 ## Quick Start
 
@@ -138,7 +138,7 @@ Each provider call creates one Feature Event. When `costMeterCode` is set, the w
 ## Usage Tracking
 
 ```ts
-// Basic tracking (auto-resolves subscription)
+// Basic tracking (Engine picks the customer's one active subscription)
 await nozle.track("cust_123", "api_call", { tokens: 100 });
 
 // With explicit subscription
@@ -153,7 +153,7 @@ await nozle.track("cust_123", "api_call", { tokens: 100 }, {
 });
 ```
 
-Subscription auto-resolution: if no `subscriptionId` is provided, the SDK looks up the customer's active subscription and caches it for subsequent calls.
+Subscription resolution: `track()` sends `external_customer_id` and your `subscriptionId` if given; the SDK does no lookup. Without one, Engine uses the customer's one active subscription. If there are several or none, it answers 422 `active_subscription_ambiguous` or `active_subscription_not_found`, thrown as a `NozleApiError` with that `code`: pass `subscriptionId`. `currentUsage()` and `pastUsage()` still look the subscription up (cached for 60 seconds).
 
 `track()` returns the `transactionId`. The SDK generates a UUID version 7 identifier before sending the request when one is not supplied. The identifier is unique across the Nozle organization and can immediately be reused as a Cost Event parent, including when the two requests arrive out of order.
 

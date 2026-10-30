@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { normalizeAnthropicUsage, normalizeOpenAIUsage } from "../provider-usage";
 import { wrapAnthropic } from "../wrap-anthropic";
 import { wrapOpenAI } from "../wrap-openai";
@@ -158,5 +158,49 @@ describe("provider wrappers", () => {
         properties: expect.objectContaining({ type: "cache_write", tokens: 20 }),
       }),
     );
+  });
+});
+
+describe("default tracking-failure warning", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const failingClient = () => ({ ...tracker(), track: vi.fn(() => Promise.reject(new Error("engine down"))) });
+  const openai = (nozle: unknown, extra: object = {}) =>
+    wrapOpenAI(
+      { chat: { completions: { create: vi.fn(async () => ({ id: "r1", model: "m", choices: [], usage: { prompt_tokens: 1, completion_tokens: 1 } })) } } } as never,
+      nozle as never,
+      { customerId: "c", metricCode: "f", ...extra } as never,
+    );
+
+  it("emits a NozleTrackingWarning and still returns the response when onError is unset", async () => {
+    const warn = vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
+    const client = openai(failingClient());
+    const res = await client.chat.completions.create({ model: "m", messages: [] } as never);
+    await new Promise((r) => setTimeout(r, 10));
+    expect((res as { id: string }).id).toBe("r1");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("engine down"), expect.objectContaining({ type: "NozleTrackingWarning" }));
+  });
+
+  it("uses onError instead of the warning when set", async () => {
+    const warn = vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
+    const onError = vi.fn();
+    await openai(failingClient(), { onError }).chat.completions.create({ model: "m", messages: [] } as never);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(onError).toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("never breaks the response when emitWarning throws or process is missing", async () => {
+    vi.spyOn(process, "emitWarning").mockImplementation(() => { throw new Error("boom"); });
+    const res = await openai(failingClient()).chat.completions.create({ model: "m", messages: [] } as never);
+    expect((res as { id: string }).id).toBe("r1");
+    vi.restoreAllMocks();
+    vi.stubGlobal("process", undefined);
+    try {
+      const { warnTrackingFailure } = await import("../provider-usage");
+      expect(() => warnTrackingFailure(new Error("x"))).not.toThrow();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

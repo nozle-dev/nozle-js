@@ -6,7 +6,7 @@ export interface WrapOptions {
   metricCode?: string;
   feature?: string;
   costMeterCode?: string;
-  /** Receives recording failures and a missing Feature for `metricCode`. Without it they are silent. */
+  /** Receives recording failures and a missing Feature for `metricCode`. Without it recording failures are emitted as a `NozleTrackingWarning` process warning. */
   onError?: (error: unknown) => void;
 }
 

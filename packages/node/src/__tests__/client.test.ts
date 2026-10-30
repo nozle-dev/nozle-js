@@ -113,7 +113,7 @@ describe("Nozle", () => {
         .mockResolvedValueOnce(jsonResponse({ error: "Bad Gateway" }, 502))
         .mockRejectedValueOnce(new TypeError("fetch failed"))
         .mockResolvedValueOnce(jsonResponse({}));
-      const client = new Nozle({ apiKey: "sk_test" });
+      const client = new Nozle({ apiKey: "sk_test", maxRetries: 0 });
 
       const first = await client.track("cust_1", "api_call", {}, { subscriptionId: "sub_1" }).catch((e: unknown) => e);
       expect(first).toBeInstanceOf(NozleApiError);
@@ -159,111 +159,64 @@ describe("Nozle", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    it("resolves subscriptions through Core and submits events through the Engine override", async () => {
-      fetchMock
-        .mockResolvedValueOnce(jsonResponse({ subscriptions: [{ external_id: "sub_auto" }] }))
-        .mockResolvedValueOnce(jsonResponse({}));
-
+    it("sends no subscription lookup: external_customer_id only, to the Engine", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({}));
       const client = new Nozle({
         apiKey: "sk_test", baseUrl: "https://engine.example/", eventsUrl: "https://core.example/",
       });
       await client.track("cust_1", "api_call");
 
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(fetchMock.mock.calls[0][0]).toContain("https://core.example/api/v1/subscriptions?");
-      expect(fetchMock.mock.calls[1][0]).toBe("https://engine.example/api/v1/events");
-      expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe("Bearer sk_test");
-      const trackBody = JSON.parse(fetchMock.mock.calls[1][1].body);
-      expect(trackBody.event.external_subscription_id).toBe("sub_auto");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][0]).toBe("https://engine.example/api/v1/events");
+      expect(String(fetchMock.mock.calls[0][0])).not.toContain("/subscriptions");
+      const event = JSON.parse(fetchMock.mock.calls[0][1].body).event;
+      expect(event.external_customer_id).toBe("cust_1");
+      expect(event).not.toHaveProperty("external_subscription_id");
     });
 
-    it("caches resolved subscription", async () => {
-      fetchMock
-        .mockResolvedValueOnce(jsonResponse({ subscriptions: [{ external_id: "sub_cached" }] }))
-        .mockResolvedValueOnce(jsonResponse({}))
-        .mockResolvedValueOnce(jsonResponse({}));
-
+    it("leaves the subscription to the Engine after a plan change", async () => {
+      fetchMock.mockResolvedValue(jsonResponse({}));
       const client = new Nozle({ apiKey: "sk_test" });
       await client.track("cust_1", "event_1");
+      await client.subscribe("cust_1", "pro");
       await client.track("cust_1", "event_2");
-
-      // 1 subscription lookup + 2 track calls = 3 fetches (not 4)
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      const tracked = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/api/v1/events"));
+      expect(tracked).toHaveLength(2);
+      for (const [, init] of tracked) expect(JSON.parse(init.body).event).not.toHaveProperty("external_subscription_id");
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/api/v1/subscriptions?"))).toBe(false);
     });
 
-    describe("refreshes the cached subscription after the customer's subscriptions change", () => {
-      const lookup = (id: string) => jsonResponse({ subscriptions: [{ external_id: id }] });
-      const trackedSubscription = () => {
-        const calls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/api/v1/events"));
-        return JSON.parse(calls[calls.length - 1][1].body).event.external_subscription_id;
-      };
-      const cases: [string, (c: Nozle) => Promise<unknown>][] = [
-        ["subscribe", (c) => c.subscribe("cust_1", "pro")],
-        ["cancelSubscription", (c) => c.cancelSubscription("cust_1", "sub_old", "immediate")],
-        ["checkout", (c) => c.checkout("cust_1", "pro", "https://app.example.com/done")],
-        ["applySubscriptionTransition", (c) =>
-          c.applySubscriptionTransition(
-            { customerId: "cust_1", subscriptionId: "sub_old", operation: "cancel", timing: "immediate" } as never,
-            "key-1",
-          )],
-        ["checkoutStatus", (c) => c.checkoutStatus("chk_1", { customerId: "cust_1", subscriptionId: "sub_old" })],
-      ];
-      it.each(cases)("%s", async (_name, change) => {
-        fetchMock
-          .mockResolvedValueOnce(lookup("sub_old"))
-          .mockResolvedValueOnce(jsonResponse({}))
-          .mockResolvedValueOnce(jsonResponse({}))
-          .mockResolvedValueOnce(lookup("sub_new"))
-          .mockResolvedValueOnce(jsonResponse({}));
+    it.each(["active_subscription_ambiguous", "active_subscription_not_found"])(
+      "surfaces the Engine's 422 %s unchanged",
+      async (code) => {
+        fetchMock.mockResolvedValueOnce(jsonResponse({ code, error: "x" }, 422));
         const client = new Nozle({ apiKey: "sk_test" });
-        await client.track("cust_1", "event_1");
-        expect(trackedSubscription()).toBe("sub_old");
-        await change(client);
-        await client.track("cust_1", "event_2");
-        expect(trackedSubscription()).toBe("sub_new");
-      });
+        const error = await client.track("cust_1", "event").catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(NozleApiError);
+        expect((error as NozleApiError).status).toBe(422);
+        expect((error as NozleApiError).code).toBe(code);
+      },
+    );
+  });
 
-      it("keeps the cache when the change fails", async () => {
-        fetchMock
-          .mockResolvedValueOnce(lookup("sub_old"))
-          .mockResolvedValueOnce(jsonResponse({}))
-          .mockResolvedValueOnce(jsonResponse({}, 500))
-          .mockResolvedValueOnce(jsonResponse({}));
+  describe("currentUsage subscription lookup", () => {
+    it("caches the lookup for a short time only", async () => {
+      vi.useFakeTimers();
+      try {
+        const lookup = () => jsonResponse({ subscriptions: [{ external_id: "sub_1" }] });
+        fetchMock.mockImplementation(async (url: string) =>
+          String(url).includes("/subscriptions?") ? lookup() : jsonResponse({ customer_usage: {} }));
         const client = new Nozle({ apiKey: "sk_test" });
-        await client.track("cust_1", "event_1");
-        await expect(client.subscribe("cust_1", "pro")).rejects.toThrow("subscribe failed");
-        await client.track("cust_1", "event_2");
-        expect(trackedSubscription()).toBe("sub_old");
-        expect(fetchMock).toHaveBeenCalledTimes(4);
-      });
-
-      it("checkoutInvoice drops every cached customer", async () => {
-        fetchMock
-          .mockResolvedValueOnce(lookup("sub_old"))
-          .mockResolvedValueOnce(jsonResponse({}))
-          .mockResolvedValueOnce(jsonResponse({}))
-          .mockResolvedValueOnce(lookup("sub_new"))
-          .mockResolvedValueOnce(jsonResponse({}));
-        const client = new Nozle({ apiKey: "sk_test" });
-        await client.track("cust_1", "event_1");
-        await client.checkoutInvoice("inv_1");
-        await client.track("cust_1", "event_2");
-        expect(trackedSubscription()).toBe("sub_new");
-      });
-    });
-
-    it("throws when no active subscription found", async () => {
-      fetchMock.mockResolvedValueOnce(jsonResponse({ subscriptions: [] }));
-      const client = new Nozle({ apiKey: "sk_test" });
-      await expect(client.track("cust_1", "event")).rejects.toThrow("No active subscription");
-    });
-
-    it("throws when multiple subscriptions found", async () => {
-      fetchMock.mockResolvedValueOnce(
-        jsonResponse({ subscriptions: [{ external_id: "a" }, { external_id: "b" }] }),
-      );
-      const client = new Nozle({ apiKey: "sk_test" });
-      await expect(client.track("cust_1", "event")).rejects.toThrow("2 active subscriptions");
+        const lookups = () => fetchMock.mock.calls.filter(([u]) => String(u).includes("/subscriptions?")).length;
+        await client.currentUsage("cust_1");
+        await client.currentUsage("cust_1");
+        expect(lookups()).toBe(1);
+        vi.advanceTimersByTime(61_000);
+        await client.currentUsage("cust_1");
+        expect(lookups()).toBe(2);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -363,15 +316,14 @@ describe("Nozle", () => {
       expect(result.reason).toBe("subscription_required");
     });
 
-    it("throws NozleApiError with the REST codes when track cannot pick one subscription", async () => {
+    it("throws NozleApiError with the Engine's REST codes when track cannot pick one subscription", async () => {
       const client = new Nozle({ apiKey: "sk_test" });
-      fetchMock.mockResolvedValueOnce(jsonResponse({ subscriptions: [] }));
+      fetchMock.mockResolvedValueOnce(jsonResponse({ code: "active_subscription_not_found" }, 422));
       await expect(client.track("c", "e")).rejects.toMatchObject({ name: "NozleApiError", status: 422, code: "active_subscription_not_found" });
-      fetchMock.mockResolvedValueOnce(jsonResponse({ subscriptions: [{ external_id: "a" }, { external_id: "b" }] }));
+      fetchMock.mockResolvedValueOnce(jsonResponse({ code: "active_subscription_ambiguous" }, 422));
       const err = await client.track("c", "e").catch((e) => e);
       expect(err).toBeInstanceOf(NozleApiError);
       expect(err.code).toBe("active_subscription_ambiguous");
-      expect(err.message).toContain("subscriptionId");
     });
   });
 
