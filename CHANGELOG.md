@@ -14,6 +14,10 @@ Needs Engine 2.31.0 for budgets.
 - `BudgetExceededError` (402 `budget_exceeded`, with `budget` when the response carries one) and `UsageLimitExceededError` (429 `usage_limit_exceeded`), both subclasses of `NozleApiError`, chosen by status and exact `code` wherever the SDK throws for a failed response.
 - Budget holds: on a Feature billed in money under a hard spend limit, `usage.holds.create()` reserves the call's estimated spend. `UsageHold` is now `CreditUsageHold | BudgetUsageHold`; a budget hold has `kind: "budget"`, `amount_held` and `currency` instead of the credit fields, and its create result carries `budget` (and `reason: "budget_exceeded"` when it does not fit). `finalize()` of a budget hold returns the hold. New types `CreditUsageHold`, `BudgetUsageHold`, `CreditUsageHoldCreateResult`, `BudgetUsageHoldCreateResult`, `CreditUsageHoldFinalizeResult`.
 
+### Changed
+
+- A 429 whose `code` is exactly `usage_limit_exceeded` is a refusal, not a rate limit, so it is no longer retried; other 429s still follow `maxRetries` and `Retry-After`. A 402 (including `budget_exceeded`) was never retried.
+
 The `budget` fields and the `Budget` schema are added by hand to the generated types, mirroring Engine, until nozle-openapi.yaml documents them.
 
 ## Node.js 0.29.0 — 2026-10-31

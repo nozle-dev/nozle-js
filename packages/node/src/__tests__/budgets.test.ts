@@ -124,6 +124,31 @@ describe("typed refusal errors", () => {
   });
 });
 
+describe("refusals are never retried", () => {
+  const retrying = () => new Nozle({ apiKey: "sk_test", host: "https://api.example", maxRetries: 2, retryDelayMs: 1 });
+
+  it("a 429 usage_limit_exceeded is sent once and thrown as UsageLimitExceededError", async () => {
+    const fetch = stub(() => json({ code: "usage_limit_exceeded" }, 429));
+    const error = await retrying().budgets.list("acme").catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(UsageLimitExceededError);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("a 402 budget_exceeded is sent once and thrown as BudgetExceededError", async () => {
+    const fetch = stub(() => json({ code: "budget_exceeded", budget }, 402));
+    const error = await retrying().budgets.list("acme").catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(BudgetExceededError);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("another 429 is still retried", async () => {
+    const fetch = stub(() => json({ code: "rate_limited" }, 429));
+    const error = await retrying().budgets.list("acme").catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(NozleApiError);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+});
+
 describe("budget holds", () => {
   const budgetHold = {
     hold_id: "bh_1",
