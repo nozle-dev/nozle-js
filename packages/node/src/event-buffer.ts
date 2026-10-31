@@ -45,6 +45,9 @@ interface Queued {
   attempts: number;
 }
 
+const FIRST_BACKOFF_MS = 1000;
+const MAX_BACKOFF_MS = 60_000;
+
 function integerOption(name: string, value: number | undefined, fallback: number, min: number, max: number): number {
   if (value === undefined) return fallback;
   if (!Number.isInteger(value) || value < min || value > max)
@@ -73,14 +76,31 @@ export class EventBuffer {
   private queued?: Promise<void>;
   private closing?: Promise<void>;
   private closed = false;
+  private autoPending = false;
+  // After a flush with failures, size, timer and exit flushes pause; explicit flush() and close() do not.
+  private backoffMs = 0;
+  private pausedUntil = 0;
+  private exitTimer?: ReturnType<typeof setTimeout>;
   private readonly timer?: ReturnType<typeof setInterval>;
   private readonly maxBatchSize: number;
   private readonly maxQueueSize: number;
   private readonly maxAttempts: number;
   private readonly onError?: EventBufferOptions["onError"];
   // beforeExit fires again after the work it starts, so a flush that leaves retries runs until the queue is empty.
+  // In a backoff it only sets an unref'ed timer: during a lasting outage the process still exits (call close() to
+  // have those events retried and reported).
   private readonly onBeforeExit = () => {
-    if (this.queue.length > 0) void this.flush();
+    const wait = this.pausedUntil - Date.now();
+    if (this.queue.length === 0 || this.running) return;
+    if (wait <= 0) {
+      void this.flush();
+    } else if (!this.exitTimer) {
+      this.exitTimer = setTimeout(() => {
+        this.exitTimer = undefined;
+        this.autoFlush();
+      }, wait);
+      this.exitTimer.unref?.();
+    }
   };
 
   constructor(private readonly sendBatch: SendBatch, options: EventBufferOptions = {}) {
@@ -90,9 +110,7 @@ export class EventBuffer {
     const interval = integerOption("flushIntervalMs", options.flushIntervalMs, 5000, 0, 2 ** 31 - 1);
     this.onError = options.onError;
     if (interval > 0) {
-      this.timer = setInterval(() => {
-        if (this.queue.length > 0) void this.flush();
-      }, interval);
+      this.timer = setInterval(() => this.autoFlush(), interval);
       // The timer never keeps the process alive; beforeExit sends what is left.
       this.timer.unref?.();
     }
@@ -119,7 +137,7 @@ export class EventBuffer {
       this.report("buffer_full", `The event buffer holds ${this.maxQueueSize} events; the new event was dropped`, [queued.event]);
     } else {
       this.queue.push(queued);
-      if (this.queue.length >= this.maxBatchSize) void this.flush();
+      if (this.queue.length >= this.maxBatchSize) this.autoFlush();
     }
     return transactionId;
   }
@@ -128,6 +146,7 @@ export class EventBuffer {
    * Sends every event waiting now and resolves when done; it never rejects. Events whose request failed go back to
    * the front of the queue for the next flush; rejected ones and those out of attempts are reported to `onError`.
    * Only one flush runs at a time: a call during a flush waits for it and then sends what is waiting.
+   * It does not wait for the backoff that follows a flush with failures.
    */
   flush(): Promise<void> {
     if (this.queued) return this.queued;
@@ -144,6 +163,7 @@ export class EventBuffer {
     this.closing ??= (async () => {
       this.closed = true;
       if (this.timer) clearInterval(this.timer);
+      if (this.exitTimer) clearTimeout(this.exitTimer);
       if (typeof process !== "undefined" && typeof process.off === "function") process.off("beforeExit", this.onBeforeExit);
       // Waits for a flush in flight too. Each flush sends an event or spends one of its attempts, so this ends.
       do await this.flush();
@@ -152,9 +172,23 @@ export class EventBuffer {
     return this.closing;
   }
 
+  /** A size, timer or exit trigger: skipped during a backoff, and run after the flush in progress. */
+  private autoFlush(): void {
+    if (this.queue.length === 0) return;
+    if (this.running) {
+      this.autoPending = true;
+    } else if (Date.now() >= this.pausedUntil) {
+      void this.flush();
+    }
+  }
+
   private start(): Promise<void> {
     this.running = this.send().finally(() => {
       this.running = undefined;
+      if (this.autoPending) {
+        this.autoPending = false;
+        this.autoFlush();
+      }
     });
     return this.running;
   }
@@ -197,6 +231,13 @@ export class EventBuffer {
     }
     // Back to the front, ahead of events tracked during the request; they still count against maxQueueSize.
     this.queue = retry.concat(this.queue);
+    if (retry.length > 0 || dropped.length > 0) {
+      this.backoffMs = this.backoffMs ? Math.min(this.backoffMs * 2, MAX_BACKOFF_MS) : FIRST_BACKOFF_MS;
+      this.pausedUntil = Date.now() + this.backoffMs;
+    } else {
+      this.backoffMs = 0;
+      this.pausedUntil = 0;
+    }
     if (dropped.length > 0) {
       const detail = failure instanceof Error ? failure.message : String(failure);
       this.report("failed", `${dropped.length} event(s) failed in ${this.maxAttempts} flushes and were dropped: ${detail}`, dropped, { cause: failure });

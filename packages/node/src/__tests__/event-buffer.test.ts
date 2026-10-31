@@ -7,6 +7,7 @@ vi.stubGlobal("fetch", fetchMock);
 afterEach(() => {
   fetchMock.mockReset();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 const json = (status: number, body: unknown) =>
@@ -213,5 +214,81 @@ describe("createEventBuffer", () => {
     expect(sentIds(0)).toEqual([id]);
     await buf.close();
     expect(process.listenerCount("beforeExit")).toBe(before);
+  });
+
+  describe("backoff after a failed flush", () => {
+    const fake = () => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+    const advance = async (ms: number) => {
+      await vi.advanceTimersByTimeAsync(ms);
+      // Let the mocked response bodies settle on real ticks.
+      for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    };
+
+    it("keeps the events through an outage of several flush intervals and delivers them once the server recovers", async () => {
+      fake();
+      let down = true;
+      fetchMock.mockImplementation(async () => (down ? json(503, { error: "down" }) : ok()));
+      const { buf, onError } = buffer({ flushIntervalMs: 100, maxBatchSize: 2, maxAttempts: 10 });
+      const first = buf.track(event(0));
+      await advance(100);
+      expect(fetchMock).toHaveBeenCalledTimes(1); // fails: 1 s pause
+
+      await advance(500);
+      const second = buf.track(event(1)); // size trigger during the pause
+      await advance(0);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(buf.size).toBe(2);
+
+      await advance(600);
+      expect(fetchMock).toHaveBeenCalledTimes(2); // timer after the pause; fails again: 2 s pause
+      await advance(1500);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      down = false;
+      await advance(600);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(sentIds(2)).toEqual([first, second]);
+      expect(buf.size).toBe(0);
+      expect(onError).not.toHaveBeenCalled();
+
+      // A flush without failures ends the backoff: the size trigger sends at once.
+      buf.track(event(2));
+      buf.track(event(3));
+      await advance(0);
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      await buf.close();
+    });
+
+    it("an explicit flush() does not wait for the backoff", async () => {
+      fetchMock.mockResolvedValueOnce(json(503, { error: "down" })).mockImplementation(async () => ok());
+      const { buf } = buffer({ maxBatchSize: 1 });
+      const first = buf.track(event(0));
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(buf.size).toBe(1));
+      const second = buf.track(event(1));
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await buf.flush();
+      expect(allSentIds().slice(1)).toEqual([first, second]); // one request per event at maxBatchSize 1
+      expect(buf.size).toBe(0);
+      await buf.close();
+    });
+
+    it("beforeExit during a backoff waits on an unref'ed timer instead of flushing at once", async () => {
+      fake();
+      fetchMock.mockResolvedValueOnce(json(503, { error: "down" })).mockImplementation(async () => ok());
+      const { buf } = buffer();
+      const id = buf.track(event(0));
+      await buf.flush();
+      process.emit("beforeExit", 0);
+      process.emit("beforeExit", 0);
+      await advance(900);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(1);
+      await advance(100);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(sentIds(1)).toEqual([id]);
+      await buf.close();
+    });
   });
 });

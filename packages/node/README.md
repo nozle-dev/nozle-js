@@ -232,19 +232,20 @@ await buffer.close();
 
 - **`track(event)`** takes a `trackBatch()` event and returns its transaction ID at once, without a request: yours, or a generated UUID version 7. Every resend of the event carries that ID, so Engine records it once. It throws `NozleValidationError` only for an invalid event (missing `customerId` or `event`, bad `timestamp`).
 - **When it sends.** A flush starts as soon as `maxBatchSize` events are waiting (default 500, 1 to 5000; also the size of each request), every `flushIntervalMs` (default 5000; 0 disables the timer) and on the process's `beforeExit`. The timer never keeps the process alive. Only one flush runs at a time; a trigger during a flush waits for it.
+- **Backoff.** After a flush in which any event failed, the size, timer and `beforeExit` flushes pause for 1 s, doubling after each consecutive flush with failures up to 60 s; a flush without failures ends the pause. Events keep queueing meanwhile (up to `maxQueueSize`), so a short outage costs no events. An explicit `flush()` or `close()` does not wait.
 - **`await flush()`** sends every event waiting now and resolves when done; it never rejects. **`await close()`** stops the timer, removes the `beforeExit` hook, sends everything (retrying failures as below) and refuses later events. `size` is the number of events waiting.
 - **Bounded memory.** The buffer holds at most `maxQueueSize` events (default 10 000), including those in a request. When it is full, `track()` drops the new event and reports it as `buffer_full`; it does not throw.
 - **Never silent.** `onError(error, events)` receives an `EventBufferError` for every event that leaves the buffer unsent, with `error.code`:
   - `buffer_full`: the queue was full and the new event was dropped.
   - `rejected`: Engine refused the event; `error.errors` maps a field to codes. It is not retried.
-  - `failed`: its requests failed (after the `maxRetries` of each request) in `maxAttempts` flushes (default 3). Until then a failed event goes back to the front of the queue for the next flush; `error.cause` is the last error.
+  - `failed`: its requests failed (after the `maxRetries` of each request) in `maxAttempts` flushes (default 3), spaced by the backoff above. Until then a failed event goes back to the front of the queue for the next flush; `error.cause` is the last error.
   - `closed`: `track()` was called after `close()`.
 
   Without `onError`, each is emitted as a `NozleTrackingWarning` process warning. `onError` must not throw.
 
-**Serverless** (AWS Lambda, Vercel and Cloudflare functions, and similar): the platform may freeze or end the process as soon as the handler returns, so neither the timer nor `beforeExit` runs. Always `await buffer.flush()` (buffer kept between invocations) or `await buffer.close()` (buffer per invocation) before returning, or the waiting events are lost.
+**Serverless** (AWS Lambda, Vercel and Cloudflare functions, and similar): the platform may freeze or end the process as soon as the handler returns, so neither the timer nor `beforeExit` runs. Always `await buffer.flush()` (buffer kept between invocations) or `await buffer.close()` (buffer per invocation) before returning, or the waiting events are lost. `flush()` keeps a failed event queued for a later flush; only `close()` retries it to `maxAttempts` and reports it, so short-lived processes and scripts should end with `await buffer.close()`.
 
-The queue lives in memory only: events still waiting when the process is killed (for example `SIGKILL`, or `process.exit()`, which skips `beforeExit`) are lost. `wrapOpenAI`, `wrapAnthropic` and `captureFetch` do not use the buffer yet.
+The queue lives in memory only: events still waiting when the process is killed (for example `SIGKILL`, or `process.exit()`, which skips `beforeExit`) are lost. During a backoff, `beforeExit` only sets a timer that does not keep the process alive, so a process whose server stays unreachable still exits and its waiting events are lost without a report unless it called `close()`. `wrapOpenAI`, `wrapAnthropic` and `captureFetch` do not use the buffer yet.
 
 ## Entitlement Checks
 
