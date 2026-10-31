@@ -1,4 +1,4 @@
-import { parseRetryAfter } from "./errors";
+import { parseRetryAfter, RefusalReason } from "./errors";
 
 export interface RequestPolicy {
   /** Per-attempt timeout in milliseconds. */
@@ -26,7 +26,8 @@ function delayFor(policy: RequestPolicy, attempt: number, response?: Response): 
 /**
  * fetch with a per-attempt timeout and opt-in retries. A request is retried only when it is safe to
  * repeat: a GET or HEAD, a call that carries an `Idempotency-Key`, or a call the caller marks
- * `idempotent`. Network errors, timeouts, 429 and 5xx are retried, honouring `Retry-After`.
+ * `idempotent`. Network errors, timeouts, 429 and 5xx are retried, honouring `Retry-After`. A 429
+ * `usage_limit_exceeded` is a refusal, not a rate limit, and is never retried.
  */
 export async function request(
   policy: RequestPolicy,
@@ -51,7 +52,7 @@ export async function request(
       failure = error;
     }
     const retryable = response === undefined || response.status === 429 || response.status >= 500;
-    if (!retryable) return response as Response;
+    if (!retryable || (await isRefusal(response))) return response as Response;
     if (attempt >= retries) {
       if (response) return response;
       throw failure;
@@ -59,4 +60,11 @@ export async function request(
     await wait(delayFor(policy, attempt, response));
     await response?.body?.cancel?.().catch(() => undefined);
   }
+}
+
+/** A 429 whose `code` is exactly `usage_limit_exceeded`: a hard unit limit, which a retry cannot pass. */
+async function isRefusal(response: Response | undefined): Promise<boolean> {
+  if (response?.status !== 429) return false;
+  const body = await response.clone().json().catch(() => undefined);
+  return !!body && typeof body === "object" && (body as { code?: unknown }).code === RefusalReason.UsageLimitExceeded;
 }

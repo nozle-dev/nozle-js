@@ -213,7 +213,39 @@ The contract:
 - **Subscription.** As for `track()`, pass `subscriptionId` or let Engine resolve the customer's one active subscription. A customer with several or none is a 422 for that event, so it comes back `rejected`.
 - **Invalid arguments** (`NozleValidationError` with the event's `index`, before any request): a missing `customerId` or `event`, a bad `timestamp`, a repeated `transactionId`, or an out-of-range `chunkSize` or `concurrency`.
 
-`trackBatch()` is not `usage.track()`: it records events like `track()` does and does not deduct credits, apply a money-billed feature's checks or return a balance. A list of 0 events sends nothing. There is no client-side buffer yet; to batch events as they happen, collect them and call `trackBatch()`.
+`trackBatch()` is not `usage.track()`: it records events like `track()` does and does not deduct credits, apply a money-billed feature's checks or return a balance. A list of 0 events sends nothing. To batch events as they happen, use an event buffer.
+
+### Event buffer
+
+`createEventBuffer()` queues events in memory and sends them through `trackBatch()` in the background, so recording an event never waits for the network.
+
+```ts
+const buffer = nozle.createEventBuffer({
+  onError: (error, events) => console.error(error.code, error.message, events.map((e) => e.transactionId)),
+});
+
+const transactionId = buffer.track({ customerId: "cust_123", event: "api_call", metadata: { tokens: 100 } });
+
+// At shutdown, or at the end of a serverless handler:
+await buffer.close();
+```
+
+- **`track(event)`** takes a `trackBatch()` event and returns its transaction ID at once, without a request: yours, or a generated UUID version 7. Every resend of the event carries that ID, so Engine records it once. It throws `NozleValidationError` only for an invalid event (missing `customerId` or `event`, bad `timestamp`).
+- **When it sends.** A flush starts as soon as `maxBatchSize` events are waiting (default 500, 1 to 5000; also the size of each request), every `flushIntervalMs` (default 5000; 0 disables the timer) and on the process's `beforeExit`. The timer never keeps the process alive. Only one flush runs at a time; a trigger during a flush waits for it.
+- **Backoff.** After a flush in which any event failed, the size, timer and `beforeExit` flushes pause for 1 s, doubling after each consecutive flush with failures up to 60 s; a flush without failures ends the pause. Events keep queueing meanwhile (up to `maxQueueSize`), so a short outage costs no events. An explicit `flush()` or `close()` does not wait.
+- **`await flush()`** sends every event waiting now and resolves when done; it never rejects. **`await close()`** stops the timer, removes the `beforeExit` hook, sends everything (retrying failures as below) and refuses later events. `size` is the number of events waiting.
+- **Bounded memory.** The buffer holds at most `maxQueueSize` events (default 10 000), including those in a request. When it is full, `track()` drops the new event and reports it as `buffer_full`; it does not throw.
+- **Never silent.** `onError(error, events)` receives an `EventBufferError` for every event that leaves the buffer unsent, with `error.code`:
+  - `buffer_full`: the queue was full and the new event was dropped.
+  - `rejected`: Engine refused the event; `error.errors` maps a field to codes. It is not retried.
+  - `failed`: its requests failed (after the `maxRetries` of each request) in `maxAttempts` flushes (default 3), spaced by the backoff above. Until then a failed event goes back to the front of the queue for the next flush; `error.cause` is the last error.
+  - `closed`: `track()` was called after `close()`.
+
+  Without `onError`, each is emitted as a `NozleTrackingWarning` process warning. `onError` must not throw.
+
+**Serverless** (AWS Lambda, Vercel and Cloudflare functions, and similar): the platform may freeze or end the process as soon as the handler returns, so neither the timer nor `beforeExit` runs. Always `await buffer.flush()` (buffer kept between invocations) or `await buffer.close()` (buffer per invocation) before returning, or the waiting events are lost. `flush()` keeps a failed event queued for a later flush; only `close()` retries it to `maxAttempts` and reports it, so short-lived processes and scripts should end with `await buffer.close()`.
+
+The queue lives in memory only: events still waiting when the process is killed (for example `SIGKILL`, or `process.exit()`, which skips `beforeExit`) are lost. During a backoff, `beforeExit` only sets a timer that does not keep the process alive, so a process whose server stays unreachable still exits and its waiting events are lost without a report unless it called `close()`. `wrapOpenAI`, `wrapAnthropic` and `captureFetch` do not use the buffer yet.
 
 ## Entitlement Checks
 
@@ -332,6 +364,52 @@ const page = await nozle.credits.listOperations("cust_123", {
 ```
 
 Keep these reads on the merchant backend. Return only the fields your authenticated browser route needs, and derive the customer from the logged-in user or team instead of trusting a browser customer ID.
+
+### Credit holds
+
+When a call's final amount is known only afterwards (an LLM response, a long job), reserve credits first and settle afterwards. Needs Engine 2.34.0+ and a secret key.
+
+```ts
+const hold = await nozle.usage.holds.create(
+  { customerId: "cust_123", featureCode: "agent_execution", properties: { tokens: 4000 }, ttlSeconds: 600 },
+  { idempotencyKey: `hold-${runId}` },
+);
+if (!hold.allowed) throw new Error(hold.reason); // "insufficient_credits": nothing was reserved
+
+try {
+  const answer = await runAgent();
+  await nozle.usage.holds.finalize(hold.hold_id, { properties: { tokens: answer.tokens } });
+} catch (error) {
+  await nozle.usage.holds.release(hold.hold_id);
+  throw error;
+}
+```
+
+- `create(params, { idempotencyKey })` takes the `usage.track()` params plus `ttlSeconds` (1 to 86400, default 900). A short balance answers `allowed: false`, not an error; a retry with the same key gets the same answer.
+- `finalize(holdId, { properties, timestamp })` spends the actual usage at the rate pinned by the hold and releases the rest (`credits_released`). More than was held passes when the hold plus free credit covers it; otherwise `allowed: false` and the hold stays open. After expiry it runs as a plain track (`hold_expired: true`). A repeat with the same usage replays the answer, so it is retried like `usage.track()`.
+- `release(holdId)` is idempotent; a finalized hold throws `NozleApiError` with `code` `hold_already_resolved` (409).
+- `get(holdId)` and `list(customerId, { status })` (`held`, `denied`, `finalized`, `released`, `expired`; newest 100) read holds; another `status` throws before any request. A missing hold throws `hold_not_found` (404).
+- Balances gain `held` (and each source `held`; entity balances `entity_held`, `shared_held`); `available` already excludes open holds.
+- As with `usage.track()`, a timestamp the SDK fills in is kept per idempotency key (and per hold for `finalize`) in this client's memory. Pass `timestamp` when a retry may come from another process.
+
+### Money budgets
+
+Spend limits (Core) cap what a customer's metered usage may cost per period. Needs Engine 2.34.0+.
+
+```ts
+import { RefusalReason } from "@nozle-js/node";
+
+const decision = await nozle.can("cust_123", "agent_execution");
+if (!decision.allowed && decision.reason === RefusalReason.BudgetExceeded) {
+  // decision.budget: { limit, spent, held, remaining, currency, period_end, status, ... }
+}
+
+const { budgets } = await nozle.budgets.list("cust_123", { subscriptionId: "sub_123" });
+```
+
+- `can()`, `usage.check()` and `usage.track()` answer `allowed: false`, `reason: "budget_exceeded"` with `budget` when a hard limit covering the Feature is used up; a soft limit never refuses. Compare `reason` with `RefusalReason` values; unknown reasons arrive as their string.
+- A plain `can()` is check-then-call, so calls in flight can overrun a cap. For an exact cap, take a hold: on a Feature billed in money `usage.holds.create()` returns a budget hold (`kind: "budget"`, `amount_held`, `currency`) and refuses with `budget_exceeded` when the estimated spend does not fit.
+- Where a failed response throws, a 402 `budget_exceeded` is a `BudgetExceededError` (with `budget` when sent) and a 429 `usage_limit_exceeded` a `UsageLimitExceededError`; both extend `NozleApiError`. Through the LLM proxy the provider SDK's own error carries the same `code`.
 
 ## Entities and per-user credits
 

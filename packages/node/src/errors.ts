@@ -1,3 +1,5 @@
+import type { Budget } from "./types";
+
 /**
  * Error thrown when a call returns a non-2xx response. The message is
  * `<operation> failed: <status> <statusText>`, followed by `: <server message>` when Nozle sent one;
@@ -116,11 +118,63 @@ export function subscriptionError(code: "active_subscription_not_found" | "activ
   return error;
 }
 
-/** Builds the error for a non-2xx response, reading `code` and `error_details` from a JSON body when there is one. */
+/**
+ * Why `can()`, `usage.check()`, `usage.track()` or a hold answers `allowed: false` (its `reason`), and the `code` of
+ * the LLM proxy's 402/429 refusals. Compare exactly; a reason a newer Engine adds arrives as its plain string.
+ */
+export const RefusalReason = {
+  FeatureNotFound: "feature_not_found",
+  NoSubscription: "no_subscription",
+  SubscriptionRequired: "subscription_required",
+  NoEntitlement: "no_entitlement",
+  UsageLimitExceeded: "usage_limit_exceeded",
+  EconomicPolicyDenied: "economic_policy_denied",
+  CustomerPaymentOverdue: "customer_payment_overdue",
+  InsufficientCredits: "insufficient_credits",
+  BudgetExceeded: "budget_exceeded",
+} as const;
+export type RefusalReason = (typeof RefusalReason)[keyof typeof RefusalReason];
+
+/** A 402 `budget_exceeded`: a hard spend limit is used up. `budget` is the limit's standing when the response carried one. */
+export class BudgetExceededError extends NozleApiError {
+  readonly budget?: Budget;
+
+  constructor(
+    operation: string,
+    response: { status: number; statusText: string; headers?: Pick<Headers, "get"> },
+    body?: unknown,
+  ) {
+    super(operation, response, body);
+    this.name = "BudgetExceededError";
+    const budget = body && typeof body === "object" ? (body as { budget?: unknown }).budget : undefined;
+    if (budget && typeof budget === "object") this.budget = budget as Budget;
+  }
+}
+
+/** A 429 `usage_limit_exceeded`: a hard unit limit is reached. */
+export class UsageLimitExceededError extends NozleApiError {
+  constructor(
+    operation: string,
+    response: { status: number; statusText: string; headers?: Pick<Headers, "get"> },
+    body?: unknown,
+  ) {
+    super(operation, response, body);
+    this.name = "UsageLimitExceededError";
+  }
+}
+
+/**
+ * Builds the error for a non-2xx response, reading `code` and `error_details` from a JSON body when there is one.
+ * A 402 `budget_exceeded` is a {@link BudgetExceededError} and a 429 `usage_limit_exceeded` a
+ * {@link UsageLimitExceededError}, chosen by status and exact code.
+ */
 export async function apiError(operation: string, response: Response): Promise<NozleApiError> {
   const body = await Promise.resolve()
     .then(() => response.json())
     .catch(() => undefined);
+  const code = body && typeof body === "object" ? (body as { code?: unknown }).code : undefined;
+  if (response.status === 402 && code === RefusalReason.BudgetExceeded) return new BudgetExceededError(operation, response, body);
+  if (response.status === 429 && code === RefusalReason.UsageLimitExceeded) return new UsageLimitExceededError(operation, response, body);
   return new NozleApiError(operation, response, body);
 }
 

@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+## Node.js 0.30.0 — 2026-11-01
+
+0.28.0 (event buffer) and 0.29.0 (credit holds) below were not published separately: their changes ship in 0.30.0.
+
+Needs Engine 2.34.0 for budgets.
+
+### Added
+
+- Money budgets (NLD-16). `nozle.budgets.list(customerId, { subscriptionId })` (`GET /customers/{id}/budgets?subscription_id=`) returns `{ customer_id, subscription_id, budgets }`: every spend limit of the subscription with its spend, open holds and status in the current period. Type `Budget`: `feature_code` (`null` for the total limit), `limit`, `spent`, `held`, `remaining` (decimal strings in major units), `currency`, `period` (`billing_period`, `calendar_month`, `lifetime`), `period_start`, `period_end`, `mode` (`hard`, `soft`), `status` (`ok`, `warning`, `exceeded`) and `as_of`; also `BudgetList`, `BudgetListOptions`.
+- `CanResult.budget`, `UsageCheckResult.budget` and `UsageTrackResult.budget`: `can()`, `usage.check()` and `usage.track()` answer `allowed: false`, `reason: "budget_exceeded"` with the used-up limit. They still return the refusal; nothing throws.
+- `RefusalReason`: the exact reason values (`feature_not_found`, `no_subscription`, `subscription_required`, `no_entitlement`, `usage_limit_exceeded`, `economic_policy_denied`, `customer_payment_overdue`, `insufficient_credits`, `budget_exceeded`). `reason` fields are typed `RefusalReason | string`, so a reason from a newer Engine still arrives.
+- `BudgetExceededError` (402 `budget_exceeded`, with `budget` when the response carries one) and `UsageLimitExceededError` (429 `usage_limit_exceeded`), both subclasses of `NozleApiError`, chosen by status and exact `code` wherever the SDK throws for a failed response.
+- Budget holds: on a Feature billed in money under a hard spend limit, `usage.holds.create()` reserves the call's estimated spend. `UsageHold` is now `CreditUsageHold | BudgetUsageHold`; a budget hold has `kind: "budget"`, `amount_held` and `currency` instead of the credit fields, and its create result carries `budget` (and `reason: "budget_exceeded"` when it does not fit). `finalize()` of a budget hold returns the hold. New types `CreditUsageHold`, `BudgetUsageHold`, `CreditUsageHoldCreateResult`, `BudgetUsageHoldCreateResult`, `CreditUsageHoldFinalizeResult`.
+
+### Changed
+
+- A 429 whose `code` is exactly `usage_limit_exceeded` is a refusal, not a rate limit, so it is no longer retried; other 429s still follow `maxRetries` and `Retry-After`. A 402 (including `budget_exceeded`) was never retried.
+
+The `budget` fields and the `Budget` schema are added by hand to the generated types, mirroring Engine, until nozle-openapi.yaml documents them.
+
+## Node.js 0.29.0 — 2026-10-31
+
+Needs Engine 2.34.0 for the hold methods and `held` fields.
+
+### Added
+
+- `nozle.usage.holds` (NLD-9): reserve credits before a call whose final amount is known only afterwards. `create(params, { idempotencyKey })` (`POST /usage/holds`) takes the `usage.track()` params plus `ttlSeconds` (1 to 86400, Engine default 900; checked before any request) and returns the hold with `allowed`, `reason`, `available`; a short balance is `allowed: false`, not an error. `finalize(holdId, { properties, timestamp })` spends the actual usage and returns the `usage.track()` result plus `hold_id`, `hold_status`, `credits_held`, `credits_released` and `hold_expired`. `release(holdId)`, `get(holdId)` and `list(customerId, { status })` (`GET /customers/{id}/credit-holds`; `status` is checked against `held`, `denied`, `finalized`, `released`, `expired` before any request). A timestamp the SDK fills in is kept per create key and per hold's finalize, so a retry replays; `create` (it sends an `Idempotency-Key`), `finalize` and `release` follow `maxRetries`. Engine errors arrive as `NozleApiError` with `code` `hold_not_found` (404), `hold_already_resolved` (409) or `hold_ttl_invalid` (400). Types: `UsageHold`, `UsageHoldStatus`, `UsageHoldCreateParams`, `UsageHoldCreateResult`, `UsageHoldFinalizeParams`, `UsageHoldFinalizeResult`, `UsageHoldListOptions`, `UsageHoldList`.
+- `CreditBalance.held` and `CreditBalanceSource.held`; `EntityCreditBalance.entity_held`, `shared_held` and `held`. Optional, since an older Engine does not send them.
+
+## Node.js 0.28.0 — 2026-10-31
+
+### Added
+
+- `nozle.createEventBuffer({ maxBatchSize, flushIntervalMs, maxQueueSize, maxAttempts, onError })` queues events in memory and sends them through `trackBatch()` in the background. `buffer.track(event)` takes a `trackBatch()` event, returns its transaction ID at once (generated UUID v7 when missing, kept on every resend so Engine records the event once) and throws `NozleValidationError` only for an invalid event. A flush starts when `maxBatchSize` events are waiting (default 500, at most 5000), every `flushIntervalMs` (default 5000; 0 disables the timer, which never keeps the process alive) and on `beforeExit`; only one flush runs at a time. `await buffer.flush()` sends what is waiting; `await buffer.close()` stops the timer and the exit hook, sends everything and refuses later events. `buffer.size` counts the waiting events.
+- The queue holds at most `maxQueueSize` events (default 10 000). No event leaves it silently: `onError(error, events)` receives an `EventBufferError` with `code` `buffer_full` (the queue was full, so the new event was dropped), `rejected` (Engine refused it, with `errors`; not retried), `failed` (its requests failed in `maxAttempts` flushes, default 3; a failed event goes back to the front of the queue until then) or `closed` (tracked after `close()`). Without `onError` each is emitted as a `NozleTrackingWarning`. Serverless handlers must `await buffer.flush()` or `buffer.close()` before returning; short-lived processes should end with `await buffer.close()`, the only call that retries and reports failed events.
+- After a flush with any failed event, the size, timer and `beforeExit` flushes back off: 1 s, doubling per consecutive flush with failures, at most 60 s; a flush without failures resets it. Events keep queueing (up to `maxQueueSize`); an explicit `flush()` or `close()` does not wait. In a backoff, `beforeExit` sets an unref'ed timer instead of flushing, so the process can still exit during an outage.
+
+Known: `wrapOpenAI`, `wrapAnthropic` and `captureFetch` still send one request per call; routing them through the buffer is a follow-up. The queue is in memory only.
+
 ## Node.js 0.27.0 — 2026-10-31
 
 ### Added

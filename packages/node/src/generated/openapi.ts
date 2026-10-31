@@ -18396,6 +18396,8 @@ export interface components {
             initial: string;
             /** @description Amount not yet consumed, as a decimal string. */
             remaining: string;
+            /** @description Credits of this source reserved by open holds, as a decimal string (Engine 2.34.0+). */
+            held?: string;
             /**
              * Format: date-time
              * @description Time the source becomes usable.
@@ -18461,6 +18463,8 @@ export interface components {
             system_status: string;
             /** @description Sum of `remaining` over sources whose `available` is `true`, as a decimal string. */
             available: string;
+            /** @description Credits reserved by open holds, as a decimal string (Engine 2.34.0+). */
+            held?: string;
             /**
              * Format: date-time
              * @description Time the balance was read; source validity is evaluated at this time.
@@ -18534,6 +18538,10 @@ export interface components {
             effective_available: string;
             /** @description Amount consumed by this Entity. */
             consumed: string;
+            /** @description Credits reserved by open holds: the Entity's own, the shared pool's, and the pool the Entity spends from (Engine 2.34.0+). */
+            entity_held?: string;
+            shared_held?: string;
+            held?: string;
             /**
              * @description Pool policy of the active plan for this Credit System; `null` when none applies.
              * @enum {string|null}
@@ -19074,6 +19082,8 @@ export interface components {
             reason?: string;
             /** @description Projected source selection, in consume order. Only when `allowed` is `true` and not empty. */
             projected_deductions?: components["schemas"]["CreditsUsageDeduction"][];
+            /** @description The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.34.0+). */
+            budget?: components["schemas"]["Budget"];
         };
         /**
          * @description Result of an authoritative consume. When `allowed` is `true` the body has `operation_id`, `metric_amount`, `credit_system`, `credits_consumed`, `remaining` and `deductions`. When `false` it has `credits_required`, `available` and `reason`, and nothing was consumed. Empty fields are omitted.
@@ -19115,6 +19125,8 @@ export interface components {
             /** @description Reason code of a denial, for example `insufficient_credits`. */
             reason?: string;
             deductions?: components["schemas"]["CreditsUsageDeduction"][];
+            /** @description The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.34.0+). */
+            budget?: components["schemas"]["Budget"];
         };
         /** @description Unknown fields, including the old `feature` field, are ignored. */
         CreditsCheckAndDeductRequest: {
@@ -19420,7 +19432,7 @@ export interface components {
              * @description Denial code. Present only when `allowed` is `false`. `customer_payment_overdue` (Engine 2.22.0) comes with HTTP `402`, every other reason with `200`.
              * @enum {string}
              */
-            reason?: "feature_not_found" | "no_subscription" | "subscription_required" | "no_entitlement" | "usage_limit_exceeded" | "economic_policy_denied" | "customer_payment_overdue";
+            reason?: "feature_not_found" | "no_subscription" | "subscription_required" | "no_entitlement" | "usage_limit_exceeded" | "economic_policy_denied" | "customer_payment_overdue" | "budget_exceeded";
             /** @description Feature type, such as `boolean`, `config` or `metered`. Absent when the feature or subscription is missing, and when a metered feature has neither an entitlement nor a charge. */
             feature_type?: string;
             /** @description Configuration values granted by the plan for a non-metered feature. Absent when there are none. */
@@ -19446,6 +19458,30 @@ export interface components {
             overage?: boolean;
             economics?: components["schemas"]["PlatformCanEconomics"];
             policy?: components["schemas"]["PlatformCanPolicy"];
+            /** @description The spend limit that refused the call (`budget_exceeded`), else the tightest one covering the Feature (Engine 2.34.0+). */
+            budget?: components["schemas"]["Budget"];
+        };
+        /** @description One money budget (spend limit) and its standing in the current period. Amounts are decimal strings in major units of `currency` (Engine 2.34.0+). */
+        Budget: {
+            /** @description The Feature the limit covers; `null` for the subscription's total limit. */
+            feature_code: string | null;
+            limit: string;
+            spent: string;
+            held: string;
+            remaining: string;
+            currency: string;
+            /** @enum {string} */
+            period: "billing_period" | "calendar_month" | "lifetime";
+            /** Format: date-time */
+            period_start: string;
+            /** @description `null` for a `lifetime` limit. */
+            period_end: string | null;
+            /** @enum {string} */
+            mode: "hard" | "soft";
+            /** @enum {string} */
+            status: "ok" | "warning" | "exceeded";
+            /** @description Time of the latest event booked into `spent`. */
+            as_of: string | null;
         };
         /** @description Point-in-time estimate for the proposed call of an allowed metered feature. Monetary values are exact decimal strings in `currency`, not cents. */
         PlatformCanEconomics: {

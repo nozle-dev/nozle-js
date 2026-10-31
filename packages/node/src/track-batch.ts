@@ -24,15 +24,26 @@ function positiveInteger(name: string, value: number | undefined, fallback: numb
   return value;
 }
 
+/** Throws `NozleValidationError` for an event `/events/batch` cannot take; `label` names the event in the message. */
+export function checkEvent(event: TrackBatchEvent, label: string, index?: number): void {
+  if (!event || typeof event !== "object") throw new NozleValidationError(`${label} must be an object`, index);
+  if (typeof event.customerId !== "string" || !event.customerId.trim())
+    throw new NozleValidationError(`${label} requires customerId`, index);
+  if (typeof event.event !== "string" || !event.event.trim())
+    throw new NozleValidationError(`${label} requires event`, index);
+  if (event.timestamp) {
+    try {
+      eventTimestamp(event.timestamp);
+    } catch (error) {
+      throw new NozleValidationError(`${label}: ${(error as Error).message}`, index);
+    }
+  }
+}
+
 function prepare(events: TrackBatchEvent[]): Prepared[] {
   const seen = new Set<string>();
   return events.map((event, index) => {
-    if (!event || typeof event !== "object")
-      throw new NozleValidationError(`trackBatch events[${index}] must be an object`, index);
-    if (typeof event.customerId !== "string" || !event.customerId.trim())
-      throw new NozleValidationError(`trackBatch events[${index}] requires customerId`, index);
-    if (typeof event.event !== "string" || !event.event.trim())
-      throw new NozleValidationError(`trackBatch events[${index}] requires event`, index);
+    checkEvent(event, `trackBatch events[${index}]`, index);
     const transactionId = event.transactionId || createTransactionId();
     if (seen.has(transactionId))
       throw new NozleValidationError(`trackBatch events[${index}] repeats transactionId ${transactionId}`, index);
@@ -44,13 +55,7 @@ function prepare(events: TrackBatchEvent[]): Prepared[] {
       properties: event.metadata ?? {},
     };
     if (event.subscriptionId) body.external_subscription_id = event.subscriptionId;
-    if (event.timestamp) {
-      try {
-        body.timestamp = eventTimestamp(event.timestamp);
-      } catch (error) {
-        throw new NozleValidationError(`trackBatch events[${index}]: ${(error as Error).message}`, index);
-      }
-    }
+    if (event.timestamp) body.timestamp = eventTimestamp(event.timestamp);
     return { index, transactionId, body };
   });
 }

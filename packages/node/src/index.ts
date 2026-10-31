@@ -2,6 +2,9 @@ export { Nozle } from "./client";
 export {
   NozleApiError,
   NozleValidationError,
+  BudgetExceededError,
+  UsageLimitExceededError,
+  RefusalReason,
   NO_ACTIVE_SUBSCRIPTION,
   CUSTOMER_PAYMENT_OVERDUE,
   isNoActiveSubscription,
@@ -9,6 +12,8 @@ export {
   refusedEventIndexes,
 } from "./errors";
 export type { EventBatchErrorDetails, EventBatchResponse } from "./errors";
+export { EventBuffer, EventBufferError } from "./event-buffer";
+export type { EventBufferErrorCode, EventBufferOptions } from "./event-buffer";
 export { paginate } from "./paginate";
 export { MarginClient } from "./margin";
 export { EventsNamespace } from "./events";
@@ -19,7 +24,8 @@ export { CreditSystemsNamespace } from "./credit-systems";
 export { CreditsNamespace } from "./credits";
 export { EntitiesNamespace } from "./entities";
 export { EntitySubscriptionsNamespace } from "./entity-subscriptions";
-export { UsageNamespace } from "./usage";
+export { UsageNamespace, UsageHoldsNamespace } from "./usage";
+export { BudgetsNamespace } from "./budgets";
 export { WebhooksNamespace, WebhookVerificationError, createWebhookHandler } from "./webhooks";
 export { InvoicesNamespace } from "./invoices";
 export { CreditNotesNamespace, CREDIT_NOTE_ERROR_CODES } from "./credit-notes";
@@ -165,6 +171,22 @@ export type {
   UsageDeduction,
   UsageCheckResult,
   UsageTrackResult,
+  UsageHoldStatus,
+  UsageHoldCreateParams,
+  UsageHoldFinalizeParams,
+  UsageHoldListOptions,
+  UsageHold,
+  CreditUsageHold,
+  BudgetUsageHold,
+  UsageHoldCreateResult,
+  CreditUsageHoldCreateResult,
+  BudgetUsageHoldCreateResult,
+  UsageHoldFinalizeResult,
+  CreditUsageHoldFinalizeResult,
+  Budget,
+  BudgetList,
+  BudgetListOptions,
+  UsageHoldList,
   CoreSubscription,
   CustomerUsage,
 } from "./types";
