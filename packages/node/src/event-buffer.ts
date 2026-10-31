@@ -52,6 +52,16 @@ function integerOption(name: string, value: number | undefined, fallback: number
   return value;
 }
 
+function warn(message: string, code: EventBufferErrorCode): void {
+  const text = `Nozle event buffer: ${message}`;
+  // Edge and browser runtimes have no process warnings.
+  if (typeof process !== "undefined" && typeof process.emitWarning === "function") {
+    process.emitWarning(text, { type: "NozleTrackingWarning", code });
+  } else {
+    console.warn(`NozleTrackingWarning [${code}]: ${text}`);
+  }
+}
+
 /**
  * Queues events in memory and sends them through `trackBatch()` in the background: when `maxBatchSize` are waiting,
  * every `flushIntervalMs`, and before the process exits. Create it with {@link Nozle.createEventBuffer}.
@@ -174,8 +184,8 @@ export class EventBuffer {
     const retry: Queued[] = [];
     const dropped: Queued["event"][] = [];
     let failure: unknown;
-    for (const [index, result] of results.entries()) {
-      const item = batch[index];
+    for (const result of results) {
+      const item = batch[result.index];
       if (result.status === "rejected") {
         this.report("rejected", `Engine rejected event ${item.event.transactionId}: ${JSON.stringify(result.errors)}`, [item.event], { errors: result.errors });
       } else if (result.status === "failed") {
@@ -197,9 +207,10 @@ export class EventBuffer {
     const error = new EventBufferError(code, message, details);
     try {
       if (this.onError) this.onError(error, events);
-      else process.emitWarning(`Nozle event buffer: ${message}`, { type: "NozleTrackingWarning", code });
+      else warn(message, code);
     } catch {
-      // A throwing callback, or no process (edge, browser): the buffer keeps working.
+      // A throwing callback falls back to the warning: an event never leaves the buffer silently.
+      warn(message, code);
     }
   }
 }
