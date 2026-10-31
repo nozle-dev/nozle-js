@@ -12,6 +12,7 @@ import { EventsNamespace } from "./events";
 import { MarginClient } from "./margin";
 import { recordUsage as _recordUsage, type RecordUsageParams } from "./provider-usage";
 import { track as _track } from "./track";
+import { trackBatch as _trackBatch } from "./track-batch";
 import { UsageNamespace } from "./usage";
 import { WebhooksNamespace } from "./webhooks";
 import { InvoicesNamespace } from "./invoices";
@@ -24,6 +25,9 @@ import type {
   CoreSubscription,
   CustomerUsage,
   TrackOptions,
+  TrackBatchEvent,
+  TrackBatchOptions,
+  TrackBatchResult,
   Plan,
   PlanFamilySelection,
   PlansOptions,
@@ -127,6 +131,15 @@ export class Nozle {
     this.invoices = new InvoicesNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.alerts = new AlertsNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.planVersions = new PlanVersionsNamespace(this.eventsUrl, this.apiKey, this.policy);
+  }
+
+  /**
+   * Records many events through Engine's `/events/batch`: split into gzipped requests of `chunkSize` (at most 5000),
+   * sent `concurrency` at a time. Returns one result per event and rejects only for invalid arguments;
+   * a failed request marks its events `failed` and the other requests still run. See the README.
+   */
+  async trackBatch(events: TrackBatchEvent[], options?: TrackBatchOptions): Promise<TrackBatchResult> {
+    return _trackBatch(this.baseUrl, this.apiKey, events, options, this.policy);
   }
 
   async track(

@@ -186,6 +186,35 @@ await nozle.costEvents.track({
 
 A Cost Event may instead use `externalCustomerId` without a parent when the cost belongs to a customer but not to one Feature Event. Cost Event methods require a secret key.
 
+### Batching events
+
+`trackBatch()` sends many events through Engine's `/events/batch` in one call. It takes the arguments of `track()` as objects, splits them into requests, sends them in parallel and returns one result per event.
+
+```ts
+const result = await nozle.trackBatch([
+  { customerId: "cust_123", event: "api_call", metadata: { tokens: 100 } },
+  { customerId: "cust_456", event: "api_call", metadata: { tokens: 40 }, timestamp: "2026-10-29T09:30:00Z" },
+]);
+
+console.log(result.accepted, result.rejected, result.failed);
+for (const r of result.results) {
+  if (r.status === "rejected") console.warn(r.index, r.errors); // { code: ["value_is_mandatory"] }
+  if (r.status === "failed") console.error(r.index, r.transactionId, r.error); // resend with this transactionId
+}
+```
+
+The contract:
+
+- **Size.** At most 5000 events per request: the Engine 2.28.0+ default (`LAGO_EVENTS_BATCH_MAX_LENGTH`). `chunkSize` (1 to 5000, default 5000) sets the size of each request, and a longer list is split. `concurrency` (1 to 64, default 4) is how many requests are in flight at once. Each request body is gzipped (`Content-Encoding: gzip`, Engine 2.28.0+); the decoded body limit is 16 MiB. An Engine with a lower cap (before 2.28.0 the default was 100) answers 422 `too_many_events` and stores nothing; the SDK then sends that request in halves until each fits.
+- **Result.** `results[i]` belongs to `events[i]` and has a `status`: `accepted` (stored), `rejected` (Engine refused this event; `errors` maps a field to codes, and resending it unchanged fails again) or `failed` (its request failed: `error` is a `NozleApiError`, a network error or a timeout, and the event may or may not be stored). `accepted`, `rejected`, `failed` and `total` count them. `trackBatch()` throws only for invalid arguments; a failed request never hides the results of the others.
+- **Partial acceptance.** Engine 2.28.0+ stores the valid events of a request and answers 200 with `error_details` naming each refused event by position: an invalid event, a `transactionId` already stored with other values, or an event of a customer whose payment is overdue (`customer_payment_overdue`). The SDK marks those `rejected` and the others `accepted`. A request that stores nothing (every event refused, or an Engine before 2.28.0, which refuses a whole request for one bad event) answers 422 or 402 naming the bad events; the SDK marks those `rejected` and resends the valid rest (at most 3 requests for one chunk), so one bad event costs its own result only. A 5xx or network error still fails the whole request; it is retried as below.
+- **Idempotency.** Every event has a `transactionId`: yours, or a generated UUID version 7 that is also returned in `results[i].transactionId`. Engine records an event once per transaction ID, so the SDK retries a request after a network error, timeout, 429 or 5xx (`maxRetries`, default 2) without storing an event twice. IDs must be unique in one call (`NozleValidationError` otherwise). To retry `failed` events yourself, pass the same `transactionId` and the same `timestamp`.
+- **Timestamps.** Each event keeps its own `timestamp` (RFC 3339 or Unix seconds); without one Engine stamps it on arrival. There is no backfill flag: `/events/batch` accepts old and future timestamps as sent. It does not apply the 24 hours ahead and 366 days back window that `usage.track()` and cost events enforce.
+- **Subscription.** As for `track()`, pass `subscriptionId` or let Engine resolve the customer's one active subscription. A customer with several or none is a 422 for that event, so it comes back `rejected`.
+- **Invalid arguments** (`NozleValidationError` with the event's `index`, before any request): a missing `customerId` or `event`, a bad `timestamp`, a repeated `transactionId`, or an out-of-range `chunkSize` or `concurrency`.
+
+`trackBatch()` is not `usage.track()`: it records events like `track()` does and does not deduct credits, apply a money-billed feature's checks or return a balance. A list of 0 events sends nothing. There is no client-side buffer yet; to batch events as they happen, collect them and call `trackBatch()`.
+
 ## Entitlement Checks
 
 ```ts
