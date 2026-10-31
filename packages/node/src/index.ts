@@ -9,6 +9,8 @@ export {
   refusedEventIndexes,
 } from "./errors";
 export type { EventBatchErrorDetails, EventBatchResponse } from "./errors";
+export { EventBuffer, EventBufferError } from "./event-buffer";
+export type { EventBufferErrorCode, EventBufferOptions } from "./event-buffer";
 export { paginate } from "./paginate";
 export { MarginClient } from "./margin";
 export { EventsNamespace } from "./events";

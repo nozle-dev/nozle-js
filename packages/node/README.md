@@ -213,7 +213,38 @@ The contract:
 - **Subscription.** As for `track()`, pass `subscriptionId` or let Engine resolve the customer's one active subscription. A customer with several or none is a 422 for that event, so it comes back `rejected`.
 - **Invalid arguments** (`NozleValidationError` with the event's `index`, before any request): a missing `customerId` or `event`, a bad `timestamp`, a repeated `transactionId`, or an out-of-range `chunkSize` or `concurrency`.
 
-`trackBatch()` is not `usage.track()`: it records events like `track()` does and does not deduct credits, apply a money-billed feature's checks or return a balance. A list of 0 events sends nothing. There is no client-side buffer yet; to batch events as they happen, collect them and call `trackBatch()`.
+`trackBatch()` is not `usage.track()`: it records events like `track()` does and does not deduct credits, apply a money-billed feature's checks or return a balance. A list of 0 events sends nothing. To batch events as they happen, use an event buffer.
+
+### Event buffer
+
+`createEventBuffer()` queues events in memory and sends them through `trackBatch()` in the background, so recording an event never waits for the network.
+
+```ts
+const buffer = nozle.createEventBuffer({
+  onError: (error, events) => console.error(error.code, error.message, events.map((e) => e.transactionId)),
+});
+
+const transactionId = buffer.track({ customerId: "cust_123", event: "api_call", metadata: { tokens: 100 } });
+
+// At shutdown, or at the end of a serverless handler:
+await buffer.close();
+```
+
+- **`track(event)`** takes a `trackBatch()` event and returns its transaction ID at once, without a request: yours, or a generated UUID version 7. Every resend of the event carries that ID, so Engine records it once. It throws `NozleValidationError` only for an invalid event (missing `customerId` or `event`, bad `timestamp`).
+- **When it sends.** A flush starts as soon as `maxBatchSize` events are waiting (default 500, 1 to 5000; also the size of each request), every `flushIntervalMs` (default 5000; 0 disables the timer) and on the process's `beforeExit`. The timer never keeps the process alive. Only one flush runs at a time; a trigger during a flush waits for it.
+- **`await flush()`** sends every event waiting now and resolves when done; it never rejects. **`await close()`** stops the timer, removes the `beforeExit` hook, sends everything (retrying failures as below) and refuses later events. `size` is the number of events waiting.
+- **Bounded memory.** The buffer holds at most `maxQueueSize` events (default 10 000), including those in a request. When it is full, `track()` drops the new event and reports it as `buffer_full`; it does not throw.
+- **Never silent.** `onError(error, events)` receives an `EventBufferError` for every event that leaves the buffer unsent, with `error.code`:
+  - `buffer_full`: the queue was full and the new event was dropped.
+  - `rejected`: Engine refused the event; `error.errors` maps a field to codes. It is not retried.
+  - `failed`: its requests failed (after the `maxRetries` of each request) in `maxAttempts` flushes (default 3). Until then a failed event goes back to the front of the queue for the next flush; `error.cause` is the last error.
+  - `closed`: `track()` was called after `close()`.
+
+  Without `onError`, each is emitted as a `NozleTrackingWarning` process warning. `onError` must not throw.
+
+**Serverless** (AWS Lambda, Vercel and Cloudflare functions, and similar): the platform may freeze or end the process as soon as the handler returns, so neither the timer nor `beforeExit` runs. Always `await buffer.flush()` (buffer kept between invocations) or `await buffer.close()` (buffer per invocation) before returning, or the waiting events are lost.
+
+The queue lives in memory only: events still waiting when the process is killed (for example `SIGKILL`, or `process.exit()`, which skips `beforeExit`) are lost. `wrapOpenAI`, `wrapAnthropic` and `captureFetch` do not use the buffer yet.
 
 ## Entitlement Checks
 

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## Node.js 0.28.0 — 2026-10-31
+
+### Added
+
+- `nozle.createEventBuffer({ maxBatchSize, flushIntervalMs, maxQueueSize, maxAttempts, onError })` queues events in memory and sends them through `trackBatch()` in the background. `buffer.track(event)` takes a `trackBatch()` event, returns its transaction ID at once (generated UUID v7 when missing, kept on every resend so Engine records the event once) and throws `NozleValidationError` only for an invalid event. A flush starts when `maxBatchSize` events are waiting (default 500, at most 5000), every `flushIntervalMs` (default 5000; 0 disables the timer, which never keeps the process alive) and on `beforeExit`; only one flush runs at a time. `await buffer.flush()` sends what is waiting; `await buffer.close()` stops the timer and the exit hook, sends everything and refuses later events. `buffer.size` counts the waiting events.
+- The queue holds at most `maxQueueSize` events (default 10 000). No event leaves it silently: `onError(error, events)` receives an `EventBufferError` with `code` `buffer_full` (the queue was full, so the new event was dropped), `rejected` (Engine refused it, with `errors`; not retried), `failed` (its requests failed in `maxAttempts` flushes, default 3; a failed event goes back to the front of the queue until then) or `closed` (tracked after `close()`). Without `onError` each is emitted as a `NozleTrackingWarning`. Serverless handlers must `await buffer.flush()` or `buffer.close()` before returning.
+
+Known: `wrapOpenAI`, `wrapAnthropic` and `captureFetch` still send one request per call; routing them through the buffer is a follow-up. The queue is in memory only.
+
 ## Node.js 0.27.0 — 2026-10-31
 
 ### Added
