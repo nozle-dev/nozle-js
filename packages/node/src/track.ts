@@ -50,7 +50,7 @@ export async function track(
   return transactionId;
 }
 
-function eventTimestamp(value: string): string {
+export function eventTimestamp(value: string): string {
   const seconds = Number(value);
   if (value.trim() && Number.isFinite(seconds) && seconds >= 0) {
     return value;

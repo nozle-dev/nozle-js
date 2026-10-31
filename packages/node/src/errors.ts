@@ -53,6 +53,18 @@ export class NozleApiError extends Error {
   }
 }
 
+/** Thrown before any request when a call's own arguments are invalid (for example a bad `trackBatch()` event). */
+export class NozleValidationError extends Error {
+  /** Position of the offending event in a batch call, when the problem is one event's. */
+  readonly index?: number;
+
+  constructor(message: string, index?: number) {
+    super(message);
+    this.name = "NozleValidationError";
+    if (index !== undefined) this.index = index;
+  }
+}
+
 /** `error_details` of a `/events/batch` answer: field errors keyed by the event's index in the request. */
 export type EventBatchErrorDetails = Record<string, Record<string, string[]>>;
 

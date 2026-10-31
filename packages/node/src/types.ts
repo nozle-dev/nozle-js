@@ -21,6 +21,42 @@ export interface TrackOptions {
   timestamp?: string;
 }
 
+/** One event of {@link Nozle.trackBatch}: the arguments of `track()` as an object. */
+export interface TrackBatchEvent {
+  customerId: string;
+  event: string;
+  metadata?: Record<string, unknown>;
+  subscriptionId?: string;
+  /** Generated (UUID v7) when missing, and returned in the result. Must be unique within the call. */
+  transactionId?: string;
+  /** RFC 3339 or Unix seconds, as for `track()`. Each event keeps its own; none is shifted or clamped. */
+  timestamp?: string;
+}
+
+export interface TrackBatchOptions {
+  /** Events per request, 1 to 5000 (the Engine 2.28.0+ maximum; default 5000). A lower Engine cap is handled by splitting. */
+  chunkSize?: number;
+  /** Requests in flight at once, 1 to 64 (default 4). */
+  concurrency?: number;
+}
+
+/** The outcome of one event of {@link Nozle.trackBatch}, at the same position as in the input. */
+export type TrackBatchEventResult =
+  | { index: number; transactionId: string; status: "accepted" }
+  /** Engine refused this event; `errors` maps a field to codes, for example `{ code: ["value_is_mandatory"] }`. Do not resend it unchanged. */
+  | { index: number; transactionId: string; status: "rejected"; errors: Record<string, string[]> }
+  /** The request carrying it failed (`NozleApiError`, network error or timeout) and it may or may not be stored. Resend it with the same `transactionId`. */
+  | { index: number; transactionId: string; status: "failed"; error: unknown };
+
+export interface TrackBatchResult {
+  total: number;
+  accepted: number;
+  rejected: number;
+  failed: number;
+  /** One entry per input event, in input order. */
+  results: TrackBatchEventResult[];
+}
+
 export interface CostEventParams {
   costMeterCode: string;
   costEventId?: string;

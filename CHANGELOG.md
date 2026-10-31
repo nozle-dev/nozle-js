@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## Node.js 0.26.0 — 2026-10-31
+
+### Added
+
+- `nozle.trackBatch(events, { chunkSize, concurrency })` sends many events through `/events/batch`: chunks of a bounded size, a bounded number of requests in flight, one result per event (`accepted`, `rejected` with Engine's per-field codes, or `failed` with the error of its request). A request that names bad events is not lost: the SDK rejects those and resends the rest. Every event has a transaction ID (generated and returned if missing), so a retried request records each event once. Throws `NozleValidationError` (new, with the event `index`) for invalid arguments before any request. Types: `TrackBatchEvent`, `TrackBatchOptions`, `TrackBatchEventResult`, `TrackBatchResult`.
+- `trackBatch()` follows Engine 2.28.0's batch contract: chunks of up to 5000 events (default 5000), gzipped request bodies (`Content-Encoding: gzip`), and a 200 that stores the valid events and lists refused ones by position in `error_details` (marked `rejected`). Gzip and chunks above 100 need Engine 2.28.0+. Against an Engine with a lower cap, a request answered 422 `too_many_events` is sent again in halves until each fits, so no event fails for the size.
+
 ## Node.js 0.25.0 — 2026-10-30
 
 ### Changed

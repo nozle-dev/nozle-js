@@ -1,6 +1,7 @@
 export { Nozle } from "./client";
 export {
   NozleApiError,
+  NozleValidationError,
   NO_ACTIVE_SUBSCRIPTION,
   CUSTOMER_PAYMENT_OVERDUE,
   isNoActiveSubscription,
@@ -48,6 +49,10 @@ export type { CaptureFetchOptions, CaptureRequest } from "./capture-fetch";
 export type {
   NozleConfig,
   TrackOptions,
+  TrackBatchEvent,
+  TrackBatchOptions,
+  TrackBatchEventResult,
+  TrackBatchResult,
   CostEventParams,
   CostEventAccepted,
   CanOptions,
