@@ -15,6 +15,7 @@ import { track as _track } from "./track";
 import { trackBatch as _trackBatch } from "./track-batch";
 import { UsageNamespace } from "./usage";
 import { WebhooksNamespace } from "./webhooks";
+import { CreditNotesNamespace } from "./credit-notes";
 import { InvoicesNamespace } from "./invoices";
 import { AlertsNamespace } from "./alerts";
 import { PlanVersionsNamespace } from "./plan-versions";
@@ -97,6 +98,8 @@ export class Nozle {
   readonly webhooks: WebhooksNamespace;
   /** A customer's invoices and their PDFs. */
   readonly invoices: InvoicesNamespace;
+  /** Preview, issue, refund, list and void credit notes. Needs a secret key. */
+  readonly creditNotes: CreditNotesNamespace;
   /** Usage and wallet-balance alerts; Nozle sends `alert.triggered` when one fires. */
   readonly alerts: AlertsNamespace;
   /** The versions of a plan code and the migrations that move subscribers between them (secret keys). */
@@ -129,6 +132,7 @@ export class Nozle {
     this.usage = new UsageNamespace(this.baseUrl, this.apiKey, this.policy);
     this.webhooks = new WebhooksNamespace();
     this.invoices = new InvoicesNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.creditNotes = new CreditNotesNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.alerts = new AlertsNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.planVersions = new PlanVersionsNamespace(this.eventsUrl, this.apiKey, this.policy);
   }

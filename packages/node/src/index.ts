@@ -22,6 +22,7 @@ export { EntitySubscriptionsNamespace } from "./entity-subscriptions";
 export { UsageNamespace } from "./usage";
 export { WebhooksNamespace, WebhookVerificationError, createWebhookHandler } from "./webhooks";
 export { InvoicesNamespace } from "./invoices";
+export { CreditNotesNamespace, CREDIT_NOTE_ERROR_CODES } from "./credit-notes";
 export { AlertsNamespace } from "./alerts";
 export { PlanVersionsNamespace } from "./plan-versions";
 export type {
@@ -36,6 +37,10 @@ export type {
 } from "./plan-versions";
 export type { Alert, AlertTarget, AlertThreshold, AlertType, CreateAlertInput, UpdateAlertInput } from "./alerts";
 export type { Invoice, InvoicePage, ListInvoicesOptions } from "./invoices";
+export type {
+  CreditNote, CreditNoteItem, CreditNotePage, CreditNotePreview, CreditNoteReason,
+  CreateCreditNoteParams, ListCreditNotesOptions, PreviewCreditNoteParams, RefundParams,
+} from "./credit-notes";
 export type { NozleWebhookEvent, VerifyWebhookInput, WebhookHandlerOptions, WebhookHeaders, WebhookVerificationCode } from "./webhooks";
 export { wrapOpenAI } from "./wrap-openai";
 export type { WrapOptions } from "./wrap-openai";

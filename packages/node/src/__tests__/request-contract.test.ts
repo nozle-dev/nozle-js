@@ -108,6 +108,19 @@ const calls: Record<string, (nozle: Nozle) => Promise<unknown>> = {
       },
       { idempotencyKey: "i2" },
     ),
+  "creditNotes.preview": (n) => n.creditNotes.preview({ invoiceId: "inv_1", items: [{ feeId: "fee_1", amountCents: 500 }] }),
+  "creditNotes.create": (n) =>
+    n.creditNotes.create({
+      invoiceId: "inv_1",
+      items: [{ feeId: "fee_1", amountCents: 500 }],
+      refundAmountCents: 500,
+      creditAmountCents: 0,
+      offsetAmountCents: 0,
+      reason: "duplicated_charge",
+      description: "Charged twice",
+      metadata: { ticket: "T-1" },
+    }),
+  "creditNotes.void": (n) => n.creditNotes.void("cn_1"),
   "credits.allocate": (n) => n.credits.allocate("cust", "user-42", { creditSystemCode: "ai_credits", amount: "10" }, { idempotencyKey: "a1" }),
 };
 
