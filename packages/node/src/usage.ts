@@ -17,7 +17,7 @@ import type {
 } from "./types";
 
 export class UsageNamespace {
-  /** Credit holds: reserve credits before a call whose final amount is known only afterwards (Engine 2.30.0+). */
+  /** Credit holds: reserve credits before a call whose final amount is known only afterwards (Engine 2.33.0+). */
   readonly holds: UsageHoldsNamespace;
 
   constructor(

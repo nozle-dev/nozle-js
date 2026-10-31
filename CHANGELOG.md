@@ -4,7 +4,7 @@
 
 ## Node.js 0.29.0 — 2026-10-31
 
-Needs Engine 2.30.0 for the hold methods and `held` fields.
+Needs Engine 2.33.0 for the hold methods and `held` fields.
 
 ### Added
 
