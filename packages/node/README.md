@@ -392,6 +392,25 @@ try {
 - Balances gain `held` (and each source `held`; entity balances `entity_held`, `shared_held`); `available` already excludes open holds.
 - As with `usage.track()`, a timestamp the SDK fills in is kept per idempotency key (and per hold for `finalize`) in this client's memory. Pass `timestamp` when a retry may come from another process.
 
+### Money budgets
+
+Spend limits (Core) cap what a customer's metered usage may cost per period. Needs Engine 2.31.0+.
+
+```ts
+import { RefusalReason } from "@nozle-js/node";
+
+const decision = await nozle.can("cust_123", "agent_execution");
+if (!decision.allowed && decision.reason === RefusalReason.BudgetExceeded) {
+  // decision.budget: { limit, spent, held, remaining, currency, period_end, status, ... }
+}
+
+const { budgets } = await nozle.budgets.list("cust_123", { subscriptionId: "sub_123" });
+```
+
+- `can()`, `usage.check()` and `usage.track()` answer `allowed: false`, `reason: "budget_exceeded"` with `budget` when a hard limit covering the Feature is used up; a soft limit never refuses. Compare `reason` with `RefusalReason` values; unknown reasons arrive as their string.
+- A plain `can()` is check-then-call, so calls in flight can overrun a cap. For an exact cap, take a hold: on a Feature billed in money `usage.holds.create()` returns a budget hold (`kind: "budget"`, `amount_held`, `currency`) and refuses with `budget_exceeded` when the estimated spend does not fit.
+- Where a failed response throws, a 402 `budget_exceeded` is a `BudgetExceededError` (with `budget` when sent) and a 429 `usage_limit_exceeded` a `UsageLimitExceededError`; both extend `NozleApiError`. Through the LLM proxy the provider SDK's own error carries the same `code`.
+
 ## Entities and per-user credits
 
 Use Entities for stable customer-owned subjects such as workspace users. Entity mutations require a server-side secret key and a caller-supplied idempotency key.

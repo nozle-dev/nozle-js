@@ -17,7 +17,10 @@ import type {
 } from "./types";
 
 export class UsageNamespace {
-  /** Credit holds: reserve credits before a call whose final amount is known only afterwards (Engine 2.30.0+). */
+  /**
+   * Holds: reserve credits (Engine 2.30.0+), or the estimated spend of a Feature billed in money under a hard spend
+   * limit (a budget hold, `kind: "budget"`; Engine 2.31.0+), before a call whose final amount is known only afterwards.
+   */
   readonly holds: UsageHoldsNamespace;
 
   constructor(
@@ -98,7 +101,10 @@ export class UsageHoldsNamespace {
   // shortcut: lives in this client's memory, so a retry from another process must pass `timestamp`; keeps the last 1000 keys.
   private readonly generatedTimestamps = new Map<string, string>();
 
-  /** Reserves the credits `usage.track` would spend. A short balance answers `allowed: false`, not an error. */
+  /**
+   * Reserves the credits `usage.track` would spend, or for a Feature billed in money under a hard spend limit its
+   * estimated spend (a budget hold). A short balance or a used-up limit answers `allowed: false`, not an error.
+   */
   async create(params: UsageHoldCreateParams, options: UsageTrackOptions): Promise<UsageHoldCreateResult> {
     requireSecretKey(this.apiKey, "usage.holds.create");
     validateUsageParams(params);

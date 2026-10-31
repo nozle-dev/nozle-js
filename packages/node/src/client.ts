@@ -15,6 +15,7 @@ import { track as _track } from "./track";
 import { trackBatch as _trackBatch } from "./track-batch";
 import { EventBuffer, type EventBufferOptions } from "./event-buffer";
 import { UsageNamespace } from "./usage";
+import { BudgetsNamespace } from "./budgets";
 import { WebhooksNamespace } from "./webhooks";
 import { CreditNotesNamespace } from "./credit-notes";
 import { InvoicesNamespace } from "./invoices";
@@ -95,6 +96,8 @@ export class Nozle {
   readonly entitySubscriptions: EntitySubscriptionsNamespace;
   readonly credits: CreditsNamespace;
   readonly usage: UsageNamespace;
+  /** Money budgets: `list(customerId, { subscriptionId })` (Engine 2.31.0+). */
+  readonly budgets: BudgetsNamespace;
   /** Verifies webhooks Nozle sends to your endpoint. */
   readonly webhooks: WebhooksNamespace;
   /** A customer's invoices and their PDFs. */
@@ -131,6 +134,7 @@ export class Nozle {
     this.entitySubscriptions = new EntitySubscriptionsNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.credits = new CreditsNamespace(this.baseUrl, this.apiKey, this.policy);
     this.usage = new UsageNamespace(this.baseUrl, this.apiKey, this.policy);
+    this.budgets = new BudgetsNamespace(this.baseUrl, this.apiKey, this.policy);
     this.webhooks = new WebhooksNamespace();
     this.invoices = new InvoicesNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.creditNotes = new CreditNotesNamespace(this.eventsUrl, this.apiKey, this.policy);

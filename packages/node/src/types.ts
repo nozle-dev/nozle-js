@@ -1,3 +1,5 @@
+import type { RefusalReason } from "./errors";
+
 export interface NozleConfig {
   /** Organization credential. Defaults to the NOZLE_SECRET_KEY environment variable. */
   apiKey?: string;
@@ -87,11 +89,12 @@ export interface CanOptions {
 export interface CanResult {
   allowed: boolean;
   /**
-   * Denial code when `allowed` is `false`: `feature_not_found`, `no_subscription`, `subscription_required`,
-   * `no_entitlement`, `usage_limit_exceeded`, `economic_policy_denied`, or `customer_payment_overdue` (the
-   * customer's unpaid invoices are past the plan's grace; `used` is `0` and `limit`/`remaining` are `null`).
+   * Denial code when `allowed` is `false`, one of {@link RefusalReason}: `feature_not_found`, `no_subscription`,
+   * `subscription_required`, `no_entitlement`, `usage_limit_exceeded`, `economic_policy_denied`,
+   * `customer_payment_overdue` (the customer's unpaid invoices are past the plan's grace; `used` is `0` and
+   * `limit`/`remaining` are `null`) or `budget_exceeded` (a hard spend limit is used up; see `budget`).
    */
-  reason?: string;
+  reason?: RefusalReason | (string & {});
   feature_type?: string;
   configuration?: Record<string, string>;
   used: number;
@@ -102,6 +105,46 @@ export interface CanResult {
   overage?: boolean;
   economics?: CanEconomics;
   policy?: CanPolicy;
+  /** The spend limit that refused the call (`budget_exceeded`), else the tightest one covering the Feature (Engine 2.31.0+). */
+  budget?: Budget;
+}
+
+/**
+ * One money budget (spend limit) and its standing in the current period. Amounts are decimal strings in major units
+ * of `currency`.
+ */
+export interface Budget {
+  /** The Feature the limit covers; `null` for the subscription's total limit. */
+  feature_code: string | null;
+  limit: string;
+  /** Gross metered usage charges booked this period. */
+  spent: string;
+  /** Spend reserved by open budget holds. */
+  held: string;
+  remaining: string;
+  currency: string;
+  period: "billing_period" | "calendar_month" | "lifetime";
+  period_start: string;
+  /** `null` for a `lifetime` limit. */
+  period_end: string | null;
+  /** A `soft` limit never refuses. */
+  mode: "hard" | "soft";
+  /** `warning` once a threshold is reached, `exceeded` once spent plus held reaches the limit. */
+  status: "ok" | "warning" | "exceeded";
+  /** Time of the latest event booked into `spent` (usage reaches the Engine a few seconds late); `null` before any. */
+  as_of: string | null;
+}
+
+export interface BudgetListOptions {
+  /** External id of the subscription, for a customer with several. */
+  subscriptionId?: string;
+}
+
+/** `GET /customers/{id}/budgets`: every spend limit of the subscription. */
+export interface BudgetList {
+  customer_id: string;
+  subscription_id: string;
+  budgets: Budget[];
 }
 
 export interface CanEconomics {
@@ -902,6 +945,7 @@ export interface UsageDeduction {
   remaining: string;
 }
 
+/** A `budget_exceeded` refusal carries only `allowed`, `reason` and `budget`. */
 export interface UsageCheckResult {
   advisory: true;
   allowed: boolean;
@@ -911,9 +955,12 @@ export interface UsageCheckResult {
   available: string;
   projected_remaining?: string;
   projected_deductions?: UsageDeduction[];
-  reason?: string;
+  reason?: RefusalReason | (string & {});
+  /** The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.31.0+). */
+  budget?: Budget;
 }
 
+/** A `budget_exceeded` refusal carries only `allowed`, `reason` and `budget`. */
 export interface UsageTrackResult {
   allowed: boolean;
   operation_id?: string;
@@ -923,8 +970,10 @@ export interface UsageTrackResult {
   credits_consumed?: string;
   available?: string;
   remaining?: string;
-  reason?: string;
+  reason?: RefusalReason | (string & {});
   deductions?: UsageDeduction[];
+  /** The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.31.0+). */
+  budget?: Budget;
 }
 
 export type UsageHoldStatus = "held" | "denied" | "finalized" | "released" | "expired";
@@ -945,7 +994,10 @@ export interface UsageHoldListOptions {
   status?: UsageHoldStatus;
 }
 
-export interface UsageHold {
+/** A hold on credits: the Feature is billed in credits. */
+export interface CreditUsageHold {
+  /** Engine sends no `kind` for a credit hold. */
+  kind?: undefined;
   hold_id: string;
   status: UsageHoldStatus;
   customer_id: string;
@@ -964,13 +1016,46 @@ export interface UsageHold {
   operation_id?: string;
 }
 
-export interface UsageHoldCreateResult extends UsageHold {
+/**
+ * A budget hold (Engine 2.31.0+): the Feature is billed in money under a hard spend limit, so the hold reserves the
+ * call's estimated spend. Finalize sends the usage as one event; its spend is then booked.
+ */
+export interface BudgetUsageHold {
+  kind: "budget";
+  hold_id: string;
+  status: UsageHoldStatus;
+  customer_id: string;
+  subscription_id: string;
+  feature_code: string;
+  metric_amount: string;
+  /** Spend reserved, a decimal string in major units of `currency`; "0" once released, expired or denied. */
+  amount_held: string;
+  currency: string;
+  expires_at: string;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+/** A credit hold, or a budget hold when `kind` is `"budget"`. */
+export type UsageHold = CreditUsageHold | BudgetUsageHold;
+
+export interface CreditUsageHoldCreateResult extends CreditUsageHold {
   allowed: boolean;
-  reason?: string;
+  reason?: RefusalReason | (string & {});
   available: string;
 }
 
-export interface UsageHoldFinalizeResult extends UsageTrackResult {
+export interface BudgetUsageHoldCreateResult extends BudgetUsageHold {
+  allowed: boolean;
+  /** `budget_exceeded` when the estimated spend does not fit. */
+  reason?: RefusalReason | (string & {});
+  budget?: Budget;
+}
+
+export type UsageHoldCreateResult = CreditUsageHoldCreateResult | BudgetUsageHoldCreateResult;
+
+export interface CreditUsageHoldFinalizeResult extends UsageTrackResult {
+  kind?: undefined;
   entity_id?: string;
   pool_policy?: string;
   hold_id: string;
@@ -980,6 +1065,9 @@ export interface UsageHoldFinalizeResult extends UsageTrackResult {
   /** The hold had expired, so the usage ran as a plain track. */
   hold_expired: boolean;
 }
+
+/** A credit hold's finalize answers the track result; a budget hold's answers the hold itself (`kind` `"budget"`). */
+export type UsageHoldFinalizeResult = CreditUsageHoldFinalizeResult | BudgetUsageHold;
 
 export interface UsageHoldList {
   customer_id: string;

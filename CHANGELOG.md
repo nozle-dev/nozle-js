@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## Node.js 0.30.0 — 2026-10-31
+
+Needs Engine 2.31.0 for budgets.
+
+### Added
+
+- Money budgets (NLD-16). `nozle.budgets.list(customerId, { subscriptionId })` (`GET /customers/{id}/budgets?subscription_id=`) returns `{ customer_id, subscription_id, budgets }`: every spend limit of the subscription with its spend, open holds and status in the current period. Type `Budget`: `feature_code` (`null` for the total limit), `limit`, `spent`, `held`, `remaining` (decimal strings in major units), `currency`, `period` (`billing_period`, `calendar_month`, `lifetime`), `period_start`, `period_end`, `mode` (`hard`, `soft`), `status` (`ok`, `warning`, `exceeded`) and `as_of`; also `BudgetList`, `BudgetListOptions`.
+- `CanResult.budget`, `UsageCheckResult.budget` and `UsageTrackResult.budget`: `can()`, `usage.check()` and `usage.track()` answer `allowed: false`, `reason: "budget_exceeded"` with the used-up limit. They still return the refusal; nothing throws.
+- `RefusalReason`: the exact reason values (`feature_not_found`, `no_subscription`, `subscription_required`, `no_entitlement`, `usage_limit_exceeded`, `economic_policy_denied`, `customer_payment_overdue`, `insufficient_credits`, `budget_exceeded`). `reason` fields are typed `RefusalReason | string`, so a reason from a newer Engine still arrives.
+- `BudgetExceededError` (402 `budget_exceeded`, with `budget` when the response carries one) and `UsageLimitExceededError` (429 `usage_limit_exceeded`), both subclasses of `NozleApiError`, chosen by status and exact `code` wherever the SDK throws for a failed response.
+- Budget holds: on a Feature billed in money under a hard spend limit, `usage.holds.create()` reserves the call's estimated spend. `UsageHold` is now `CreditUsageHold | BudgetUsageHold`; a budget hold has `kind: "budget"`, `amount_held` and `currency` instead of the credit fields, and its create result carries `budget` (and `reason: "budget_exceeded"` when it does not fit). `finalize()` of a budget hold returns the hold. New types `CreditUsageHold`, `BudgetUsageHold`, `CreditUsageHoldCreateResult`, `BudgetUsageHoldCreateResult`, `CreditUsageHoldFinalizeResult`.
+
+The `budget` fields and the `Budget` schema are added by hand to the generated types, mirroring Engine, until nozle-openapi.yaml documents them.
+
 ## Node.js 0.29.0 — 2026-10-31
 
 Needs Engine 2.30.0 for the hold methods and `held` fields.

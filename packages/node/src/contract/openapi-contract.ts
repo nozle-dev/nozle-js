@@ -14,6 +14,7 @@ import type {
   PlanVersionMigrationPreviewItem,
 } from "../plan-versions";
 import type {
+  Budget,
   CanResult,
   CostEventAccepted,
   CreditBalance,
@@ -38,6 +39,7 @@ export type OpenApiContract = [
   Expect<Fits<Schemas["CreditsUsageTrackResponse"], UsageTrackResult>>,
   Expect<Fits<Schemas["CreditsUsageCheckResponse"], UsageCheckResult>>,
   Expect<Fits<Schemas["PlatformCanResponse"], CanResult>>,
+  Expect<Fits<Schemas["Budget"], Budget>>,
   Expect<Fits<Schemas["PlatformPingResponse"], PingResult>>,
   Expect<Fits<Schemas["CostEventAccepted"], CostEventAccepted>>,
   Expect<Fits<Schemas["CreditsCustomerBalance"], CreditBalance>>,
