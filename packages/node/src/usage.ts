@@ -18,7 +18,7 @@ import type {
 
 export class UsageNamespace {
   /**
-   * Holds: reserve credits (Engine 2.33.0+), or the estimated spend of a Feature billed in money under a hard spend
+   * Holds: reserve credits (Engine 2.34.0+), or the estimated spend of a Feature billed in money under a hard spend
    * limit (a budget hold, `kind: "budget"`; Engine 2.34.0+), before a call whose final amount is known only afterwards.
    */
   readonly holds: UsageHoldsNamespace;

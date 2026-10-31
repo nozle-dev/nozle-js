@@ -367,7 +367,7 @@ Keep these reads on the merchant backend. Return only the fields your authentica
 
 ### Credit holds
 
-When a call's final amount is known only afterwards (an LLM response, a long job), reserve credits first and settle afterwards. Needs Engine 2.33.0+ and a secret key.
+When a call's final amount is known only afterwards (an LLM response, a long job), reserve credits first and settle afterwards. Needs Engine 2.34.0+ and a secret key.
 
 ```ts
 const hold = await nozle.usage.holds.create(

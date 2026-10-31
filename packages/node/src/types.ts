@@ -705,7 +705,7 @@ export interface CreditBalanceSource {
   initial: string;
   remaining: string;
   valid_from: string;
-  /** Credits of this source reserved by open holds (Engine 2.33.0+). */
+  /** Credits of this source reserved by open holds (Engine 2.34.0+). */
   held?: string;
   expires_at: string | null;
   priority: number;
@@ -722,7 +722,7 @@ export interface CreditBalance {
   system_status: string;
   /** What can be spent now: open holds are already subtracted. */
   available: string;
-  /** Credits reserved by open holds (Engine 2.33.0+). */
+  /** Credits reserved by open holds (Engine 2.34.0+). */
   held?: string;
   as_of: string;
   sources: CreditBalanceSource[];
@@ -864,7 +864,7 @@ export interface EntityCreditBalance
   entity_available: string;
   shared_available: string;
   effective_available: string;
-  /** Credits reserved by open holds: the entity's own, the shared pool's, and the pool the entity spends from (Engine 2.33.0+). */
+  /** Credits reserved by open holds: the entity's own, the shared pool's, and the pool the entity spends from (Engine 2.34.0+). */
   entity_held?: string;
   shared_held?: string;
   held?: string;
