@@ -18396,6 +18396,8 @@ export interface components {
             initial: string;
             /** @description Amount not yet consumed, as a decimal string. */
             remaining: string;
+            /** @description Credits of this source reserved by open holds, as a decimal string (Engine 2.30.0+). */
+            held?: string;
             /**
              * Format: date-time
              * @description Time the source becomes usable.
@@ -18461,6 +18463,8 @@ export interface components {
             system_status: string;
             /** @description Sum of `remaining` over sources whose `available` is `true`, as a decimal string. */
             available: string;
+            /** @description Credits reserved by open holds, as a decimal string (Engine 2.30.0+). */
+            held?: string;
             /**
              * Format: date-time
              * @description Time the balance was read; source validity is evaluated at this time.
@@ -18534,6 +18538,10 @@ export interface components {
             effective_available: string;
             /** @description Amount consumed by this Entity. */
             consumed: string;
+            /** @description Credits reserved by open holds: the Entity's own, the shared pool's, and the pool the Entity spends from (Engine 2.30.0+). */
+            entity_held?: string;
+            shared_held?: string;
+            held?: string;
             /**
              * @description Pool policy of the active plan for this Credit System; `null` when none applies.
              * @enum {string|null}

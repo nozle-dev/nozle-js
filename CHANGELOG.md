@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## Node.js 0.29.0 — 2026-10-31
+
+Needs Engine 2.30.0 for the hold methods and `held` fields.
+
+### Added
+
+- `nozle.usage.holds` (NLD-9): reserve credits before a call whose final amount is known only afterwards. `create(params, { idempotencyKey })` (`POST /usage/holds`) takes the `usage.track()` params plus `ttlSeconds` (1 to 86400, Engine default 900; checked before any request) and returns the hold with `allowed`, `reason`, `available`; a short balance is `allowed: false`, not an error. `finalize(holdId, { properties, timestamp })` spends the actual usage and returns the `usage.track()` result plus `hold_id`, `hold_status`, `credits_held`, `credits_released` and `hold_expired`. `release(holdId)`, `get(holdId)` and `list(customerId, { status })` (`GET /customers/{id}/credit-holds`; `status` is checked against `held`, `denied`, `finalized`, `released`, `expired` before any request). A timestamp the SDK fills in is kept per create key and per hold's finalize, so a retry replays; `create` (it sends an `Idempotency-Key`), `finalize` and `release` follow `maxRetries`. Engine errors arrive as `NozleApiError` with `code` `hold_not_found` (404), `hold_already_resolved` (409) or `hold_ttl_invalid` (400). Types: `UsageHold`, `UsageHoldStatus`, `UsageHoldCreateParams`, `UsageHoldCreateResult`, `UsageHoldFinalizeParams`, `UsageHoldFinalizeResult`, `UsageHoldListOptions`, `UsageHoldList`.
+- `CreditBalance.held` and `CreditBalanceSource.held`; `EntityCreditBalance.entity_held`, `shared_held` and `held`. Optional, since an older Engine does not send them.
+
 ## Node.js 0.28.0 — 2026-10-31
 
 ### Added

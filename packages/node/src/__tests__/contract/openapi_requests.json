@@ -9831,6 +9831,81 @@
   ],
   "type": "object"
  },
+ "POST /engine/api/v1/usage/holds": {
+  "additionalProperties": false,
+  "properties": {
+   "credit_system_code": {
+    "type": "string"
+   },
+   "customer_id": {
+    "type": "string"
+   },
+   "entity_id": {
+    "type": "string"
+   },
+   "feature_code": {
+    "type": "string"
+   },
+   "properties": {
+    "additionalProperties": true,
+    "type": "object"
+   },
+   "subscription_id": {
+    "type": "string"
+   },
+   "timestamp": {
+    "allOf": [
+     {
+      "oneOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "string"
+       }
+      ]
+     }
+    ]
+   },
+   "ttl_seconds": {
+    "type": "integer"
+   }
+  },
+  "required": [
+   "customer_id",
+   "feature_code",
+   "timestamp"
+  ],
+  "type": "object"
+ },
+ "POST /engine/api/v1/usage/holds/{hold_id}/finalize": {
+  "additionalProperties": false,
+  "properties": {
+   "properties": {
+    "additionalProperties": true,
+    "type": "object"
+   },
+   "timestamp": {
+    "allOf": [
+     {
+      "oneOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "string"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "required": [
+   "timestamp"
+  ],
+  "type": "object"
+ },
+ "POST /engine/api/v1/usage/holds/{hold_id}/release": null,
  "POST /engine/api/v1/usage/track": {
   "additionalProperties": false,
   "properties": {

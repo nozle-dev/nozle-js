@@ -365,6 +365,33 @@ const page = await nozle.credits.listOperations("cust_123", {
 
 Keep these reads on the merchant backend. Return only the fields your authenticated browser route needs, and derive the customer from the logged-in user or team instead of trusting a browser customer ID.
 
+### Credit holds
+
+When a call's final amount is known only afterwards (an LLM response, a long job), reserve credits first and settle afterwards. Needs Engine 2.30.0+ and a secret key.
+
+```ts
+const hold = await nozle.usage.holds.create(
+  { customerId: "cust_123", featureCode: "agent_execution", properties: { tokens: 4000 }, ttlSeconds: 600 },
+  { idempotencyKey: `hold-${runId}` },
+);
+if (!hold.allowed) throw new Error(hold.reason); // "insufficient_credits": nothing was reserved
+
+try {
+  const answer = await runAgent();
+  await nozle.usage.holds.finalize(hold.hold_id, { properties: { tokens: answer.tokens } });
+} catch (error) {
+  await nozle.usage.holds.release(hold.hold_id);
+  throw error;
+}
+```
+
+- `create(params, { idempotencyKey })` takes the `usage.track()` params plus `ttlSeconds` (1 to 86400, default 900). A short balance answers `allowed: false`, not an error; a retry with the same key gets the same answer.
+- `finalize(holdId, { properties, timestamp })` spends the actual usage at the rate pinned by the hold and releases the rest (`credits_released`). More than was held passes when the hold plus free credit covers it; otherwise `allowed: false` and the hold stays open. After expiry it runs as a plain track (`hold_expired: true`). A repeat with the same usage replays the answer, so it is retried like `usage.track()`.
+- `release(holdId)` is idempotent; a finalized hold throws `NozleApiError` with `code` `hold_already_resolved` (409).
+- `get(holdId)` and `list(customerId, { status })` (`held`, `denied`, `finalized`, `released`, `expired`; newest 100) read holds; another `status` throws before any request. A missing hold throws `hold_not_found` (404).
+- Balances gain `held` (and each source `held`; entity balances `entity_held`, `shared_held`); `available` already excludes open holds.
+- As with `usage.track()`, a timestamp the SDK fills in is kept per idempotency key (and per hold for `finalize`) in this client's memory. Pass `timestamp` when a retry may come from another process.
+
 ## Entities and per-user credits
 
 Use Entities for stable customer-owned subjects such as workspace users. Entity mutations require a server-side secret key and a caller-supplied idempotency key.

@@ -71,6 +71,13 @@ const calls: Record<string, (nozle: Nozle) => Promise<unknown>> = {
   track: (n) => n.track("cust", "api_calls", { tokens: 1 }, { subscriptionId: "sub_1" }),
   "usage.check": (n) => n.usage.check({ customerId: "cust", featureCode: "emails" }),
   "usage.track": (n) => n.usage.track({ customerId: "cust", featureCode: "emails" }, { idempotencyKey: "k1" }),
+  "usage.holds.create": (n) =>
+    n.usage.holds.create(
+      { customerId: "cust", entityId: "user-42", featureCode: "emails", creditSystemCode: "ai_credits", ttlSeconds: 600 },
+      { idempotencyKey: "h1" },
+    ),
+  "usage.holds.finalize": (n) => n.usage.holds.finalize("hold_1", { properties: { tokens: 10 } }),
+  "usage.holds.release": (n) => n.usage.holds.release("hold_1"),
   "costEvents.track": (n) => n.costEvents.track({ costMeterCode: "llm_tokens", externalCustomerId: "cust" }),
   "customers.upsert": (n) => n.customers.upsert({ externalId: "cust" }),
   subscribe: (n) => n.subscribe("cust", "pro"),

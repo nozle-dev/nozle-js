@@ -662,6 +662,8 @@ export interface CreditBalanceSource {
   initial: string;
   remaining: string;
   valid_from: string;
+  /** Credits of this source reserved by open holds (Engine 2.30.0+). */
+  held?: string;
   expires_at: string | null;
   priority: number;
   status: string;
@@ -675,7 +677,10 @@ export interface CreditBalance {
   credit_system_name: string;
   unit_name: string;
   system_status: string;
+  /** What can be spent now: open holds are already subtracted. */
   available: string;
+  /** Credits reserved by open holds (Engine 2.30.0+). */
+  held?: string;
   as_of: string;
   sources: CreditBalanceSource[];
 }
@@ -816,6 +821,10 @@ export interface EntityCreditBalance
   entity_available: string;
   shared_available: string;
   effective_available: string;
+  /** Credits reserved by open holds: the entity's own, the shared pool's, and the pool the entity spends from (Engine 2.30.0+). */
+  entity_held?: string;
+  shared_held?: string;
+  held?: string;
   consumed: string;
   pool_policy: EntityCreditPoolPolicy | null;
 }
@@ -916,6 +925,65 @@ export interface UsageTrackResult {
   remaining?: string;
   reason?: string;
   deductions?: UsageDeduction[];
+}
+
+export type UsageHoldStatus = "held" | "denied" | "finalized" | "released" | "expired";
+
+/** The `usage.track` request plus how long the hold lasts. */
+export interface UsageHoldCreateParams extends UsageTrackParams {
+  /** Seconds until the hold expires: 1 to 86400, Engine default 900. */
+  ttlSeconds?: number;
+}
+
+/** The actual usage of the held call. */
+export interface UsageHoldFinalizeParams {
+  properties?: Record<string, unknown>;
+  timestamp?: string;
+}
+
+export interface UsageHoldListOptions {
+  status?: UsageHoldStatus;
+}
+
+export interface UsageHold {
+  hold_id: string;
+  status: UsageHoldStatus;
+  customer_id: string;
+  entity_id?: string;
+  subscription_id?: string;
+  feature_code: string;
+  credit_system: string;
+  pool_policy?: string;
+  metric_amount: string;
+  credits_required: string;
+  /** "0" for a denied hold. */
+  credits_held: string;
+  expires_at: string;
+  created_at: string;
+  resolved_at: string | null;
+  operation_id?: string;
+}
+
+export interface UsageHoldCreateResult extends UsageHold {
+  allowed: boolean;
+  reason?: string;
+  available: string;
+}
+
+export interface UsageHoldFinalizeResult extends UsageTrackResult {
+  entity_id?: string;
+  pool_policy?: string;
+  hold_id: string;
+  hold_status: UsageHoldStatus;
+  credits_held: string;
+  credits_released: string;
+  /** The hold had expired, so the usage ran as a plain track. */
+  hold_expired: boolean;
+}
+
+export interface UsageHoldList {
+  customer_id: string;
+  holds: UsageHold[];
 }
 
 /** One subscription as Core returns it (`GET /subscriptions`). */
