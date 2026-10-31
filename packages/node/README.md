@@ -455,6 +455,34 @@ export const POST = createWebhookHandler(nozle, {
 });
 ```
 
+## Credit notes and refunds
+
+Needs a secret key and a workspace with credit notes enabled (otherwise `NozleApiError` 403 `feature_unavailable`). A credit note lowers a finalized invoice; its total is settled by crediting the customer's balance, refunding the original payment method (Stripe or Razorpay, started by Nozle), offsetting what the customer still owes, or a mix.
+
+```ts
+const items = [{ feeId: "fee_123", amountCents: 500 }]; // feeId: `fees[].nozle_id` in the invoice from GET /invoices/{id}
+
+// 1. Preview: nothing is created. Taxes and coupons are applied.
+const preview = await nozle.creditNotes.preview({ invoiceId: "inv_123", items });
+preview.max_creditable_amount_cents; // the credit note's total
+preview.max_refundable_amount_cents; // what was paid and not refunded yet
+
+// 2a. Refund the items to the original payment method (partial refunds: use fewer or smaller items).
+const note = await nozle.creditNotes.refund({ invoiceId: "inv_123", items, reason: "duplicated_charge", metadata: { ticket: "T-42" } });
+note.refund_status; // "pending", then "succeeded" or "failed" (webhook credit_note.refund_failure)
+
+// 2b. Or choose the split yourself: the three amounts add up to max_creditable_amount_cents.
+await nozle.creditNotes.create({ invoiceId: "inv_123", items, refundAmountCents: 300, creditAmountCents: 200, reason: "order_change" });
+
+await nozle.creditNotes.list({ customerId: "cus_1", refundStatus: "failed" });
+await nozle.creditNotes.get(note.nozle_id);
+await nozle.creditNotes.void(note.nozle_id); // voids the unused credit; never undoes a paid refund or an offset
+```
+
+`reason` is one of `duplicated_charge`, `product_unsatisfactory`, `order_change`, `order_cancellation`, `fraudulent_charge`, `other` (default). `refund()` throws `refund_exceeds_paid_amount` and creates nothing when less was paid than the items are worth; pass `creditRemainder: true` to refund what was paid and credit the rest.
+
+The SDK sends no `Idempotency-Key` with credit note requests yet (Core 11.22.0 accepts one on create), so `create()`, `refund()` and `void()` are never retried, whatever `maxRetries` says; `preview()`, `get()` and `list()` are. After a network error or a 5xx on `create()`, call `list({ customerId, invoiceNumber })` before trying again. Errors are `NozleApiError`; test them with `error.hasCode(CREDIT_NOTE_ERROR_CODES.cannotRefundUnpaidInvoice)` (also `higherThanRemainingInvoiceAmount`, `higherThanRemainingFeeAmount`, `doesNotMatchItemAmounts`, `invalidTypeOrStatus`, `noVoidableAmount`). Nozle stores only the provider's refund id and status, never card or bank details.
+
 ## Health Check
 
 ```ts

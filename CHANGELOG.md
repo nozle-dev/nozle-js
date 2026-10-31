@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## Node.js 0.27.0 — 2026-10-31
+
+### Added
+
+- `nozle.creditNotes`: `preview()` (Core `POST /credit_notes/estimate`), `create()` with `creditAmountCents`, `refundAmountCents`, `offsetAmountCents`, `reason`, `description` and `metadata`, `refund()` (preview, then a credit note refunded to the original payment method; `creditRemainder` for partial payment), `list()`, `get()` and `void()`. `CREDIT_NOTE_ERROR_CODES` names the codes Core returns. `create()`, `refund()` and `void()` are never retried because they send no `Idempotency-Key` yet; `preview()`, `get()` and `list()` follow `maxRetries`. Needs a secret key and a workspace with credit notes enabled.
+
 ## Node.js 0.26.0 — 2026-10-31
 
 ### Added
