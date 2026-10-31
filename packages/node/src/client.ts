@@ -13,6 +13,7 @@ import { MarginClient } from "./margin";
 import { recordUsage as _recordUsage, type RecordUsageParams } from "./provider-usage";
 import { track as _track } from "./track";
 import { trackBatch as _trackBatch } from "./track-batch";
+import { EventBuffer, type EventBufferOptions } from "./event-buffer";
 import { UsageNamespace } from "./usage";
 import { WebhooksNamespace } from "./webhooks";
 import { CreditNotesNamespace } from "./credit-notes";
@@ -144,6 +145,14 @@ export class Nozle {
    */
   async trackBatch(events: TrackBatchEvent[], options?: TrackBatchOptions): Promise<TrackBatchResult> {
     return _trackBatch(this.baseUrl, this.apiKey, events, options, this.policy);
+  }
+
+  /**
+   * An in-memory queue that sends events through {@link Nozle.trackBatch} in the background: on size, on a timer and
+   * before the process exits. Serverless handlers must `await buffer.flush()` or `buffer.close()` before returning.
+   */
+  createEventBuffer(options?: EventBufferOptions): EventBuffer {
+    return new EventBuffer((events, batchOptions) => this.trackBatch(events, batchOptions), options);
   }
 
   async track(
