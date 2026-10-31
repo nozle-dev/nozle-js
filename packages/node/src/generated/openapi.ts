@@ -18396,7 +18396,7 @@ export interface components {
             initial: string;
             /** @description Amount not yet consumed, as a decimal string. */
             remaining: string;
-            /** @description Credits of this source reserved by open holds, as a decimal string (Engine 2.30.0+). */
+            /** @description Credits of this source reserved by open holds, as a decimal string (Engine 2.33.0+). */
             held?: string;
             /**
              * Format: date-time
@@ -18463,7 +18463,7 @@ export interface components {
             system_status: string;
             /** @description Sum of `remaining` over sources whose `available` is `true`, as a decimal string. */
             available: string;
-            /** @description Credits reserved by open holds, as a decimal string (Engine 2.30.0+). */
+            /** @description Credits reserved by open holds, as a decimal string (Engine 2.33.0+). */
             held?: string;
             /**
              * Format: date-time
@@ -18538,7 +18538,7 @@ export interface components {
             effective_available: string;
             /** @description Amount consumed by this Entity. */
             consumed: string;
-            /** @description Credits reserved by open holds: the Entity's own, the shared pool's, and the pool the Entity spends from (Engine 2.30.0+). */
+            /** @description Credits reserved by open holds: the Entity's own, the shared pool's, and the pool the Entity spends from (Engine 2.33.0+). */
             entity_held?: string;
             shared_held?: string;
             held?: string;
@@ -19082,7 +19082,7 @@ export interface components {
             reason?: string;
             /** @description Projected source selection, in consume order. Only when `allowed` is `true` and not empty. */
             projected_deductions?: components["schemas"]["CreditsUsageDeduction"][];
-            /** @description The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.31.0+). */
+            /** @description The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.34.0+). */
             budget?: components["schemas"]["Budget"];
         };
         /**
@@ -19125,7 +19125,7 @@ export interface components {
             /** @description Reason code of a denial, for example `insufficient_credits`. */
             reason?: string;
             deductions?: components["schemas"]["CreditsUsageDeduction"][];
-            /** @description The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.31.0+). */
+            /** @description The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.34.0+). */
             budget?: components["schemas"]["Budget"];
         };
         /** @description Unknown fields, including the old `feature` field, are ignored. */
@@ -19458,10 +19458,10 @@ export interface components {
             overage?: boolean;
             economics?: components["schemas"]["PlatformCanEconomics"];
             policy?: components["schemas"]["PlatformCanPolicy"];
-            /** @description The spend limit that refused the call (`budget_exceeded`), else the tightest one covering the Feature (Engine 2.31.0+). */
+            /** @description The spend limit that refused the call (`budget_exceeded`), else the tightest one covering the Feature (Engine 2.34.0+). */
             budget?: components["schemas"]["Budget"];
         };
-        /** @description One money budget (spend limit) and its standing in the current period. Amounts are decimal strings in major units of `currency` (Engine 2.31.0+). */
+        /** @description One money budget (spend limit) and its standing in the current period. Amounts are decimal strings in major units of `currency` (Engine 2.34.0+). */
         Budget: {
             /** @description The Feature the limit covers; `null` for the subscription's total limit. */
             feature_code: string | null;

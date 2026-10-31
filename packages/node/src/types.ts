@@ -105,7 +105,7 @@ export interface CanResult {
   overage?: boolean;
   economics?: CanEconomics;
   policy?: CanPolicy;
-  /** The spend limit that refused the call (`budget_exceeded`), else the tightest one covering the Feature (Engine 2.31.0+). */
+  /** The spend limit that refused the call (`budget_exceeded`), else the tightest one covering the Feature (Engine 2.34.0+). */
   budget?: Budget;
 }
 
@@ -705,7 +705,7 @@ export interface CreditBalanceSource {
   initial: string;
   remaining: string;
   valid_from: string;
-  /** Credits of this source reserved by open holds (Engine 2.30.0+). */
+  /** Credits of this source reserved by open holds (Engine 2.33.0+). */
   held?: string;
   expires_at: string | null;
   priority: number;
@@ -722,7 +722,7 @@ export interface CreditBalance {
   system_status: string;
   /** What can be spent now: open holds are already subtracted. */
   available: string;
-  /** Credits reserved by open holds (Engine 2.30.0+). */
+  /** Credits reserved by open holds (Engine 2.33.0+). */
   held?: string;
   as_of: string;
   sources: CreditBalanceSource[];
@@ -864,7 +864,7 @@ export interface EntityCreditBalance
   entity_available: string;
   shared_available: string;
   effective_available: string;
-  /** Credits reserved by open holds: the entity's own, the shared pool's, and the pool the entity spends from (Engine 2.30.0+). */
+  /** Credits reserved by open holds: the entity's own, the shared pool's, and the pool the entity spends from (Engine 2.33.0+). */
   entity_held?: string;
   shared_held?: string;
   held?: string;
@@ -956,7 +956,7 @@ export interface UsageCheckResult {
   projected_remaining?: string;
   projected_deductions?: UsageDeduction[];
   reason?: RefusalReason | (string & {});
-  /** The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.31.0+). */
+  /** The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.34.0+). */
   budget?: Budget;
 }
 
@@ -972,7 +972,7 @@ export interface UsageTrackResult {
   remaining?: string;
   reason?: RefusalReason | (string & {});
   deductions?: UsageDeduction[];
-  /** The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.31.0+). */
+  /** The used-up hard spend limit, with `reason` `budget_exceeded` (Engine 2.34.0+). */
   budget?: Budget;
 }
 
@@ -1017,7 +1017,7 @@ export interface CreditUsageHold {
 }
 
 /**
- * A budget hold (Engine 2.31.0+): the Feature is billed in money under a hard spend limit, so the hold reserves the
+ * A budget hold (Engine 2.34.0+): the Feature is billed in money under a hard spend limit, so the hold reserves the
  * call's estimated spend. Finalize sends the usage as one event; its spend is then booked.
  */
 export interface BudgetUsageHold {

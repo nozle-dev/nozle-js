@@ -2,7 +2,7 @@ import { request, type RequestPolicy } from "./http";
 import { apiError } from "./errors";
 import type { BudgetList, BudgetListOptions } from "./types";
 
-/** Money budgets (spend limits) and their standing (Engine 2.31.0+). */
+/** Money budgets (spend limits) and their standing (Engine 2.34.0+). */
 export class BudgetsNamespace {
   constructor(
     private readonly baseUrl: string,

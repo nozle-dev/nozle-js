@@ -4,7 +4,7 @@
 
 ## Node.js 0.30.0 — 2026-10-31
 
-Needs Engine 2.31.0 for budgets.
+Needs Engine 2.34.0 for budgets.
 
 ### Added
 
@@ -22,7 +22,7 @@ The `budget` fields and the `Budget` schema are added by hand to the generated t
 
 ## Node.js 0.29.0 — 2026-10-31
 
-Needs Engine 2.30.0 for the hold methods and `held` fields.
+Needs Engine 2.33.0 for the hold methods and `held` fields.
 
 ### Added
 

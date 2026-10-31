@@ -96,7 +96,7 @@ export class Nozle {
   readonly entitySubscriptions: EntitySubscriptionsNamespace;
   readonly credits: CreditsNamespace;
   readonly usage: UsageNamespace;
-  /** Money budgets: `list(customerId, { subscriptionId })` (Engine 2.31.0+). */
+  /** Money budgets: `list(customerId, { subscriptionId })` (Engine 2.34.0+). */
   readonly budgets: BudgetsNamespace;
   /** Verifies webhooks Nozle sends to your endpoint. */
   readonly webhooks: WebhooksNamespace;
