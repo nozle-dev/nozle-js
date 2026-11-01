@@ -1,3 +1,4 @@
+import type { CustomerAddress, CustomerTaxFields, CustomerTaxId, CustomerType } from "./customer-tax";
 import type { RefusalReason } from "./errors";
 
 export interface NozleConfig {
@@ -704,9 +705,15 @@ export interface CustomerUpsertParams {
   name?: string;
   email?: string;
   billingConfiguration?: CustomerBillingConfiguration;
+  customerType?: CustomerType;
+  legalName?: string;
+  address?: CustomerAddress;
+  shippingAddress?: CustomerAddress;
+  /** `null` clears the stored tax ID (and its type and check result). Core validates the format. */
+  taxId?: CustomerTaxId | null;
 }
 
-export interface CustomerUpsertResult {
+export interface CustomerUpsertResult extends CustomerTaxFields {
   external_id: string;
   name?: string;
   email?: string;

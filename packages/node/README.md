@@ -339,6 +339,21 @@ await nozle.customers.upsert({
 });
 ```
 
+Tax data: pass `customerType`, `legalName`, `address`, `shippingAddress` and `taxId`. Core validates the format (`value_is_invalid`, `value_is_mandatory`, `invalid_format` in `errorDetails`; test with `error.hasCode(CustomerTaxErrorCode.InvalidFormat)`). A VIES check can leave `tax_identification_status` at `pending`, so wait before checkout:
+
+```ts
+await nozle.customers.upsert({
+  externalId: "cust_123",
+  customerType: "company",
+  address: { line1: "Main St 1", city: "Berlin", postalCode: "10115", country: "DE" },
+  taxId: { type: "eu_vat", value: "DE811128135" }, // null clears it
+});
+const customer = await nozle.customers.waitForTaxCheck("cust_123"); // { timeoutMs } defaults to 10000
+customer.tax_treatment; // "reverse_charge" | "standard" | ...
+```
+
+A checkout call refuses with `customer_tax_location_required` (422) when the billing entity needs a country or address, and `customer_tax_check_pending` (409, `error.retryAfterSeconds`) while a check runs.
+
 A payment provider assignment needs `providerCustomerId` or `syncWithProvider: true`; otherwise Core drops it. The same applies to `provider_customer_id` and `sync_with_provider` when you call the REST API directly.
 
 ### Importing billing state and opening credit balances
