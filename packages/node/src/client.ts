@@ -127,7 +127,7 @@ export class Nozle {
       retryDelayMs: config.retryDelayMs ?? 500,
     };
     this.margin = new MarginClient(this.baseUrl, this.apiKey, this.policy);
-    this.events = new EventsNamespace();
+    this.events = new EventsNamespace(this.baseUrl, this.apiKey, this.policy);
     this.costEvents = new CostEventsNamespace(this.baseUrl, this.apiKey, this.policy);
     this.costIntelligence = new CostIntelligenceNamespace(this.baseUrl, this.apiKey, this.policy);
     this.customers = new CustomersNamespace(this.eventsUrl, this.apiKey, this.policy, this.baseUrl);

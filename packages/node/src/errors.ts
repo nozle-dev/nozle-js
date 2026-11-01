@@ -117,6 +117,15 @@ export const TrialErrorCode = {
 } as const;
 export type TrialErrorCode = (typeof TrialErrorCode)[keyof typeof TrialErrorCode];
 
+/** Codes of a refused `events.void`, and of a `track` of a voided ID. Test with `error.hasCode(...)`. */
+export const EventVoidErrorCode = {
+  EventNotFound: "event_not_found",
+  PeriodInvoiced: "period_invoiced",
+  ReasonRequired: "reason_required",
+  TransactionVoided: "transaction_voided",
+} as const;
+export type EventVoidErrorCode = (typeof EventVoidErrorCode)[keyof typeof EventVoidErrorCode];
+
 /** True when the error means the customer has no active subscription, whichever service or SDK path raised it. */
 export function isNoActiveSubscription(error: unknown): boolean {
   return error instanceof NozleApiError && error.hasCode(NO_ACTIVE_SUBSCRIPTION);

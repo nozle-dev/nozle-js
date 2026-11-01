@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## Node.js 0.34.0 — unreleased
+
+Needs an Engine with event void (NLD-8).
+
+### Added
+
+- `nozle.events.void(transactionId, { reason })` (`POST /events/{transaction_id}/void`, Engine): voids a recorded usage event and reverses its usage, credits, cost and margin. Idempotent: a replay returns `status: "already_voided"`. The result is `{ void }` with `status`, `reason`, `voided_at`, `actor` and `effects` (each `reversed`, `recomputed`, `refunded`, `not_applicable` or `pending`).
+- `EventVoidErrorCode` (`event_not_found` 404, `period_invoiced` 409, `reason_required` 422, `transaction_voided` 409 on a later `track` of that ID) for `error.hasCode(...)`.
+- Types `EventVoid`, `EventVoidEffects`, `EventVoidResult`.
+
 ## Node.js 0.33.0 — 2026-11-01
 
 Needs a Core with trial updates (NLD-4).
