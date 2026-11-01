@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Nozle } from "../client";
-import { NozleApiError } from "../errors";
+import { NozleApiError, NozleValidationError, TrialErrorCode } from "../errors";
 import type { CancellationPolicy } from "../types";
 
 const fetchMock = vi.fn();
@@ -616,6 +616,99 @@ describe("Nozle", () => {
         client.cancelSubscription("cust_1", "sub_1", { policy: "whenever" as CancellationPolicy }),
       ).rejects.toThrow("policy must be end_of_period or immediate");
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("subscription trials", () => {
+    const ok = {
+      subscription: { external_id: "sub/1", status: "active", trial_ends_at: "2026-12-01T00:00:00Z", in_trial: true },
+    };
+    const sent = () => {
+      const [url, init] = fetchMock.mock.calls[0];
+      return { url: url.toString(), init, body: JSON.parse(init.body) };
+    };
+
+    it("sends each of the three forms as a PUT to Core", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      for (const trial of [{ extend_days: 7 }, { ends_at: "2026-12-01T00:00:00Z" }, { convert: true as const }]) {
+        fetchMock.mockReset();
+        fetchMock.mockResolvedValueOnce(jsonResponse(ok));
+        const result = await client.updateSubscription("sub/1", { trial });
+        const { url, init, body } = sent();
+        expect(url).toBe("https://api.nozle.app/core/api/v1/subscriptions/sub%2F1");
+        expect(init.method).toBe("PUT");
+        expect(body).toEqual({ subscription: { trial } });
+        expect(result.subscription.in_trial).toBe(true);
+        expect(result.subscription.trial_ends_at).toBe("2026-12-01T00:00:00Z");
+      }
+    });
+
+    it("rejects none, several and malformed forms before sending", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      const bad = [
+        {},
+        { reason: "x" },
+        { extend_days: 3, convert: true },
+        { extend_days: 3, ends_at: "2026-12-01T00:00:00Z" },
+        { extend_days: 0 },
+        { extend_days: 1.5 },
+        { ends_at: "tomorrow" },
+        { convert: false },
+        { convert: true, reason: "x".repeat(501) },
+      ];
+      for (const trial of bad) {
+        await expect(client.updateSubscription("sub_1", { trial } as never)).rejects.toBeInstanceOf(NozleValidationError);
+      }
+      await expect(client.updateSubscription("", { trial: { convert: true } })).rejects.toBeInstanceOf(NozleValidationError);
+      await expect(new Nozle({ apiKey: "pk_x" }).updateSubscription("s", { trial: { convert: true } })).rejects.toThrow(
+        "requires a secret key",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("extendTrial sends days or endsAt with the reason", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      fetchMock.mockResolvedValueOnce(jsonResponse(ok));
+      await client.extendTrial("sub_1", { days: 14, reason: "sales call" });
+      expect(sent().body).toEqual({ subscription: { trial: { extend_days: 14, reason: "sales call" } } });
+      fetchMock.mockReset();
+      fetchMock.mockResolvedValueOnce(jsonResponse(ok));
+      await client.extendTrial("sub_1", { endsAt: "2026-12-01T00:00:00Z" });
+      expect(sent().body).toEqual({ subscription: { trial: { ends_at: "2026-12-01T00:00:00Z" } } });
+      await expect(client.extendTrial("sub_1", {})).rejects.toBeInstanceOf(NozleValidationError);
+      await expect(client.extendTrial("sub_1", { days: 1, endsAt: "2026-12-01T00:00:00Z" })).rejects.toBeInstanceOf(
+        NozleValidationError,
+      );
+    });
+
+    it("convertTrial sends convert true", async () => {
+      const client = new Nozle({ apiKey: "sk_test" });
+      fetchMock.mockResolvedValueOnce(jsonResponse(ok));
+      await client.convertTrial("sub_1", { reason: "customer asked" });
+      expect(sent().body).toEqual({ subscription: { trial: { convert: true, reason: "customer asked" } } });
+    });
+
+    it.each([
+      [TrialErrorCode.InvalidParams],
+      [TrialErrorCode.NotActive],
+      [TrialErrorCode.ExtensionTooLong],
+      [TrialErrorCode.EndInPast],
+      [TrialErrorCode.PaymentMethodRequired],
+    ])("maps the 422 %s code", async (code) => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ status: 422, error: "Unprocessable Entity", code: "validation_errors", error_details: { trial: [code] } }, 422));
+      const client = new Nozle({ apiKey: "sk_test" });
+      const error = await client.convertTrial("sub_1").catch((e) => e);
+      expect(error).toBeInstanceOf(NozleApiError);
+      expect(error.status).toBe(422);
+      expect(error.hasCode(code)).toBe(true);
+      expect(error.hasCode(TrialErrorCode.NotActive === code ? TrialErrorCode.EndInPast : TrialErrorCode.NotActive)).toBe(false);
+    });
+
+    it("maps the 409 plan_change_pending code", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ status: 409, error: "Conflict", code: "plan_change_pending" }, 409));
+      const error = await new Nozle({ apiKey: "sk_test" }).convertTrial("sub_1").catch((e) => e);
+      expect(error.status).toBe(409);
+      expect(error.hasCode(TrialErrorCode.PlanChangePending)).toBe(true);
     });
   });
 

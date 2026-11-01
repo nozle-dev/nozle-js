@@ -7,7 +7,7 @@ import { CostIntelligenceNamespace } from "./cost-intelligence";
 import { CreditSystemsNamespace } from "./credit-systems";
 import { EntitiesNamespace } from "./entities";
 import { EntitySubscriptionsNamespace } from "./entity-subscriptions";
-import { apiError, NO_ACTIVE_SUBSCRIPTION, subscriptionError } from "./errors";
+import { apiError, NO_ACTIVE_SUBSCRIPTION, NozleValidationError, subscriptionError } from "./errors";
 import { EventsNamespace } from "./events";
 import { MarginClient } from "./margin";
 import { recordUsage as _recordUsage, type RecordUsageParams } from "./provider-usage";
@@ -48,6 +48,8 @@ import type {
   CancellationPolicy,
   CancelSubscriptionOptions,
   CancelSubscriptionResult,
+  SubscriptionTrialUpdate,
+  UpdateSubscriptionResult,
   SubscriptionTransitionParams,
   SubscriptionTransitionPreview,
   SubscriptionTransitionResult,
@@ -452,6 +454,58 @@ export class Nozle {
     }
     this.subCache.delete(customerId);
     return res.json();
+  }
+
+  /**
+   * Changes a subscription's trial (`PUT /subscriptions/{id}`, Core). `trial` has exactly one of `extend_days`
+   * (adds to the current end), `ends_at` (absolute new end, at least 30 minutes ahead) or `convert: true` (ends the
+   * trial now and starts paid billing); `reason` is optional (up to 500 characters). Refusals throw `NozleApiError`
+   * with a {@link TrialErrorCode}. Not retried: a repeated extension would add twice.
+   */
+  async updateSubscription(
+    externalId: string,
+    update: { trial: SubscriptionTrialUpdate },
+  ): Promise<UpdateSubscriptionResult> {
+    if (!this.apiKey.startsWith("sk_")) throw new Error("updateSubscription requires a secret key");
+    if (!externalId.trim()) throw new NozleValidationError("updateSubscription requires externalId");
+    const trial = update?.trial as Record<string, unknown> | undefined;
+    if (!trial || typeof trial !== "object") throw new NozleValidationError("updateSubscription requires trial");
+    const given = ["extend_days", "ends_at", "convert"].filter((key) => trial[key] !== undefined);
+    if (given.length !== 1)
+      throw new NozleValidationError("trial needs exactly one of extend_days, ends_at or convert");
+    if (trial.extend_days !== undefined && !(Number.isInteger(trial.extend_days) && (trial.extend_days as number) > 0))
+      throw new NozleValidationError("extend_days must be a positive integer");
+    if (trial.ends_at !== undefined && (typeof trial.ends_at !== "string" || !Number.isFinite(Date.parse(trial.ends_at))))
+      throw new NozleValidationError("ends_at must be an ISO 8601 timestamp");
+    if (trial.convert !== undefined && trial.convert !== true)
+      throw new NozleValidationError("convert must be true");
+    if (trial.reason !== undefined && (typeof trial.reason !== "string" || trial.reason.length > 500))
+      throw new NozleValidationError("reason must be a string up to 500 characters");
+    const res = await request(this.policy, `${this.eventsUrl}/api/v1/subscriptions/${encodeURIComponent(externalId)}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: { trial } }),
+    });
+    if (!res.ok) throw await apiError("updateSubscription", res);
+    return res.json();
+  }
+
+  /** Extends a trial by `days`, or moves its end to `endsAt` (ISO 8601). Give one of them. See {@link updateSubscription}. */
+  extendTrial(
+    externalId: string,
+    options: { days?: number; endsAt?: string; reason?: string },
+  ): Promise<UpdateSubscriptionResult> {
+    const { days, endsAt, reason } = options;
+    return this.updateSubscription(externalId, {
+      trial: { extend_days: days, ends_at: endsAt, ...(reason !== undefined && { reason }) } as SubscriptionTrialUpdate,
+    });
+  }
+
+  /** Ends a trial now and starts paid billing per the plan's rules. See {@link updateSubscription}. */
+  convertTrial(externalId: string, options: { reason?: string } = {}): Promise<UpdateSubscriptionResult> {
+    return this.updateSubscription(externalId, {
+      trial: { convert: true, ...(options.reason !== undefined && { reason: options.reason }) },
+    });
   }
 
   async previewSubscriptionTransition(

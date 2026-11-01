@@ -106,6 +106,17 @@ export const CUSTOMER_PAYMENT_OVERDUE = "customer_payment_overdue";
 /** The one code for a customer with no active subscription. Core's `subscription_not_found` counts as the same case in {@link NozleApiError.hasCode}. */
 export const NO_ACTIVE_SUBSCRIPTION = "active_subscription_not_found";
 
+/** Codes of a refused trial update: 422 `error_details.trial` except `plan_change_pending` (409). Test with `error.hasCode(...)`. */
+export const TrialErrorCode = {
+  InvalidParams: "trial_invalid_params",
+  NotActive: "trial_not_active",
+  ExtensionTooLong: "trial_extension_too_long",
+  EndInPast: "trial_end_in_past",
+  PaymentMethodRequired: "payment_method_required",
+  PlanChangePending: "plan_change_pending",
+} as const;
+export type TrialErrorCode = (typeof TrialErrorCode)[keyof typeof TrialErrorCode];
+
 /** True when the error means the customer has no active subscription, whichever service or SDK path raised it. */
 export function isNoActiveSubscription(error: unknown): boolean {
   return error instanceof NozleApiError && error.hasCode(NO_ACTIVE_SUBSCRIPTION);
