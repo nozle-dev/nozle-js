@@ -133,6 +133,17 @@ app.post("/chat", async (req) => {
 
 Calls on the original client record nothing.
 
+By default each call's usage is sent in the background as soon as the response is read. Pass an [event buffer](#event-buffer) as `buffer` to queue it there instead, so it is batched and `flush()` or `close()` sends it, for example at the end of a serverless handler:
+
+```ts
+const buffer = nozle.createEventBuffer();
+const client = wrapOpenAI(openai, nozle, { customerId: "cust_123", buffer });
+await client.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: "Hello" }] });
+await buffer.flush(); // sends the usage event
+```
+
+`captureFetch(nozle, { customerId, buffer })` takes the same option. `flush()` and `close()` first wait for responses still being read and for their cost events, which are still sent directly. A buffered usage event's delivery failures go to the buffer's `onError`.
+
 Each provider call creates one Feature Event. When `costMeterCode` is set, the wrapper generates the Feature Event `transaction_id` before sending and attaches separate detailed Cost Events for `input`, `cached_input`, `cache_write`, `output`, and `reasoning` token categories when present. OpenAI and Anthropic field names are normalized into the same Cost Event properties: `{ tokens, provider, model, type }`. Delivery can arrive out of order because the Cost Event processor resolves the shared `transaction_id` asynchronously.
 
 ## Usage Tracking
@@ -245,7 +256,7 @@ await buffer.close();
 
 **Serverless** (AWS Lambda, Vercel and Cloudflare functions, and similar): the platform may freeze or end the process as soon as the handler returns, so neither the timer nor `beforeExit` runs. Always `await buffer.flush()` (buffer kept between invocations) or `await buffer.close()` (buffer per invocation) before returning, or the waiting events are lost. `flush()` keeps a failed event queued for a later flush; only `close()` retries it to `maxAttempts` and reports it, so short-lived processes and scripts should end with `await buffer.close()`.
 
-The queue lives in memory only: events still waiting when the process is killed (for example `SIGKILL`, or `process.exit()`, which skips `beforeExit`) are lost. During a backoff, `beforeExit` only sets a timer that does not keep the process alive, so a process whose server stays unreachable still exits and its waiting events are lost without a report unless it called `close()`. `wrapOpenAI`, `wrapAnthropic` and `captureFetch` do not use the buffer yet.
+The queue lives in memory only: events still waiting when the process is killed (for example `SIGKILL`, or `process.exit()`, which skips `beforeExit`) are lost. During a backoff, `beforeExit` only sets a timer that does not keep the process alive, so a process whose server stays unreachable still exits and its waiting events are lost without a report unless it called `close()`. `wrapOpenAI`, `wrapAnthropic` and `captureFetch` queue their usage events in a buffer passed as their `buffer` option.
 
 ## Entitlement Checks
 

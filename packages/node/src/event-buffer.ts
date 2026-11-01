@@ -48,6 +48,27 @@ interface Queued {
 const FIRST_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 60_000;
 
+// Work that will track events into a buffer, such as an LLM response still being read by a wrapper.
+const heldWork = new WeakMap<EventBuffer, Set<Promise<unknown>>>();
+
+/** Makes the buffer's `flush()` and `close()` wait for `work` before sending; used by the LLM capture wrappers. */
+export function holdUntilFlushed(buffer: EventBuffer, work: Promise<unknown>): void {
+  let held = heldWork.get(buffer);
+  if (!held) heldWork.set(buffer, (held = new Set()));
+  const settled = work.then(
+    () => {},
+    () => {},
+  );
+  held.add(settled);
+  void settled.then(() => held.delete(settled));
+}
+
+/** Waits for the work held when it is called, not for work held later, so a busy server's flush still ends. */
+function settleHeld(buffer: EventBuffer): Promise<unknown> | undefined {
+  const held = heldWork.get(buffer);
+  return held?.size ? Promise.all([...held]) : undefined;
+}
+
 function integerOption(name: string, value: number | undefined, fallback: number, min: number, max: number): number {
   if (value === undefined) return fallback;
   if (!Number.isInteger(value) || value < min || value > max)
@@ -93,7 +114,7 @@ export class EventBuffer {
     const wait = this.pausedUntil - Date.now();
     if (this.queue.length === 0 || this.running) return;
     if (wait <= 0) {
-      void this.flush();
+      void this.flushQueue();
     } else if (!this.exitTimer) {
       this.exitTimer = setTimeout(() => {
         this.exitTimer = undefined;
@@ -146,9 +167,15 @@ export class EventBuffer {
    * Sends every event waiting now and resolves when done; it never rejects. Events whose request failed go back to
    * the front of the queue for the next flush; rejected ones and those out of attempts are reported to `onError`.
    * Only one flush runs at a time: a call during a flush waits for it and then sends what is waiting.
-   * It does not wait for the backoff that follows a flush with failures.
+   * It does not wait for the backoff that follows a flush with failures. It first waits for the LLM responses
+   * that wrappers given this buffer are still reading, so their usage is sent too.
    */
   flush(): Promise<void> {
+    const held = settleHeld(this);
+    return held ? held.then(() => this.flushQueue()) : this.flushQueue();
+  }
+
+  private flushQueue(): Promise<void> {
     if (this.queued) return this.queued;
     if (!this.running) return this.start();
     this.queued = this.running.then(() => {
@@ -158,15 +185,19 @@ export class EventBuffer {
     return this.queued;
   }
 
-  /** Stops the timer and the exit hook, sends everything (retrying failures up to `maxAttempts`) and refuses later events. */
+  /**
+   * Waits for the LLM responses that wrappers given this buffer are still reading, then stops the timer and the
+   * exit hook, sends everything (retrying failures up to `maxAttempts`) and refuses later events.
+   */
   close(): Promise<void> {
     this.closing ??= (async () => {
+      await settleHeld(this);
       this.closed = true;
       if (this.timer) clearInterval(this.timer);
       if (this.exitTimer) clearTimeout(this.exitTimer);
       if (typeof process !== "undefined" && typeof process.off === "function") process.off("beforeExit", this.onBeforeExit);
       // Waits for a flush in flight too. Each flush sends an event or spends one of its attempts, so this ends.
-      do await this.flush();
+      do await this.flushQueue();
       while (this.queue.length > 0);
     })();
     return this.closing;
@@ -178,7 +209,7 @@ export class EventBuffer {
     if (this.running) {
       this.autoPending = true;
     } else if (Date.now() >= this.pausedUntil) {
-      void this.flush();
+      void this.flushQueue();
     }
   }
 

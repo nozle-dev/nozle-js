@@ -133,6 +133,8 @@ export interface Budget {
   status: "ok" | "warning" | "exceeded";
   /** Time of the latest event booked into `spent` (usage reaches the Engine a few seconds late); `null` before any. */
   as_of: string | null;
+  /** When counting began: `period_start` once earlier spend in the period is counted, else when the count started; `null` before any. Engine 2.38.0. */
+  counted_from?: string | null;
 }
 
 export interface BudgetListOptions {

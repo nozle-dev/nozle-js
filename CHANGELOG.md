@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## Node.js 0.31.0 — 2026-11-01
+
+### Added
+
+- `Budget.counted_from` (Engine 2.38.0): when counting began, `period_start` once earlier spend in the period is counted (NLD-21).
+- `wrapOpenAI`, `wrapAnthropic` and `captureFetch` take a `buffer` option (an `EventBuffer` from `nozle.createEventBuffer()`, NLD-23). With it, each call's usage event is queued in the buffer instead of sent at once, so `await buffer.flush()` or `await buffer.close()` sends it: usage is no longer lost when a serverless handler returns or a process exits. `flush()` and `close()` first wait for responses the wrappers are still reading (a `captureFetch` stream or JSON body read in the background) and for their cost events, which are still sent directly. Delivery failures of a buffered usage event go to the buffer's `onError`, not the wrapper's; the wrapper's `onError` still receives cost event failures and `feature_not_found`. The transaction ID stays `llm-<provider>-<response id>`. Without `buffer` nothing changes.
+
 ## Node.js 0.30.0 — 2026-11-01
 
 0.28.0 (event buffer) and 0.29.0 (credit holds) below were not published separately: their changes ship in 0.30.0.
