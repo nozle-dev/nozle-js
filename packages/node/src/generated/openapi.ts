@@ -19482,6 +19482,11 @@ export interface components {
             status: "ok" | "warning" | "exceeded";
             /** @description Time of the latest event booked into `spent`. */
             as_of: string | null;
+            /**
+             * Format: date-time
+             * @description Engine 2.38.0. When `spent` starts: `period_start` once the period's spend is counted in full; before that (a limit added mid-period, for about 5 minutes), the time counting started; `null` when nothing is counted yet.
+             */
+            counted_from: string | null;
         };
         /** @description Point-in-time estimate for the proposed call of an allowed metered feature. Monetary values are exact decimal strings in `currency`, not cents. */
         PlatformCanEconomics: {
