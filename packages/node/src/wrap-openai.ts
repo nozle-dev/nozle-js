@@ -1,4 +1,5 @@
 import type { Nozle } from "./client";
+import { holdUntilFlushed, type EventBuffer } from "./event-buffer";
 import { captureProviderUsage, detectUsage, StreamUsageCollector, type DetectedUsage } from "./provider-usage";
 
 export interface WrapOptions {
@@ -8,6 +9,12 @@ export interface WrapOptions {
   costMeterCode?: string;
   /** Receives recording failures and a missing Feature for `metricCode`. Without it recording failures are emitted as a `NozleTrackingWarning` process warning. */
   onError?: (error: unknown) => void;
+  /**
+   * Queues each usage event in this buffer instead of sending it at once, so `await buffer.flush()` or
+   * `buffer.close()` sends it. Its delivery failures then go to the buffer's `onError`. Cost events are still
+   * sent directly, and the buffer's `flush()` and `close()` wait for them.
+   */
+  buffer?: EventBuffer;
 }
 
 export function wrapOpenAI<T extends { chat: { completions: { create: Function } } }>(
@@ -75,6 +82,7 @@ export function recordOnRead(result: any, params: any, nozle: Nozle, opts: WrapO
       usage: detected.usage,
       latencyMs: Date.now() - start,
       onError: opts.onError,
+      buffer: opts.buffer,
     });
   };
   const record = (value: any) => (params.stream ? recordStream(value, report) : report(detectUsage(value)));
@@ -88,7 +96,8 @@ export function recordOnRead(result: any, params: any, nozle: Nozle, opts: WrapO
       return value;
     });
   }
-  Promise.resolve(result).then(record, () => {});
+  const recorded = Promise.resolve(result).then(record, () => {});
+  if (opts.buffer) holdUntilFlushed(opts.buffer, recorded);
   return result;
 }
 

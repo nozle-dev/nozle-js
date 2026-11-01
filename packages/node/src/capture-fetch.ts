@@ -1,4 +1,5 @@
 import type { Nozle } from "./client";
+import { holdUntilFlushed, type EventBuffer } from "./event-buffer";
 import {
   captureProviderUsage,
   detectUsage,
@@ -38,6 +39,12 @@ export interface CaptureFetchOptions {
    * process warning. The provider response is never affected.
    */
   onError?: (error: unknown) => void;
+  /**
+   * Queues each usage event in this buffer instead of sending it at once, so `await buffer.flush()` or
+   * `buffer.close()` sends it; both first wait for responses still being read. Its delivery failures then go to
+   * the buffer's `onError`. Cost events are still sent directly, and the buffer's `flush()` and `close()` wait for them.
+   */
+  buffer?: EventBuffer;
 }
 
 const CUSTOMER_HEADER = "x-nozle-customer-id";
@@ -80,7 +87,7 @@ export function captureFetch(
     const contentType = response.headers.get("content-type") ?? "";
     const record = (found: DetectedUsage | undefined) => {
       if (!found) return;
-      void captureProviderUsage({
+      return captureProviderUsage({
         nozle,
         customerId: prepared.customerId as string,
         featureCode: options.featureCode ?? "llm_tokens",
@@ -93,13 +100,17 @@ export function captureFetch(
         usage: found.usage,
         latencyMs: Date.now() - started,
         onError: report,
+        buffer: options.buffer,
       });
+    };
+    const hold = (work: Promise<unknown>) => {
+      if (options.buffer) holdUntilFlushed(options.buffer, work);
     };
 
     try {
       if (contentType.includes("text/event-stream")) {
         const [forApp, forUsage] = response.body.tee();
-        void readStream(forUsage).then(record, report);
+        hold(readStream(forUsage).then(record, report));
         return new Response(forApp, {
           status: response.status,
           statusText: response.statusText,
@@ -107,10 +118,12 @@ export function captureFetch(
         });
       }
       if (contentType.includes("json")) {
-        void response
-          .clone()
-          .json()
-          .then((body) => record(detectUsage(body)), report);
+        hold(
+          response
+            .clone()
+            .json()
+            .then((body) => record(detectUsage(body)), report),
+        );
       }
     } catch (error) {
       report(error);

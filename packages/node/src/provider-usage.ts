@@ -1,4 +1,5 @@
 import type { Nozle } from "./client";
+import { holdUntilFlushed, type EventBuffer } from "./event-buffer";
 
 export type ProviderTokenType = "input" | "cached_input" | "cache_write" | "output" | "reasoning";
 
@@ -26,6 +27,8 @@ interface CaptureProviderUsageParams {
   latencyMs: number;
   /** Receives delivery failures and a missing Feature for `featureCode`. Without it they are emitted as a `NozleTrackingWarning` process warning. */
   onError?: (error: unknown) => void;
+  /** Queues the usage event here instead of sending it; the buffer's `flush()` and `close()` also wait for the cost events. */
+  buffer?: EventBuffer;
 }
 
 /** Token usage found in one provider response, with the response's own id and model. */
@@ -156,20 +159,23 @@ export function captureProviderUsage(params: CaptureProviderUsageParams): Promis
   const transactionId = requestId ? `llm-${params.provider}-${requestId}` : params.nozle.events.createTransactionId();
   const occurredAt = new Date();
   const model = stringValue(params.model);
-  const featureEvent = params.nozle.track(
-    params.customerId,
-    params.featureCode,
-    {
-      ...(params.provider && { provider: params.provider }),
-      model,
-      input_tokens: params.usage.featureInputTokens,
-      output_tokens: params.usage.featureOutputTokens,
-      latency_ms: params.latencyMs,
-      ...(params.providerHost && { provider_host: params.providerHost }),
-      ...(params.feature && { feature: params.feature }),
-    },
-    { transactionId, timestamp: occurredAt.toISOString() },
-  );
+  const properties = {
+    ...(params.provider && { provider: params.provider }),
+    model,
+    input_tokens: params.usage.featureInputTokens,
+    output_tokens: params.usage.featureOutputTokens,
+    latency_ms: params.latencyMs,
+    ...(params.providerHost && { provider_host: params.providerHost }),
+    ...(params.feature && { feature: params.feature }),
+  };
+  const timestamp = occurredAt.toISOString();
+  const buffer = params.buffer;
+  // A buffered event's delivery failures go to the buffer's onError; only an invalid event rejects here.
+  const featureEvent = buffer
+    ? new Promise<string>((resolve) =>
+        resolve(buffer.track({ customerId: params.customerId, event: params.featureCode, metadata: properties, transactionId, timestamp })),
+      )
+    : params.nozle.track(params.customerId, params.featureCode, properties, { transactionId, timestamp });
 
   const detailedCostEvents = params.costMeterCode
     ? params.usage.categories.map((category) =>
@@ -192,6 +198,7 @@ export function captureProviderUsage(params: CaptureProviderUsageParams): Promis
   // Provider responses must never fail because telemetry delivery failed. Both
   // endpoints are durably acknowledged and support out-of-order parent linking.
   const settled = Promise.allSettled([featureEvent, ...detailedCostEvents]);
+  if (buffer) holdUntilFlushed(buffer, settled);
   const report = params.onError ?? warnTrackingFailure;
   void settled.then((results) => {
     for (const result of results) if (result.status === "rejected") safely(report, result.reason);
