@@ -771,6 +771,26 @@ await nozle.cancelSubscription("cust_123", "sub_123", {
 });
 ```
 
+### Extend or end a trial
+
+Server-only (`sk_` key). `trial` takes exactly one of `extend_days`, `ends_at` or `convert`, plus an optional `reason`
+(up to 500 characters); giving none or several throws `NozleValidationError` before any request. A trial can be
+extended by at most 90 days at a time and can last at most 365 days in total (the server enforces both).
+
+```ts
+await nozle.extendTrial("sub_123", { days: 14, reason: "sales call" });
+await nozle.extendTrial("sub_123", { endsAt: "2026-12-01T00:00:00Z" }); // at least 30 minutes ahead
+const { subscription } = await nozle.convertTrial("sub_123"); // ends the trial now, starts paid billing
+// subscription.in_trial === false, subscription.trial_ends_at, subscription.trial_ended_at
+
+await nozle.updateSubscription("sub_123", { trial: { extend_days: 7 } }); // the general call
+```
+
+Convert bills at period end on a pay-in-arrears plan and invoices at once on pay-in-advance; payment follows the
+normal collection flow and a failed payment does not undo the conversion. Refusals are `NozleApiError`; test with
+`error.hasCode(TrialErrorCode.NotActive)` (`trial_invalid_params`, `trial_not_active`, `trial_extension_too_long`,
+`trial_end_in_past`, `payment_method_required`, and `plan_change_pending` as a 409). These calls are not retried.
+
 ## TypeScript
 
 All methods and responses are fully typed. Exported types:

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## Node.js 0.33.0 — 2026-11-01
+
+Needs a Core with trial updates (NLD-4).
+
+### Added
+
+- `nozle.updateSubscription(externalId, { trial })` (`PUT /subscriptions/{id}`, Core): `trial` has exactly one of `extend_days`, `ends_at` or `convert: true`, plus an optional `reason`. Giving none or several throws `NozleValidationError` before any request. The result is `{ subscription }` with `trial_ends_at` and `in_trial`.
+- `nozle.extendTrial(externalId, { days | endsAt, reason })` and `nozle.convertTrial(externalId, { reason })`.
+- `TrialErrorCode` (`trial_invalid_params`, `trial_not_active`, `trial_extension_too_long`, `trial_end_in_past`, `payment_method_required`, `plan_change_pending`) for `error.hasCode(...)`.
+- Types `SubscriptionTrialUpdate`, `UpdateSubscriptionResult`.
+
 ## Node.js 0.32.0 — 2026-11-01
 
 ### Added

@@ -560,6 +560,22 @@ export interface CancelSubscriptionResult {
   };
 }
 
+/** What `updateSubscription` does to a trial: exactly one of `extend_days`, `ends_at` or `convert`. */
+export type SubscriptionTrialUpdate = { reason?: string } & (
+  | { extend_days: number; ends_at?: never; convert?: never }
+  | { ends_at: string; extend_days?: never; convert?: never }
+  | { convert: true; extend_days?: never; ends_at?: never }
+);
+
+/** Result of `updateSubscription`: the subscription with its trial state. */
+export interface UpdateSubscriptionResult {
+  subscription: CoreSubscription & {
+    /** When the trial ends (ISO 8601), or null when the subscription has no trial. */
+    trial_ends_at: string | null;
+    in_trial: boolean;
+  };
+}
+
 export type SubscriptionTransitionOperation = "cancel" | "downgrade" | "uncancel";
 export type SubscriptionTransitionTiming = "end_of_period" | "immediate";
 export type SubscriptionTransitionBillingAnchor = "keep_anchor" | "reset_anchor";
