@@ -296,6 +296,30 @@ describe("Nozle", () => {
     });
   });
 
+  describe("can policy fields", () => {
+    it("passes on_not_configured and scope through, and tolerates their absence", async () => {
+      const policy = {
+        version_id: "v1",
+        mode: "deny",
+        on_unavailable: "warn",
+        maximum_snapshot_age_seconds: 300,
+        decision: "allow",
+        reason: "within_policy",
+      };
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ allowed: true, used: 1, policy: { ...policy, on_not_configured: "deny", scope: "plan" } }),
+      );
+      fetchMock.mockResolvedValueOnce(jsonResponse({ allowed: true, used: 1, policy }));
+      const client = new Nozle({ apiKey: "sk_test" });
+      const withFields = await client.can("cust_1", "seats");
+      expect(withFields.policy?.on_not_configured).toBe("deny");
+      expect(withFields.policy?.scope).toBe("plan");
+      const without = await client.can("cust_1", "seats");
+      expect(without.policy?.on_not_configured).toBeUndefined();
+      expect(without.policy?.scope).toBeUndefined();
+    });
+  });
+
   describe("can selectors and subscription errors", () => {
     it("sends subscription_id and entity_id when given", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ allowed: true, used: 1, limit: 5, remaining: 4 }));

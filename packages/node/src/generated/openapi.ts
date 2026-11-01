@@ -19530,6 +19530,16 @@ export interface components {
              * @enum {string}
              */
             on_unavailable: "allow" | "warn" | "deny";
+            /**
+             * @description What the policy does for a feature with no Cost Rule. Engine 2.39.0; absent on older Engines.
+             * @enum {string}
+             */
+            on_not_configured?: "allow" | "warn" | "deny";
+            /**
+             * @description The target of the policy that decided the call. Engine 2.40.0; absent on older Engines.
+             * @enum {string}
+             */
+            scope?: "customer" | "plan" | "feature" | "organization";
             /** @description Decimal string. Absent when not set. */
             minimum_margin_amount?: string;
             /** @description Decimal string. Absent when not set. */

@@ -167,6 +167,10 @@ export interface CanPolicy {
   version_id: string;
   mode: "allow" | "warn" | "deny";
   on_unavailable: "allow" | "warn" | "deny";
+  /** What the policy does for a feature with no Cost Rule. Engine 2.39.0; absent on older Engines. */
+  on_not_configured?: "allow" | "warn" | "deny";
+  /** Target of the policy that decided the call. Engine 2.40.0; absent on older Engines. */
+  scope?: "customer" | "plan" | "feature" | "organization";
   minimum_margin_amount?: string;
   minimum_margin_percent?: string;
   maximum_estimated_cost?: string;
