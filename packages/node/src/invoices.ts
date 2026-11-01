@@ -1,7 +1,10 @@
 import { apiError } from "./errors";
 import { request, type RequestPolicy } from "./http";
 
-export type Invoice = import("./generated/openapi").components["schemas"]["InvoiceObject"];
+import type { InvoiceTaxFields } from "./customer-tax";
+
+/** An invoice; `tax_status`, `tax_treatment` and `tax_details` come from Cores that support customer tax data. */
+export type Invoice = import("./generated/openapi").components["schemas"]["InvoiceObject"] & InvoiceTaxFields;
 
 export interface InvoicePage {
   invoices: Invoice[];

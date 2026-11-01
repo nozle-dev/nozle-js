@@ -21,6 +21,7 @@ import { CreditNotesNamespace } from "./credit-notes";
 import { InvoicesNamespace } from "./invoices";
 import { AlertsNamespace } from "./alerts";
 import { PlanVersionsNamespace } from "./plan-versions";
+import { addressToWire } from "./customer-tax";
 import type {
   NozleConfig,
   CanOptions,
@@ -833,6 +834,11 @@ class CustomersNamespace {
     if (billing && !billing.paymentProvider?.trim()) {
       throw new Error("customers.upsert billingConfiguration requires paymentProvider");
     }
+    const taxId = params.taxId;
+    // Mirrors Core's "type needs a value"; the format is Core's to judge.
+    if (taxId && (!taxId.type?.trim() || !taxId.value?.trim())) {
+      throw new Error("customers.upsert taxId requires type and value (use null to clear)");
+    }
     const res = await request(this.policy, `${this.baseUrl}/api/v1/customers`, {
       method: "POST",
       headers: {
@@ -844,6 +850,14 @@ class CustomersNamespace {
           external_id: params.externalId,
           name: params.name,
           email: params.email,
+          customer_type: params.customerType,
+          legal_name: params.legalName,
+          ...(params.address && addressToWire(params.address)),
+          shipping_address: params.shippingAddress && addressToWire(params.shippingAddress),
+          ...(taxId !== undefined && {
+            tax_identification_number: taxId === null ? null : taxId.value,
+            ...(taxId && { tax_identification_type: taxId.type }),
+          }),
           billing_configuration: billing && {
             payment_provider: billing.paymentProvider,
             payment_provider_code: billing.paymentProviderCode,
@@ -857,5 +871,40 @@ class CustomersNamespace {
     if (!res.ok) throw await apiError(`customers.upsert`, res);
     const payload = (await res.json()) as { customer: CustomerUpsertResult };
     return payload.customer;
+  }
+
+  /** One customer with its tax fields (`tax_identification_status`, `tax_treatment`). Secret key. */
+  async get(externalId: string): Promise<CustomerUpsertResult> {
+    if (!this.apiKey.startsWith("sk_")) {
+      throw new Error("customers.get requires a secret key");
+    }
+    if (!externalId?.trim()) {
+      throw new Error("customers.get requires externalId");
+    }
+    const res = await request(this.policy, `${this.baseUrl}/api/v1/customers/${encodeURIComponent(externalId)}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    }, { idempotent: true });
+    if (!res.ok) throw await apiError(`customers.get`, res);
+    return ((await res.json()) as { customer: CustomerUpsertResult }).customer;
+  }
+
+  /**
+   * Polls `get` until `tax_identification_status` is not `pending` (a VIES check is running), then returns the
+   * customer. Call it before a checkout so the price already reflects reverse charge. Throws after `timeoutMs`
+   * (default 10 000) with the last customer unchanged on Core's side; the check keeps running.
+   */
+  async waitForTaxCheck(externalId: string, opts: { timeoutMs?: number; intervalMs?: number } = {}): Promise<CustomerUpsertResult> {
+    const timeoutMs = opts.timeoutMs ?? 10_000;
+    const intervalMs = opts.intervalMs ?? 500;
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const customer = await this.get(externalId);
+      if (customer.tax_identification_status !== "pending") return customer;
+      if (Date.now() + intervalMs > deadline) {
+        throw new Error(`customers.waitForTaxCheck timed out after ${timeoutMs} ms: tax check still pending`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
   }
 }

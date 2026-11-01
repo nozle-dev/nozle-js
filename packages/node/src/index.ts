@@ -1,4 +1,16 @@
 export { Nozle } from "./client";
+export { TAX_ID_TYPES } from "./customer-tax";
+export type {
+  TaxIdType,
+  TaxIdStatus,
+  TaxTreatment,
+  CustomerType,
+  CustomerAddress,
+  CustomerTaxId,
+  CustomerTaxFields,
+  InvoiceTaxFields,
+  InvoiceTaxDetails,
+} from "./customer-tax";
 export {
   NozleApiError,
   NozleValidationError,
@@ -8,6 +20,7 @@ export {
   NO_ACTIVE_SUBSCRIPTION,
   TrialErrorCode,
   EventVoidErrorCode,
+  CustomerTaxErrorCode,
   CUSTOMER_PAYMENT_OVERDUE,
   isNoActiveSubscription,
   isCustomerPaymentOverdue,

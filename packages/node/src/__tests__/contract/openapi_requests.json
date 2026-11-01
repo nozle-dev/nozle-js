@@ -2703,6 +2703,12 @@
        "null"
       ]
      },
+     "tax_identification_type": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
      "timezone": {
       "enum": [
        null,

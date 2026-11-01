@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## Node.js 0.36.0 — 2026-11-01
+
+Needs a Core with customer tax data (NLD-12).
+
+### Added
+
+- `customers.upsert` accepts `customerType`, `legalName`, `address`, `shippingAddress` and `taxId: { type, value }` (`null` clears it). Core validates the format; the SDK only refuses a `taxId` without type or value.
+- Customer results carry `tax_identification_type`, `tax_identification_status`, `tax_treatment` and `tax_identification_warnings`.
+- `customers.get(externalId)` and `customers.waitForTaxCheck(externalId, { timeoutMs })`, which polls until the VIES check is no longer `pending` (default 10 s). Call it before a checkout.
+- Invoices read `tax_status`, `tax_treatment` and `tax_details`.
+- `CustomerTaxErrorCode` (`value_is_invalid`, `value_is_mandatory`, `invalid_format`, `customer_tax_location_required` 422, `customer_tax_check_pending` 409) for `error.hasCode(...)`; `NozleApiError.retryAfterSeconds` carries `retry_after_seconds`.
+- Types `TaxIdType` (Stripe's list plus any string), `TaxIdStatus`, `TaxTreatment`, `CustomerAddress`, `CustomerTaxId`.
+
 ## Node.js 0.35.0 — 2026-11-01
 
 Usage events carry the token breakdown, and a stream that ends early is recorded (NLD-3). Needs a Core that accepts the `cache_write_1h` token type before a catalog price for it can exist.

@@ -80,6 +80,15 @@ const calls: Record<string, (nozle: Nozle) => Promise<unknown>> = {
   "usage.holds.release": (n) => n.usage.holds.release("hold_1"),
   "costEvents.track": (n) => n.costEvents.track({ costMeterCode: "llm_tokens", externalCustomerId: "cust" }),
   "customers.upsert": (n) => n.customers.upsert({ externalId: "cust" }),
+  "customers.upsert with tax data": (n) =>
+    n.customers.upsert({
+      externalId: "cust",
+      customerType: "company",
+      legalName: "Acme GmbH",
+      address: { line1: "Main St 1", city: "Berlin", postalCode: "10115", country: "DE" },
+      shippingAddress: { line1: "Dock 2", country: "DE" },
+      taxId: { type: "eu_vat", value: "DE811128135" },
+    }),
   subscribe: (n) => n.subscribe("cust", "pro"),
   "subscribe to a plan version": (n) => n.subscribe("cust", "pro", { planVersion: 1 }),
   "planVersions.previewMigration": (n) => n.planVersions.previewMigration("pro", { fromVersion: 1 }),

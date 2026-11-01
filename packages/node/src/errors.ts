@@ -15,6 +15,8 @@ export class NozleApiError extends Error {
   readonly requestId?: string;
   /** Seconds to wait before retrying, from the `Retry-After` header, when the service sent one. */
   readonly retryAfter?: number;
+  /** Seconds to wait, from the body's `retry_after_seconds` (a 409 `customer_tax_check_pending`), when Core sent one. */
+  readonly retryAfterSeconds?: number;
   /** Set by `track()`: the event's transaction ID. Pass it back as `transactionId` when you retry, so the event is recorded once. */
   transactionId?: string;
 
@@ -32,6 +34,7 @@ export class NozleApiError extends Error {
     if (retryAfter !== undefined) this.retryAfter = retryAfter;
     const data = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
     if (typeof data.code === "string") this.code = data.code;
+    if (typeof data.retry_after_seconds === "number") this.retryAfterSeconds = data.retry_after_seconds;
     const details = data.error_details;
     if (details && typeof details === "object" && !Array.isArray(details))
       this.errorDetails = details as Record<string, unknown>;
@@ -116,6 +119,21 @@ export const TrialErrorCode = {
   PlanChangePending: "plan_change_pending",
 } as const;
 export type TrialErrorCode = (typeof TrialErrorCode)[keyof typeof TrialErrorCode];
+
+/**
+ * Codes for customer tax data. `ValueIsInvalid`, `ValueIsMandatory` and `InvalidFormat` arrive in `errorDetails`
+ * (`tax_identification_type` / `tax_identification_number`) of a 422 `customers.upsert`; `TaxLocationRequired` (422,
+ * `errorDetails.customer`: `country_missing` or `address_missing`) and `TaxCheckPending` (409, see `retryAfterSeconds`)
+ * refuse a checkout call. Test with `error.hasCode(...)`.
+ */
+export const CustomerTaxErrorCode = {
+  ValueIsInvalid: "value_is_invalid",
+  ValueIsMandatory: "value_is_mandatory",
+  InvalidFormat: "invalid_format",
+  TaxLocationRequired: "customer_tax_location_required",
+  TaxCheckPending: "customer_tax_check_pending",
+} as const;
+export type CustomerTaxErrorCode = (typeof CustomerTaxErrorCode)[keyof typeof CustomerTaxErrorCode];
 
 /** Codes of a refused `events.void`, and of a `track` of a voided ID. Test with `error.hasCode(...)`. */
 export const EventVoidErrorCode = {
