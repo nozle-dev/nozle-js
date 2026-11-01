@@ -197,6 +197,17 @@ await nozle.costEvents.track({
 
 A Cost Event may instead use `externalCustomerId` without a parent when the cost belongs to a customer but not to one Feature Event. Cost Event methods require a secret key.
 
+### Voiding an event
+
+`events.void()` (secret key) cancels a recorded event by its transaction ID and reverses its usage, credits, cost and margin. It works only while no finalized, open or pending invoice covers the event's time; otherwise it throws `NozleApiError` `period_invoiced` and changes nothing. It is idempotent: a replay returns `status: "already_voided"`.
+
+```ts
+const { void: v } = await nozle.events.void("tx_123", { reason: "wrong quantity" }); // reason: 1 to 500 characters
+// v.status "voided" | "already_voided"; v.effects.credits "refunded" | "not_applicable" | "pending"
+```
+
+Refusals: `event_not_found` (404), `period_invoiced` (409), `reason_required` (422); test with `error.hasCode(EventVoidErrorCode.PeriodInvoiced)`. A voided ID cannot be tracked again (`transaction_voided`, 409): send the corrected event with a new `transactionId`. An effect is `pending` while its background step runs; replay the call to read the current state.
+
 ### Batching events
 
 `trackBatch()` sends many events through Engine's `/events/batch` in one call. It takes the arguments of `track()` as objects, splits them into requests, sends them in parallel and returns one result per event.

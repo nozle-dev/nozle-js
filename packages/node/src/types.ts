@@ -576,6 +576,32 @@ export interface UpdateSubscriptionResult {
   };
 }
 
+/** What a void did to each downstream record: `pending` while its async step runs, `not_applicable` when nothing to undo. */
+export interface EventVoidEffects {
+  event: "voided";
+  usage: "reversed" | "recomputed" | "not_applicable" | "pending";
+  credits: "refunded" | "not_applicable" | "pending";
+  cost: "reversed" | "not_applicable" | "pending";
+  margin: "reversed" | "not_applicable" | "pending";
+}
+
+export interface EventVoid {
+  transaction_id: string;
+  /** `voided` for this call, `already_voided` for a replay (no side effects). */
+  status: "voided" | "already_voided";
+  reason: string;
+  /** ISO 8601, server time. */
+  voided_at: string;
+  /** `api_key:<id>`. */
+  actor: string;
+  effects: EventVoidEffects;
+}
+
+/** Result of `events.void`. */
+export interface EventVoidResult {
+  void: EventVoid;
+}
+
 export type SubscriptionTransitionOperation = "cancel" | "downgrade" | "uncancel";
 export type SubscriptionTransitionTiming = "end_of_period" | "immediate";
 export type SubscriptionTransitionBillingAnchor = "keep_anchor" | "reset_anchor";
