@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## Node.js 0.34.0 — unreleased
+## Node.js 0.34.0 — 2026-11-01
 
 Needs an Engine with event void (NLD-8).
 
