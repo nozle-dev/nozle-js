@@ -53,7 +53,7 @@ export type { NozleWebhookEvent, VerifyWebhookInput, WebhookHandlerOptions, Webh
 export { wrapOpenAI } from "./wrap-openai";
 export type { WrapOptions } from "./wrap-openai";
 export { wrapAnthropic } from "./wrap-anthropic";
-export { normalizeOpenAIUsage, normalizeAnthropicUsage, normalizeGeminiUsage, detectUsage } from "./provider-usage";
+export { normalizeOpenAIUsage, normalizeAnthropicUsage, normalizeGeminiUsage, detectUsage, estimateTokens, ESTIMATE_BYTES_PER_TOKEN } from "./provider-usage";
 export type { ProviderTokenType, ProviderTokenUsage, ProviderUsageFormat, DetectedUsage, RecordUsageParams } from "./provider-usage";
 export { captureFetch } from "./capture-fetch";
 export { createBillingHandler, BILLING_ROUTES } from "./billing-handler";

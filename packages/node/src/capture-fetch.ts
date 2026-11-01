@@ -3,6 +3,7 @@ import { holdUntilFlushed, type EventBuffer } from "./event-buffer";
 import {
   captureProviderUsage,
   detectUsage,
+  requestTextBytes,
   StreamUsageCollector,
   warnTrackingFailure,
   type DetectedUsage,
@@ -110,7 +111,7 @@ export function captureFetch(
     try {
       if (contentType.includes("text/event-stream")) {
         const [forApp, forUsage] = response.body.tee();
-        hold(readStream(forUsage).then(record, report));
+        hold(readStream(forUsage, prepared.inputBytes).then(record, report));
         return new Response(forApp, {
           status: response.status,
           statusText: response.statusText,
@@ -139,6 +140,8 @@ interface Prepared {
   feature?: string;
   model?: string;
   host?: string;
+  /** UTF-8 size of the request message text, for the estimate of an aborted stream. */
+  inputBytes?: number;
 }
 
 function prepare(input: RequestInfo | URL, init: RequestInit | undefined, options: CaptureFetchOptions): Prepared {
@@ -161,9 +164,11 @@ function prepare(input: RequestInfo | URL, init: RequestInit | undefined, option
 
   let body = init?.body;
   let model: string | undefined;
+  let inputBytes: number | undefined;
   if (typeof body === "string" && method === "POST") {
     const parsed = parseJson(body);
     if (parsed && typeof parsed === "object") {
+      inputBytes = requestTextBytes(parsed);
       model = typeof parsed.model === "string" ? parsed.model : undefined;
       // Chat completion streams leave usage out unless asked; the request path is the API contract.
       if (
@@ -179,23 +184,27 @@ function prepare(input: RequestInfo | URL, init: RequestInit | undefined, option
   }
 
   if (!hadNozleHeaders && body === init?.body) {
-    return { input, init, customerId, feature, model, host: url.host };
+    return { input, init, customerId, feature, model, host: url.host, inputBytes };
   }
   const nextInit: RequestInit = { ...init, headers, body };
-  return { input: request ? new Request(request, nextInit) : input, init: nextInit, customerId, feature, model, host: url.host };
+  return { input: request ? new Request(request, nextInit) : input, init: nextInit, customerId, feature, model, host: url.host, inputBytes };
 }
 
-async function readStream(stream: ReadableStream<Uint8Array>): Promise<DetectedUsage | undefined> {
+async function readStream(stream: ReadableStream<Uint8Array>, inputBytes = 0): Promise<DetectedUsage | undefined> {
   const collector = new StreamUsageCollector();
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let finished = false;
+  let ended = true;
   const line = (text: string) => {
     if (finished || !text.startsWith("data:")) return;
     const data = text.slice(5).trim();
     // "[DONE]" ends an OpenAI-style stream; nothing after it belongs to the response.
-    if (data === "[DONE]") finished = true;
+    if (data === "[DONE]") {
+      finished = true;
+      collector.markFinished();
+    }
     if (!data || finished) return;
     collector.add(parseJson(data));
   };
@@ -205,6 +214,7 @@ async function readStream(stream: ReadableStream<Uint8Array>): Promise<DetectedU
       chunk = await reader.read();
     } catch {
       // The app aborted the request; usage already seen still counts.
+      ended = false;
       break;
     }
     const { value, done } = chunk;
@@ -217,7 +227,8 @@ async function readStream(stream: ReadableStream<Uint8Array>): Promise<DetectedU
     }
   }
   line(buffer.trim());
-  return collector.result();
+  // A stream that closes without the provider's final usage marker was cut short.
+  return collector.result(ended && collector.complete, inputBytes);
 }
 
 function parseJson(text: string): any {

@@ -1,6 +1,6 @@
 import type { Nozle } from "./client";
 import { holdUntilFlushed, type EventBuffer } from "./event-buffer";
-import { captureProviderUsage, detectUsage, StreamUsageCollector, type DetectedUsage } from "./provider-usage";
+import { captureProviderUsage, detectUsage, requestTextBytes, StreamUsageCollector, type DetectedUsage } from "./provider-usage";
 
 export interface WrapOptions {
   customerId: string;
@@ -85,7 +85,7 @@ export function recordOnRead(result: any, params: any, nozle: Nozle, opts: WrapO
       buffer: opts.buffer,
     });
   };
-  const record = (value: any) => (params.stream ? recordStream(value, report) : report(detectUsage(value)));
+  const record = (value: any) => (params.stream ? recordStream(value, report, requestTextBytes(params)) : report(detectUsage(value)));
 
   // An SDK APIPromise parses the body only when read; reading it here would take the body from
   // `asResponse()` and from helpers like `parse()`. `_thenUnwrap` gives the same kind of promise,
@@ -101,17 +101,26 @@ export function recordOnRead(result: any, params: any, nozle: Nozle, opts: WrapO
   return result;
 }
 
-/** Folds the events into usage as the caller iterates, keeping the stream object and its helpers. */
-function recordStream(stream: any, report: (detected: DetectedUsage | undefined) => void): void {
+/**
+ * Folds the events into usage as the caller iterates, keeping the stream object and its helpers.
+ * Usage is also recorded when the caller breaks out or the stream throws: the provider's partial
+ * report, or an estimate, flagged `stream_aborted`.
+ */
+function recordStream(stream: any, report: (detected: DetectedUsage | undefined) => void, inputBytes: number): void {
   const iterate = stream?.[Symbol.asyncIterator];
   if (typeof iterate !== "function") return;
   // shortcut: SDK `tee()` reads the stream's internal iterator, so tee'd branches are not recorded; patch that too if needed.
   stream[Symbol.asyncIterator] = async function* () {
     const collector = new StreamUsageCollector();
-    for await (const event of { [Symbol.asyncIterator]: () => iterate.call(stream) }) {
-      collector.add(event);
-      yield event;
+    let ended = false;
+    try {
+      for await (const event of { [Symbol.asyncIterator]: () => iterate.call(stream) }) {
+        collector.add(event);
+        yield event;
+      }
+      ended = true;
+    } finally {
+      report(collector.result(ended, inputBytes));
     }
-    report(collector.result());
   };
 }
