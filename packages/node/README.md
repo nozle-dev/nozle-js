@@ -278,6 +278,8 @@ result.economics?.estimated_incremental_revenue // Exact decimal string, for exa
 result.economics?.estimated_incremental_margin  // Exact decimal string, for example "0.05"
 result.economics?.estimated_margin_percent      // Percentage string when revenue is above zero
 result.policy?.decision                         // "allow", "warn", or "deny"
+result.policy?.scope                            // "customer", "plan", "feature" or "organization" (Engine 2.40.0)
+result.policy?.on_not_configured                // "allow", "warn" or "deny" for a feature with no Cost Rule (Engine 2.39.0)
 ```
 
 ## Credit Check & Deduct
