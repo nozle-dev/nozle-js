@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## Node.js 0.38.1 — 2026-11-03
+
+### Fixed
+
+- `NozleApiError` messages now include Core's `code` and `error_details`, for example `billingEntities.update failed: 422 Unprocessable Entity: Unprocessable Entity (code: validation_errors, error_details: {"tax_provider":["conflicts_with_eu_tax_management"]})`. `error.code` and `error.errorDetails` are unchanged; responses without those fields keep the same message. Details longer than 500 characters are cut.
+
 ## Node.js 0.38.0 — 2026-11-02
 
 Needs a Core with Stripe Tax (NLD-12 Part B, Core 11.32.0) for `taxProvider` and `providerTaxCode`.

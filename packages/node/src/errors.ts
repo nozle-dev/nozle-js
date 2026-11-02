@@ -25,7 +25,7 @@ export class NozleApiError extends Error {
     response: { status: number; statusText: string; headers?: Pick<Headers, "get"> },
     body?: unknown,
   ) {
-    super(`${operation} failed: ${response.status} ${response.statusText}${serverText(body)}`);
+    super(`${operation} failed: ${response.status} ${response.statusText}${serverText(body)}${codeText(body)}`);
     this.name = "NozleApiError";
     this.status = response.status;
     const requestId = response.headers?.get("x-request-id");
@@ -229,6 +229,19 @@ function serverText(body: unknown): string {
   const nested = error && typeof error === "object" ? (error as Record<string, unknown>).message : undefined;
   const text = [error, nested, message].find((value) => typeof value === "string" && value.trim());
   return text ? `: ${(text as string).trim().slice(0, 500)}` : "";
+}
+
+/** ` (code: <code>, error_details: <json>)` from Core's `code` and `error_details`, or an empty string. Never reads the request. */
+function codeText(body: unknown): string {
+  if (!body || typeof body !== "object") return "";
+  const { code, error_details: details } = body as Record<string, unknown>;
+  const parts: string[] = [];
+  if (typeof code === "string" && code) parts.push(`code: ${code}`);
+  if (details && typeof details === "object" && !Array.isArray(details) && Object.keys(details).length) {
+    const json = JSON.stringify(details);
+    parts.push(`error_details: ${json.length > 500 ? `${json.slice(0, 500)}...` : json}`);
+  }
+  return parts.length ? ` (${parts.join(", ")})` : "";
 }
 
 /** Seconds from a `Retry-After` value: delta-seconds or an HTTP-date. */

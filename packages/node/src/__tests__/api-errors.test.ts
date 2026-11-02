@@ -72,7 +72,7 @@ describe("server text, Retry-After and the no-subscription code", () => {
   it("puts the server error text in the message and keeps the code", async () => {
     fetchMock.mockResolvedValueOnce(failure(422, { code: "invalid_date_range", error: "from must be before to" }));
     const error = await new Nozle({ apiKey: "sk_test", maxRetries: 0 }).plans().catch((cause: unknown) => cause as NozleApiError);
-    expect(error.message).toBe("plans failed: 422 Unprocessable Entity: from must be before to");
+    expect(error.message).toBe("plans failed: 422 Unprocessable Entity: from must be before to (code: invalid_date_range)");
     expect(error.code).toBe("invalid_date_range");
   });
 
@@ -91,5 +91,29 @@ describe("server text, Retry-After and the no-subscription code", () => {
     expect(isNoActiveSubscription(new NozleApiError("x", response, { code: "active_subscription_not_found" }))).toBe(true);
     expect(isNoActiveSubscription(new NozleApiError("x", response, { code: "other" }))).toBe(false);
     expect(isNoActiveSubscription(new Error("x"))).toBe(false);
+  });
+
+  describe("message carries Core's code and error_details", () => {
+    const res = { status: 422, statusText: "Unprocessable Entity" };
+
+    it("adds both in a short form", () => {
+      const error = new NozleApiError("op", res, { error: "Unprocessable Entity", code: "validation_errors", error_details: { name: ["too_long"] } });
+      expect(error.message).toBe('op failed: 422 Unprocessable Entity: Unprocessable Entity (code: validation_errors, error_details: {"name":["too_long"]})');
+    });
+
+    it("adds only the code when there are no details", () => {
+      expect(new NozleApiError("op", res, { code: "payment_provider_required" }).message).toBe("op failed: 422 Unprocessable Entity (code: payment_provider_required)");
+    });
+
+    it("is unchanged without code or details, and ignores non-object details", () => {
+      expect(new NozleApiError("op", res, { error: "boom" }).message).toBe("op failed: 422 Unprocessable Entity: boom");
+      expect(new NozleApiError("op", res, { error_details: ["x"] }).message).toBe("op failed: 422 Unprocessable Entity");
+      expect(new NozleApiError("op", res).message).toBe("op failed: 422 Unprocessable Entity");
+    });
+
+    it("truncates huge details", () => {
+      const error = new NozleApiError("op", res, { error_details: { a: ["x".repeat(2000)] } });
+      expect(error.message.length).toBeLessThan(600);
+    });
   });
 });
