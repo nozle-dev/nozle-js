@@ -45,6 +45,8 @@ export interface CustomerTaxId {
 export interface CustomerTaxFields {
   tax_identification_type?: TaxIdType | null;
   tax_identification_status?: TaxIdStatus;
+  /** True when the customer is exempt from tax. */
+  tax_exempt?: boolean;
   tax_treatment?: TaxTreatment;
   /** Non-blocking notes on a write, for example `country_mismatch`. Only on upsert responses. */
   tax_identification_warnings?: string[];
@@ -65,6 +67,11 @@ export interface InvoiceTaxDetails {
   tax_identification_consultation_number?: string | null;
   customer_country?: string | null;
   seller_tax_identification_number?: string | null;
+  /** Set when Stripe Tax computed the tax. */
+  provider?: "stripe_tax" | null;
+  calculation_id?: string | null;
+  transaction_id?: string | null;
+  taxability_reasons?: string[] | null;
 }
 
 /** Wire form of a {@link CustomerAddress}: Core's flat keys. */

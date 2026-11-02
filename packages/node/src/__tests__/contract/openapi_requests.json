@@ -2703,6 +2703,12 @@
        "null"
       ]
      },
+     "tax_exempt": {
+      "type": [
+       "boolean",
+       "null"
+      ]
+     },
      "tax_identification_type": {
       "type": [
        "string",

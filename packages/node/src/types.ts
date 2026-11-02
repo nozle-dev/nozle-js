@@ -709,6 +709,8 @@ export interface CustomerUpsertParams {
   legalName?: string;
   address?: CustomerAddress;
   shippingAddress?: CustomerAddress;
+  /** Exempt the customer from tax. */
+  taxExempt?: boolean;
   /** `null` clears the stored tax ID (and its type and check result). Core validates the format. */
   taxId?: CustomerTaxId | null;
 }

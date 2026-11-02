@@ -88,6 +88,7 @@ const calls: Record<string, (nozle: Nozle) => Promise<unknown>> = {
       address: { line1: "Main St 1", city: "Berlin", postalCode: "10115", country: "DE" },
       shippingAddress: { line1: "Dock 2", country: "DE" },
       taxId: { type: "eu_vat", value: "DE811128135" },
+      taxExempt: true,
     }),
   subscribe: (n) => n.subscribe("cust", "pro"),
   "subscribe to a plan version": (n) => n.subscribe("cust", "pro", { planVersion: 1 }),

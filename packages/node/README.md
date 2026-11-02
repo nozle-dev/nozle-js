@@ -352,6 +352,8 @@ const customer = await nozle.customers.waitForTaxCheck("cust_123"); // { timeout
 customer.tax_treatment; // "reverse_charge" | "standard" | ...
 ```
 
+Pass `taxExempt: true` to exempt a customer from tax. An invoice with `tax_status: "failed"` carries one of `CustomerTaxErrorCode.TaxLocationInvalid`, `TaxIdInvalid`, `StripeTaxNotAuthorized`, `StripeAccountRequired` or `TaxProviderUnavailable`.
+
 A checkout call refuses with `customer_tax_location_required` (422) when the billing entity needs a country or address, and `customer_tax_check_pending` (409, `error.retryAfterSeconds`) while a check runs.
 
 A payment provider assignment needs `providerCustomerId` or `syncWithProvider: true`; otherwise Core drops it. The same applies to `provider_customer_id` and `sync_with_provider` when you call the REST API directly.

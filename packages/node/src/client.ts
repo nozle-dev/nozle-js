@@ -852,6 +852,7 @@ class CustomersNamespace {
           email: params.email,
           customer_type: params.customerType,
           legal_name: params.legalName,
+          tax_exempt: params.taxExempt,
           ...(params.address && addressToWire(params.address)),
           shipping_address: params.shippingAddress && addressToWire(params.shippingAddress),
           ...(taxId !== undefined && {
