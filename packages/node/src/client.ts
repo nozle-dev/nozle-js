@@ -18,6 +18,7 @@ import { UsageNamespace } from "./usage";
 import { BudgetsNamespace } from "./budgets";
 import { WebhooksNamespace } from "./webhooks";
 import { CreditNotesNamespace } from "./credit-notes";
+import { BillingEntitiesNamespace } from "./billing-entities";
 import { InvoicesNamespace } from "./invoices";
 import { AlertsNamespace } from "./alerts";
 import { PlanVersionsNamespace } from "./plan-versions";
@@ -107,6 +108,7 @@ export class Nozle {
   readonly invoices: InvoicesNamespace;
   /** Preview, issue, refund, list and void credit notes. Needs a secret key. */
   readonly creditNotes: CreditNotesNamespace;
+  readonly billingEntities: BillingEntitiesNamespace;
   /** Usage and wallet-balance alerts; Nozle sends `alert.triggered` when one fires. */
   readonly alerts: AlertsNamespace;
   /** The versions of a plan code and the migrations that move subscribers between them (secret keys). */
@@ -141,6 +143,7 @@ export class Nozle {
     this.webhooks = new WebhooksNamespace();
     this.invoices = new InvoicesNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.creditNotes = new CreditNotesNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.billingEntities = new BillingEntitiesNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.alerts = new AlertsNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.planVersions = new PlanVersionsNamespace(this.eventsUrl, this.apiKey, this.policy);
   }

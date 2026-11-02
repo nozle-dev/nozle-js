@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## Node.js 0.38.0 — 2026-11-02
+
+Needs a Core with Stripe Tax (NLD-12 Part B, Core 11.32.0) for `taxProvider` and `providerTaxCode`.
+
+### Added
+
+- `billingEntities.list()`, `get(code)`, `create(params)` and `update(code, params)` for Core's `/api/v1/billing_entities`, with camelCase params including `taxProvider` (`"nozle"` or `"stripe_tax"`) and `providerTaxCode`. Results carry `tax_provider`, `provider_tax_code`, `customer_location_required` and `einvoicing`; `get` and `update` also return `taxes` and `selected_invoice_custom_sections`. `update` accepts `taxCodes` and `invoiceCustomSectionCodes`.
+- Types `BillingEntity`, `BillingEntityDetails`, `BillingEntityTaxProvider` and the param types. `create` and `update` are never retried.
+
 ## Node.js 0.37.0 — 2026-11-02
 
 Needs a Core with Stripe Tax (NLD-12 Part B, Core 11.32.0).
