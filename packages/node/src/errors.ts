@@ -132,6 +132,12 @@ export const CustomerTaxErrorCode = {
   InvalidFormat: "invalid_format",
   TaxLocationRequired: "customer_tax_location_required",
   TaxCheckPending: "customer_tax_check_pending",
+  /** Invoice tax failures (see `tax_status: "failed"`). */
+  TaxLocationInvalid: "customer_tax_location_invalid",
+  TaxIdInvalid: "tax_id_invalid",
+  StripeTaxNotAuthorized: "stripe_tax_not_authorized",
+  StripeAccountRequired: "stripe_account_required",
+  TaxProviderUnavailable: "tax_provider_unavailable",
 } as const;
 export type CustomerTaxErrorCode = (typeof CustomerTaxErrorCode)[keyof typeof CustomerTaxErrorCode];
 

@@ -21,9 +21,11 @@ describe("customers.upsert tax data", () => {
       address: { line1: "Main St 1", line2: "Top", city: "Berlin", state: "BE", postalCode: "10115", country: "DE" },
       shippingAddress: { line1: "Dock 2", country: "DE" },
       taxId: { type: "eu_vat", value: "DE811128135" },
+      taxExempt: true,
     });
     expect(sentCustomer()).toEqual({
       external_id: "c1",
+      tax_exempt: true,
       customer_type: "company",
       legal_name: "Acme GmbH",
       address_line1: "Main St 1",
