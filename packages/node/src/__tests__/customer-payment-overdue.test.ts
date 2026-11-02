@@ -86,7 +86,7 @@ describe("NozleApiError message from an LLM proxy refusal", () => {
       error: { message: "Payment overdue", type: "payment_required", code: "customer_payment_overdue" },
     });
 
-    expect(error.message).toBe("proxy failed: 402 Payment Required: Payment overdue");
+    expect(error.message).toBe("proxy failed: 402 Payment Required: Payment overdue (code: customer_payment_overdue)");
     expect(error.hasCode("customer_payment_overdue")).toBe(true);
   });
 });

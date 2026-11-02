@@ -62,6 +62,9 @@ describe("billingEntities", () => {
     const error = await client().billingEntities.update("de", { taxProvider: "stripe_tax" }).catch((e) => e);
     expect(error).toBeInstanceOf(NozleApiError);
     expect(error.status).toBe(422);
+    expect(error.code).toBe("validation_errors");
+    expect(error.errorDetails).toEqual({ tax_provider: ["conflicts_with_eu_tax_management"] });
+    expect(error.message).toBe('billingEntities.update failed: 422 Unprocessable Entity: Unprocessable Entity (code: validation_errors, error_details: {"tax_provider":["conflicts_with_eu_tax_management"]})');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

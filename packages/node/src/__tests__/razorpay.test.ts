@@ -191,7 +191,7 @@ describe("checkout results and errors", () => {
     const error = await client.checkout("customer", "pro").catch((e: unknown) => e);
     expect(error).toBeInstanceOf(NozleApiError);
     const api = error as NozleApiError;
-    expect(api.message).toBe("checkout failed: 422 Unprocessable Entity");
+    expect(api.message).toBe('checkout failed: 422 Unprocessable Entity (code: validation_errors, error_details: {"base":["razorpay_requires_inr"]})');
     expect(api.status).toBe(422);
     expect(api.code).toBe("validation_errors");
     expect(api.hasCode("razorpay_requires_inr")).toBe(true);
