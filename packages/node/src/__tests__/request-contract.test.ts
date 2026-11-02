@@ -138,6 +138,19 @@ const calls: Record<string, (nozle: Nozle) => Promise<unknown>> = {
       metadata: { ticket: "T-1" },
     }),
   "creditNotes.void": (n) => n.creditNotes.void("cn_1"),
+  "billingEntities.create": (n) =>
+    n.billingEntities.create({
+      code: "de_gmbh",
+      name: "Acme GmbH",
+      country: "DE",
+      defaultCurrency: "EUR",
+      taxProvider: "stripe_tax",
+      providerTaxCode: "txcd_10000000",
+      customerLocationRequired: true,
+      billingConfiguration: { invoiceGracePeriod: 3, documentLocale: "de" },
+    }),
+  "billingEntities.update": (n) =>
+    n.billingEntities.update("de_gmbh", { taxProvider: "nozle", providerTaxCode: undefined, euTaxManagement: true, taxCodes: ["vat"], emailSettings: ["invoice.finalized"] }),
   "credits.allocate": (n) => n.credits.allocate("cust", "user-42", { creditSystemCode: "ai_credits", amount: "10" }, { idempotencyKey: "a1" }),
 };
 

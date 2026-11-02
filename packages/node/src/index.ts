@@ -45,6 +45,11 @@ export { WebhooksNamespace, WebhookVerificationError, createWebhookHandler } fro
 export { InvoicesNamespace } from "./invoices";
 export { CreditNotesNamespace, CREDIT_NOTE_ERROR_CODES } from "./credit-notes";
 export { AlertsNamespace } from "./alerts";
+export { BillingEntitiesNamespace } from "./billing-entities";
+export type {
+  BillingEntity, BillingEntityConfiguration, BillingEntityDetails, BillingEntityTaxFields, BillingEntityTaxProvider,
+  CreateBillingEntityParams, UpdateBillingEntityParams, UpdateBillingEntityAppliedParams,
+} from "./billing-entities";
 export { PlanVersionsNamespace } from "./plan-versions";
 export type {
   PlanVersion,
