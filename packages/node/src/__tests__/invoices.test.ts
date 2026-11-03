@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentTokenErrorCode, Nozle, NozleApiError, createBillingHandler } from "../index";
+import { AgentTokenErrorCode, X402ErrorCode, Nozle, NozleApiError, createBillingHandler } from "../index";
 
 const CORE = "https://api.example/core/api/v1";
 const invoice = { nozle_id: "inv_1", number: "INV-1", file_url: "https://files.example/inv_1.pdf", customer: { external_id: "cus_1" } };
@@ -56,6 +56,41 @@ describe("invoices", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     const down = stub({ "POST /core/api/v1/invoices/inv_1/pay_with_agent_token": () => new Response("{}", { status: 503 }) });
     await expect(new Nozle({ apiKey: "sk_test", host: "https://api.example", maxRetries: 3 }).invoices.payWithAgentToken("inv_1", "spt_abc")).rejects.toThrow();
+    expect(down).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads x402 requirements", async () => {
+    const requirements = { x402Version: 2, accepts: [{ scheme: "exact" }], resource: { url: "https://x" } };
+    stub({ "GET /core/api/v1/invoices/inv%201/x402_requirements": () => Response.json({ x402_requirements: requirements }) });
+    expect(await nozle().invoices.getX402Requirements("inv 1")).toEqual(requirements);
+  });
+
+  it("retries the x402 requirements read", async () => {
+    let calls = 0;
+    const fetch = stub({ "GET /core/api/v1/invoices/inv_1/x402_requirements": () => (++calls === 1 ? new Response("{}", { status: 503 }) : Response.json({ x402_requirements: { x402Version: 2, accepts: [] } })) });
+    await new Nozle({ apiKey: "sk_test", host: "https://api.example", maxRetries: 3 }).invoices.getX402Requirements("inv_1");
+    expect(fetch.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("pays with x402, sends the hash in the body and returns the invoice", async () => {
+    const hash = `0x${"ab".repeat(32)}`;
+    const fetch = stub({ "POST /core/api/v1/invoices/inv%201/pay_with_x402": () => Response.json({ invoice: { ...invoice, payment_status: "pending" } }) });
+    const paid = await nozle().invoices.payWithX402("inv 1", hash);
+    expect(paid.payment_status).toBe("pending");
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ transaction_hash: hash });
+  });
+
+  it("reads the x402 refusal codes and never retries a payment", async () => {
+    const fetch = stub({
+      "POST /core/api/v1/invoices/inv_1/pay_with_x402": () =>
+        Response.json({ status: 422, error: "Unprocessable Entity", code: "validation_errors", error_details: { transaction_hash: ["invalid_format"] } }, { status: 422 }),
+    });
+    const error = await nozle().invoices.payWithX402("inv_1", "0x1").catch((e) => e);
+    expect(error).toBeInstanceOf(NozleApiError);
+    expect(error.hasCode(X402ErrorCode.InvalidFormat)).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const down = stub({ "POST /core/api/v1/invoices/inv_1/pay_with_x402": () => new Response("{}", { status: 503 }) });
+    await expect(new Nozle({ apiKey: "sk_test", host: "https://api.example", maxRetries: 3 }).invoices.payWithX402("inv_1", "0x1")).rejects.toThrow();
     expect(down).toHaveBeenCalledTimes(1);
   });
 

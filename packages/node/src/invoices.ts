@@ -42,6 +42,28 @@ export const AgentTokenErrorCode = {
 } as const;
 export type AgentTokenErrorCode = (typeof AgentTokenErrorCode)[keyof typeof AgentTokenErrorCode];
 
+/**
+ * Why Core refused `invoices.getX402Requirements` or `invoices.payWithX402`. `feature_not_enabled` is a 403,
+ * `invoice_not_payable` a 422 `code`; `usd_required` arrives in `errorDetails.currency`, `stripe_required` in
+ * `errorDetails.payment_provider` and `invalid_format` in `errorDetails.transaction_hash`. Test with `error.hasCode(...)`.
+ */
+export const X402ErrorCode = {
+  FeatureNotEnabled: "feature_not_enabled",
+  InvoiceNotPayable: "invoice_not_payable",
+  UsdRequired: "usd_required",
+  StripeRequired: "stripe_required",
+  InvalidFormat: "invalid_format",
+} as const;
+export type X402ErrorCode = (typeof X402ErrorCode)[keyof typeof X402ErrorCode];
+
+/** x402 payment requirements for an invoice (`x402Version` 2); `accepts` and `resource` are passed through from Core. */
+export interface X402Requirements {
+  x402Version: number;
+  accepts: Record<string, unknown>[];
+  resource?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export class InvoicesNamespace {
   constructor(
     private readonly coreUrl: string,
@@ -98,6 +120,31 @@ export class InvoicesNamespace {
     const path = `/api/v1/invoices/${encodeURIComponent(invoiceId)}/pay_with_agent_token`;
     const body = { agent_payment_token: agentPaymentToken };
     return (await this.call<{ invoice: Invoice }>("invoices.payWithAgentToken", "POST", path, body, false)).invoice;
+  }
+
+  /**
+   * What an x402 payer must send to settle this invoice (USDC on Base to the merchant's Stripe deposit address). Needs the
+   * `stripe_x402_payments` feature flag, a USD invoice and a Stripe-connected customer. Refusals are `NozleApiError`s;
+   * see {@link X402ErrorCode}. Safe to retry.
+   */
+  async getX402Requirements(invoiceId: string): Promise<X402Requirements> {
+    if (!invoiceId.trim()) throw new Error("invoices.getX402Requirements requires invoiceId");
+    const path = `/api/v1/invoices/${encodeURIComponent(invoiceId)}/x402_requirements`;
+    return (await this.call<{ x402_requirements: X402Requirements }>("invoices.getX402Requirements", "GET", path)).x402_requirements;
+  }
+
+  /**
+   * Records an x402 payment the payer already settled on-chain: pass the transaction hash (`0x` + 64 hex). Returns the
+   * invoice; the payment is often `processing` first and the Stripe webhook finishes it. Core treats the hash as the
+   * idempotency key, but the SDK never retries it on its own: it moves money. Refusals are `NozleApiError`s; see
+   * {@link X402ErrorCode}.
+   */
+  async payWithX402(invoiceId: string, transactionHash: string): Promise<Invoice> {
+    if (!invoiceId.trim()) throw new Error("invoices.payWithX402 requires invoiceId");
+    if (!transactionHash.trim()) throw new Error("invoices.payWithX402 requires transactionHash");
+    const path = `/api/v1/invoices/${encodeURIComponent(invoiceId)}/pay_with_x402`;
+    const body = { transaction_hash: transactionHash };
+    return (await this.call<{ invoice: Invoice }>("invoices.payWithX402", "POST", path, body, false)).invoice;
   }
 
   private raw(method: string, path: string, body?: unknown, idempotent = true): Promise<Response> {
