@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## Node.js 0.39.0 — 2026-11-03
+
+### Added
+
+- `invoices.payWithAgentToken(invoiceId, agentPaymentToken)` pays a finalized invoice with a Stripe Shared Payment Token (`spt_...`) an AI agent handed you, through Core's `POST /api/v1/invoices/:id/pay_with_agent_token`. It returns the invoice and is never retried. Needs the `stripe_agent_payment_token` feature flag. Refusals are `NozleApiError`s; test them with `error.hasCode(AgentTokenErrorCode.TokenExpired)` (also `FeatureNotEnabled`, `InvalidFormat`, `InvoiceNotPayable`, `StripeRequired`, `TokenDeactivated`, `CurrencyMismatch`, `AmountExceedsLimit`).
+- `invoices.getX402Requirements(invoiceId)` returns the x402 payment requirements for an invoice (`GET /api/v1/invoices/:id/x402_requirements`, safe to retry). `invoices.payWithX402(invoiceId, transactionHash)` records an x402 USDC payment the payer already settled on-chain (`POST .../pay_with_x402`, returns the invoice, never retried). Both need the `stripe_x402_payments` feature flag, a USD invoice and a Stripe-connected customer. Refusals are `NozleApiError`s; test them with `error.hasCode(X402ErrorCode.InvalidFormat)` (also `FeatureNotEnabled`, `InvoiceNotPayable`, `UsdRequired`, `StripeRequired`). Types `X402Requirements` and `X402ErrorCode`.
 
 ## Node.js 0.38.1 — 2026-11-03
 
