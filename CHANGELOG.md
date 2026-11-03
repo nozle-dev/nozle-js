@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `invoices.payWithAgentToken(invoiceId, agentPaymentToken)` pays a finalized invoice with a Stripe Shared Payment Token (`spt_...`) an AI agent handed you, through Core's `POST /api/v1/invoices/:id/pay_with_agent_token`. It returns the invoice and is never retried. Needs the `stripe_agent_payment_token` feature flag. Refusals are `NozleApiError`s; test them with `error.hasCode(AgentTokenErrorCode.TokenExpired)` (also `FeatureNotEnabled`, `InvalidFormat`, `InvoiceNotPayable`, `StripeRequired`, `TokenDeactivated`, `CurrencyMismatch`, `AmountExceedsLimit`).
+
 ## Node.js 0.38.1 — 2026-11-03
 
 ### Fixed

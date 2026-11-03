@@ -42,7 +42,7 @@ export { EntitySubscriptionsNamespace } from "./entity-subscriptions";
 export { UsageNamespace, UsageHoldsNamespace } from "./usage";
 export { BudgetsNamespace } from "./budgets";
 export { WebhooksNamespace, WebhookVerificationError, createWebhookHandler } from "./webhooks";
-export { InvoicesNamespace } from "./invoices";
+export { InvoicesNamespace, AgentTokenErrorCode } from "./invoices";
 export { CreditNotesNamespace, CREDIT_NOTE_ERROR_CODES } from "./credit-notes";
 export { AlertsNamespace } from "./alerts";
 export { BillingEntitiesNamespace } from "./billing-entities";

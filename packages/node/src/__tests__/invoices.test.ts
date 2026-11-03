@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Nozle, createBillingHandler } from "../index";
+import { AgentTokenErrorCode, Nozle, NozleApiError, createBillingHandler } from "../index";
 
 const CORE = "https://api.example/core/api/v1";
 const invoice = { nozle_id: "inv_1", number: "INV-1", file_url: "https://files.example/inv_1.pdf", customer: { external_id: "cus_1" } };
@@ -36,6 +36,27 @@ describe("invoices", () => {
     });
     expect(await nozle().invoices.downloadUrl("inv_1")).toBe("https://files.example/inv_1.pdf");
     expect(await nozle().invoices.downloadUrl("inv_2")).toBeNull();
+  });
+
+  it("pays with an agent token, sends the token in the body and returns the invoice", async () => {
+    const fetch = stub({ "POST /core/api/v1/invoices/inv%201/pay_with_agent_token": () => Response.json({ invoice: { ...invoice, payment_status: "succeeded" } }) });
+    const paid = await nozle().invoices.payWithAgentToken("inv 1", "spt_abc");
+    expect(paid.payment_status).toBe("succeeded");
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ agent_payment_token: "spt_abc" });
+  });
+
+  it("reads the refusal code and never retries a payment", async () => {
+    const fetch = stub({
+      "POST /core/api/v1/invoices/inv_1/pay_with_agent_token": () =>
+        Response.json({ status: 422, error: "Unprocessable Entity", code: "validation_errors", error_details: { agent_payment_token: ["token_expired"] } }, { status: 422 }),
+    });
+    const error = await nozle().invoices.payWithAgentToken("inv_1", "spt_abc").catch((e) => e);
+    expect(error).toBeInstanceOf(NozleApiError);
+    expect(error.hasCode(AgentTokenErrorCode.TokenExpired)).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const down = stub({ "POST /core/api/v1/invoices/inv_1/pay_with_agent_token": () => new Response("{}", { status: 503 }) });
+    await expect(new Nozle({ apiKey: "sk_test", host: "https://api.example", maxRetries: 3 }).invoices.payWithAgentToken("inv_1", "spt_abc")).rejects.toThrow();
+    expect(down).toHaveBeenCalledTimes(1);
   });
 
   it("needs a secret key", async () => {

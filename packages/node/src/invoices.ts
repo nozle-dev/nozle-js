@@ -25,6 +25,23 @@ export interface ListInvoicesOptions {
   perPage?: number;
 }
 
+/**
+ * Why Core refused `invoices.payWithAgentToken`. 422 codes arrive in `errorDetails.agent_payment_token` (the limit codes
+ * and `invalid_format`), `stripe_required` in `errorDetails.payment_provider`; `feature_not_enabled` is a 403 and
+ * `invoice_not_payable` a 422 `code`. Test with `error.hasCode(...)`.
+ */
+export const AgentTokenErrorCode = {
+  FeatureNotEnabled: "feature_not_enabled",
+  InvalidFormat: "invalid_format",
+  InvoiceNotPayable: "invoice_not_payable",
+  StripeRequired: "stripe_required",
+  TokenDeactivated: "token_deactivated",
+  TokenExpired: "token_expired",
+  CurrencyMismatch: "currency_mismatch",
+  AmountExceedsLimit: "amount_exceeds_limit",
+} as const;
+export type AgentTokenErrorCode = (typeof AgentTokenErrorCode)[keyof typeof AgentTokenErrorCode];
+
 export class InvoicesNamespace {
   constructor(
     private readonly coreUrl: string,
@@ -69,18 +86,32 @@ export class InvoicesNamespace {
     return (JSON.parse(text) as { invoice?: Invoice }).invoice?.file_url ?? null;
   }
 
-  private raw(method: string, path: string, body?: unknown): Promise<Response> {
+  /**
+   * Pays a finalized invoice with a Stripe Shared Payment Token (`spt_...`) an AI agent handed you. Returns the invoice
+   * with its new payment status; a declined charge is a 200 with a failed payment, not an error. Needs the
+   * `stripe_agent_payment_token` feature flag on your organization and a Stripe-connected customer. Refusals are
+   * `NozleApiError`s; see {@link AgentTokenErrorCode}. Never retried: it moves money.
+   */
+  async payWithAgentToken(invoiceId: string, agentPaymentToken: string): Promise<Invoice> {
+    if (!invoiceId.trim()) throw new Error("invoices.payWithAgentToken requires invoiceId");
+    if (!agentPaymentToken.trim()) throw new Error("invoices.payWithAgentToken requires agentPaymentToken");
+    const path = `/api/v1/invoices/${encodeURIComponent(invoiceId)}/pay_with_agent_token`;
+    const body = { agent_payment_token: agentPaymentToken };
+    return (await this.call<{ invoice: Invoice }>("invoices.payWithAgentToken", "POST", path, body, false)).invoice;
+  }
+
+  private raw(method: string, path: string, body?: unknown, idempotent = true): Promise<Response> {
     if (!this.apiKey.startsWith("sk_")) throw new Error("invoices require a secret key");
     return request(this.policy, `${this.coreUrl}${path}`, {
       method,
       headers: { Authorization: `Bearer ${this.apiKey}`, ...(body !== undefined && { "Content-Type": "application/json" }) },
       ...(body !== undefined && { body: JSON.stringify(body) }),
-      // Every call here is a read; download only starts PDF generation once.
-    }, { idempotent: true });
+      // Reads and download (starts PDF generation once) are safe to retry; a payment is not.
+    }, { idempotent });
   }
 
-  private async call<T>(operation: string, method: string, path: string, body?: unknown): Promise<T> {
-    const response = await this.raw(method, path, body);
+  private async call<T>(operation: string, method: string, path: string, body?: unknown, idempotent = true): Promise<T> {
+    const response = await this.raw(method, path, body, idempotent);
     if (!response.ok) throw await apiError(operation, response);
     return (await response.json()) as T;
   }
