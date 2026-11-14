@@ -593,6 +593,9 @@ note.refund_status; // "pending", then "succeeded" or "failed" (webhook credit_n
 // 2b. Or choose the split yourself: the three amounts add up to max_creditable_amount_cents.
 await nozle.creditNotes.create({ invoiceId: "inv_123", items, refundAmountCents: 300, creditAmountCents: 200, reason: "order_change" });
 
+// 2c. Money you already paid back yourself (bank transfer, cash): the out-of-band part of the refund is recorded, never sent to a provider.
+await nozle.creditNotes.create({ invoiceId: "inv_123", items, refundAmountCents: 500, outOfBandRefundAmountCents: 500, outOfBandRefundReference: "TRX-42" });
+
 await nozle.creditNotes.list({ customerId: "cus_1", refundStatus: "failed" });
 await nozle.creditNotes.get(note.nozle_id);
 await nozle.creditNotes.void(note.nozle_id); // voids the unused credit; never undoes a paid refund or an offset
@@ -600,7 +603,7 @@ await nozle.creditNotes.void(note.nozle_id); // voids the unused credit; never u
 
 `reason` is one of `duplicated_charge`, `product_unsatisfactory`, `order_change`, `order_cancellation`, `fraudulent_charge`, `other` (default). `refund()` throws `refund_exceeds_paid_amount` and creates nothing when less was paid than the items are worth; pass `creditRemainder: true` to refund what was paid and credit the rest.
 
-The SDK sends no `Idempotency-Key` with credit note requests yet (Core 11.22.0 accepts one on create), so `create()`, `refund()` and `void()` are never retried, whatever `maxRetries` says; `preview()`, `get()` and `list()` are. After a network error or a 5xx on `create()`, call `list({ customerId, invoiceNumber })` before trying again. Errors are `NozleApiError`; test them with `error.hasCode(CREDIT_NOTE_ERROR_CODES.cannotRefundUnpaidInvoice)` (also `higherThanRemainingInvoiceAmount`, `higherThanRemainingFeeAmount`, `doesNotMatchItemAmounts`, `invalidTypeOrStatus`, `noVoidableAmount`). Nozle stores only the provider's refund id and status, never card or bank details.
+The SDK sends no `Idempotency-Key` with credit note requests yet (Core 11.22.0 accepts one on create), so `create()`, `refund()` and `void()` are never retried, whatever `maxRetries` says; `preview()`, `get()` and `list()` are. After a network error or a 5xx on `create()`, call `list({ customerId, invoiceNumber })` before trying again. Errors are `NozleApiError`; test them with `error.hasCode(CREDIT_NOTE_ERROR_CODES.cannotRefundUnpaidInvoice)` (also `higherThanRemainingInvoiceAmount`, `higherThanRemainingFeeAmount`, `doesNotMatchItemAmounts`, `invalidTypeOrStatus`, `noVoidableAmount`). From Core 11.46.0 an online refund the invoice's provider payments cannot take is refused with `manualRefundRequired` (manual payment, or only marked paid), `providerRefundUnsupported` (a provider Nozle cannot refund through) or `insufficientRefundableAmount`; record it with `outOfBandRefundAmountCents` instead (`higherThanRefundAmount` when that is above `refundAmountCents`). Nozle stores only the provider's refund id and status, never card or bank details.
 
 ## Health Check
 

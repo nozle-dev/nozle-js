@@ -9025,6 +9025,22 @@ export interface components {
              */
             offset_amount_cents: number;
             /**
+             * @description The part of `refund_amount_cents` the merchant paid back outside any payment provider, for example by bank transfer or in cash, expressed in cents. It is never sent to a provider. A credit note refunded only out of band has `refund_status` `succeeded` at once. 0 when everything was refunded online. Core 11.46.0; absent on older Cores.
+             * @example 0
+             */
+            out_of_band_refund_amount_cents?: number;
+            /**
+             * @description The merchant's reference for the out-of-band refund, for example a bank transfer ID. Core 11.46.0; absent on older Cores.
+             * @example null
+             */
+            out_of_band_refund_reference?: string | null;
+            /**
+             * Format: date-time
+             * @description When the out-of-band refund was made. `null` without an out-of-band refund. Core 11.46.0; absent on older Cores.
+             * @example null
+             */
+            out_of_band_refunded_at?: string | null;
+            /**
              * @description The pro-rated amount of the coupons applied to the source invoice.
              * @example 20
              */
@@ -9775,8 +9791,15 @@ export interface components {
              * @example 2022-04-29T08:59:51Z
              */
             updated_at: string;
+            /** @description What is still owed on the invoice, in cents. After a lost payment dispute (Core 11.45.0), it is what is owed again: what the disputes took back, plus anything still due before, less payments recorded since and offset credit notes, and never below 0. */
             total_due_amount_cents?: number;
+            /** @description What was paid on the invoice, in cents. It stays gross after a lost dispute, so after a recovery payment it can be higher than `total_amount_cents`. */
             total_paid_amount_cents?: number;
+            /**
+             * @description What lost payment disputes took back from the invoice's payments, in cents. `0` without a lost dispute. Core 11.45.0; absent on older Cores.
+             * @example 0
+             */
+            disputed_amount_cents?: number;
             total_offsetted_credit_note_amount_cents?: number;
             /**
              * @description Core 11.16.0. The amount due of this invoice carried to the customer's next invoice because it was below the payment provider's minimum charge (Stripe's minimum per currency, Razorpay INR 1). `0` when nothing was carried. A carried invoice is settled (`payment_status` `succeeded`, `total_due_amount_cents` `0`) and is never charged or dunned. See [Amounts below the provider minimum](/guides/billing/invoices#amounts-below-the-provider-minimum).

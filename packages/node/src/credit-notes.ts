@@ -53,12 +53,23 @@ export interface CreateCreditNoteParams extends PreviewCreditNoteParams {
    * with taxes (take it from `preview()`); at least one must be above zero.
    * - `creditAmountCents`: added to the customer's balance, applied to their next invoice.
    * - `refundAmountCents`: returned to the customer's original payment method by the payment provider.
-   *   Only up to what was paid on the invoice and not refunded yet.
+   *   Only up to what was paid on the invoice and not refunded yet. Its `outOfBandRefundAmountCents` part is
+   *   recorded as already paid back by you and is not sent to a provider.
    * - `offsetAmountCents`: deducted from what the customer still owes on the invoice.
    */
   creditAmountCents?: number;
   refundAmountCents?: number;
   offsetAmountCents?: number;
+  /**
+   * The part of `refundAmountCents` you already paid back yourself outside any payment provider (bank transfer,
+   * cash). Nozle records it as refunded and never sends it to a provider. Use it for an invoice paid with a manual
+   * payment, only marked paid, or paid through a provider Nozle cannot refund through. Core 11.46.0.
+   */
+  outOfBandRefundAmountCents?: number;
+  /** Your reference for the out-of-band refund, for example a bank transfer ID (up to 255 characters). */
+  outOfBandRefundReference?: string;
+  /** ISO 8601 time you made the out-of-band refund; Core uses the creation time when left out. */
+  outOfBandRefundedAt?: string;
   reason?: CreditNoteReason;
   /** Printed on the credit note PDF. */
   description?: string;
@@ -118,6 +129,14 @@ export const CREDIT_NOTE_ERROR_CODES = {
   /** Void of a credit note with nothing left to void (HTTP 422). */
   noVoidableAmount: "no_voidable_amount",
   refundExceedsPaidAmount: "refund_exceeds_paid_amount",
+  /** The online part of the refund needs a manual payment, or the invoice was only marked paid: use `outOfBandRefundAmountCents`. */
+  manualRefundRequired: "manual_refund_required",
+  /** The invoice was paid through a provider Nozle cannot refund through: use `outOfBandRefundAmountCents`. */
+  providerRefundUnsupported: "provider_refund_unsupported",
+  /** The invoice's provider payments still hold less than the online part of the refund. */
+  insufficientRefundableAmount: "insufficient_refundable_amount",
+  /** `outOfBandRefundAmountCents` is above `refundAmountCents`. */
+  higherThanRefundAmount: "higher_than_refund_amount",
 } as const;
 
 const REASONS = ["duplicated_charge", "product_unsatisfactory", "order_change", "order_cancellation", "fraudulent_charge", "other"];
@@ -163,7 +182,7 @@ export class CreditNotesNamespace {
    * Issues a credit note. It sends no `Idempotency-Key` yet, so the SDK never retries it: if it fails
    * with a network error or a 5xx, call `list({ customerId, invoiceNumber })` before trying again.
    * A refund is started with the payment provider after the call returns; follow `refund_status`
-   * with `get()` or the `credit_note.refund_failure` webhook.
+   * with `get()` or the `credit_note.refund_failure` webhook. Its out-of-band part is settled at once.
    */
   async create(params: CreateCreditNoteParams): Promise<CreditNote> {
     const op = "creditNotes.create";
@@ -171,6 +190,7 @@ export class CreditNotesNamespace {
     cents(params.creditAmountCents, op, "creditAmountCents");
     cents(params.refundAmountCents, op, "refundAmountCents");
     cents(params.offsetAmountCents, op, "offsetAmountCents");
+    cents(params.outOfBandRefundAmountCents, op, "outOfBandRefundAmountCents");
     checkReason(params.reason, op);
     if (!((params.creditAmountCents ?? 0) + (params.refundAmountCents ?? 0) + (params.offsetAmountCents ?? 0) > 0))
       throw new Error(`${op} requires creditAmountCents, refundAmountCents or offsetAmountCents above zero`);
@@ -178,6 +198,9 @@ export class CreditNotesNamespace {
       ["credit_amount_cents", params.creditAmountCents],
       ["refund_amount_cents", params.refundAmountCents],
       ["offset_amount_cents", params.offsetAmountCents],
+      ["out_of_band_refund_amount_cents", params.outOfBandRefundAmountCents],
+      ["out_of_band_refund_reference", params.outOfBandRefundReference],
+      ["out_of_band_refunded_at", params.outOfBandRefundedAt],
       ["reason", params.reason],
       ["description", params.description],
       ["metadata", params.metadata],
