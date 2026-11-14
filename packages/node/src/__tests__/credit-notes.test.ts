@@ -57,6 +57,22 @@ describe("creditNotes", () => {
     expect((fetch.mock.calls[0][1] as RequestInit).headers).not.toHaveProperty("Idempotency-Key");
   });
 
+  it("sends the out-of-band part of a refund", async () => {
+    const fetch = stub({ [`POST ${core}`]: () => Response.json({ credit_note: note }) });
+    await nozle().creditNotes.create({
+      invoiceId: "inv_1", items, refundAmountCents: 500, outOfBandRefundAmountCents: 200,
+      outOfBandRefundReference: "TRX-1", outOfBandRefundedAt: "2026-11-14T10:00:00Z",
+    });
+    expect(body(fetch.mock.calls[0])).toEqual({
+      credit_note: {
+        invoice_id: "inv_1", items: [{ fee_id: "fee_1", amount_cents: 500 }], refund_amount_cents: 500,
+        out_of_band_refund_amount_cents: 200, out_of_band_refund_reference: "TRX-1", out_of_band_refunded_at: "2026-11-14T10:00:00Z",
+      },
+    });
+    await expect(nozle().creditNotes.create({ invoiceId: "inv_1", items, refundAmountCents: 500, outOfBandRefundAmountCents: -1 }))
+      .rejects.toThrow("outOfBandRefundAmountCents must be a whole number of cents");
+  });
+
   it("never retries create or void, even after a 503 or a network error", async () => {
     const fetch = stub({
       [`POST ${core}`]: () => failure(503, {}),

@@ -1,5 +1,23 @@
 # Changelog
 
+## Node.js 0.41.0 — 2026-11-14
+
+Types follow Core 11.45.0 to 11.46.1 (lost disputes, out-of-band refunds). The new fields are optional: older Cores do not send them.
+
+### Added
+
+- `creditNotes.create` accepts `outOfBandRefundAmountCents`, `outOfBandRefundReference` and `outOfBandRefundedAt` (Core 11.46.0): the part of `refundAmountCents` you already paid back yourself, by bank transfer or cash. Nozle records it and never sends it to a provider; a credit note refunded only out of band is `succeeded` at once. Credit note results carry `out_of_band_refund_amount_cents`, `out_of_band_refund_reference` and `out_of_band_refunded_at`.
+- `CREDIT_NOTE_ERROR_CODES` adds `manualRefundRequired`, `providerRefundUnsupported`, `insufficientRefundableAmount` (Core 11.46.0 refuses an online refund the invoice's provider payments cannot take) and `higherThanRefundAmount`.
+- Invoice results carry `disputed_amount_cents` (Core 11.45.0), what lost payment disputes took back.
+
+### Changed
+
+- Documented on the `Invoice` type: after a lost dispute `total_due_amount_cents` is what is owed again (it was 0 before Core 11.45.0), and `total_paid_amount_cents` stays gross, so it can be higher than `total_amount_cents` after a recovery payment.
+
+### Other
+
+- AGENTS.md: testing safety rules for tests, scripts and agents (no raw card numbers to providers, test keys only, production read-only by default).
+
 ## Node.js 0.40.0 — 2026-11-13
 
 ### Removed
