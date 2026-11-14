@@ -140,13 +140,7 @@ describe("customers.importBillingState", () => {
   });
 });
 
-describe("margin.forecast and margin.simulate", () => {
-  it("forecast reads /margin/forecast with the range", async () => {
-    fetchMock.mockResolvedValueOnce(json({ points: [], confidence: "low" }));
-    await expect(client().margin.forecast({ from: "2026-10-01", to: "2026-10-15" })).resolves.toEqual({ points: [], confidence: "low" });
-    expect(sent()).toMatchObject({ method: "GET", path: "/engine/api/v1/margin/forecast", query: { from: "2026-10-01", to: "2026-10-15" } });
-  });
-
+describe("margin.simulate", () => {
   it("simulate posts the metric and price with the range in the query", async () => {
     const result = { metric_code: "agent_execution", new_revenue_cents: 29500, event_count: 295 };
     fetchMock.mockResolvedValueOnce(json(result));
@@ -159,9 +153,6 @@ describe("margin.forecast and margin.simulate", () => {
   });
 
   it("maps errors to NozleApiError and validates the body locally", async () => {
-    fetchMock.mockResolvedValueOnce(json({ code: "invalid_date_range", error: "to must be after from" }, 400));
-    const error = await rejection(client().margin.forecast({ from: "2026-10-02", to: "2026-10-01" }));
-    expect([error.status, error.code]).toEqual([400, "invalid_date_range"]);
     fetchMock.mockResolvedValueOnce(json({ code: "analytics_unavailable", error: "down" }, 503));
     expect((await rejection(new Nozle({ apiKey: "sk_test", maxRetries: 0 }).margin.simulate({ metricCode: "m", newPriceDollars: 0 }))).code).toBe("analytics_unavailable");
     fetchMock.mockReset();

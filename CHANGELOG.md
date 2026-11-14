@@ -1,5 +1,11 @@
 # Changelog
 
+## Node.js 0.40.0 — 2026-11-13
+
+### Removed
+
+- `margin.forecast(params?)` (`GET /margin/forecast`) and its `MarginForecast` type. Engine no longer serves that route; every call 404ed. Breaking: remove the call site if you used it.
+
 ## Node.js 0.39.0 — 2026-11-03
 
 ### Added

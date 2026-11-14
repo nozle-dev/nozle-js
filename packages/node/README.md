@@ -620,7 +620,6 @@ const byMetric = await nozle.margin.byMetric();
 const byPlan = await nozle.margin.byPlan();
 const byModel = await nozle.margin.byModel();
 const trend = await nozle.margin.trend({ granularity: "day" });
-const forecast = await nozle.margin.forecast(); // next 30 days, from the last month's daily trend
 const simulation = await nozle.margin.simulate({ metricCode: "agent_execution", newPriceDollars: 1 });
 
 // With time range

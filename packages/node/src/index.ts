@@ -131,7 +131,6 @@ export type {
   SubscriptionTransitionResult,
   MarginQueryParams,
   TrendParams,
-  MarginForecast,
   MarginSummary,
   MarginByCustomer,
   MarginByMetric,

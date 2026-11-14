@@ -1,6 +1,6 @@
 import { request, type RequestPolicy } from "./http";
 import { apiError } from "./errors";
-import type { MarginByCustomer, MarginByMetric, MarginByModel, MarginByPlan, MarginForecast, MarginSummary, MarginTrend, MarginQueryParams, MarginSimulateParams, MarginSimulation, TrendParams } from "./types";
+import type { MarginByCustomer, MarginByMetric, MarginByModel, MarginByPlan, MarginSummary, MarginTrend, MarginQueryParams, MarginSimulateParams, MarginSimulation, TrendParams } from "./types";
 
 export class MarginClient {
   private readonly base: string;
@@ -55,11 +55,6 @@ export class MarginClient {
   trend(params?: TrendParams) {
     const { granularity = "day", ...rest } = params ?? {};
     return this.get<MarginTrend>("/trend", { granularity, ...rest });
-  }
-
-  /** Daily revenue, cost and margin projected for the 30 days after the range (default: the last month). */
-  forecast(params?: MarginQueryParams): Promise<MarginForecast> {
-    return this.get("/forecast", params);
   }
 
   /** Replays one metric's recorded usage in the range at a new unit price; the recorded cost is kept. */
