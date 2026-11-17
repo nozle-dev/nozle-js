@@ -650,6 +650,8 @@ const run = await nozle.costIntelligence.allocateSharedCost(poolId, { allocation
 const plans = await nozle.plans();
 // The pricing table view: without plan families and features hidden from it
 const visible = await nozle.plans({ includeHidden: false });
+// Archived plans (secret key): they take no new subscriptions, existing ones keep billing
+const archived = await nozle.plans({ status: "archived" });
 
 // Create checkout from an authenticated merchant route.
 const checkout = await nozle.checkout(

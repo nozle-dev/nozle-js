@@ -180,6 +180,8 @@ export interface CanPolicy {
   reason: string;
 }
 
+export type PlanStatus = "active" | "archived";
+
 export interface Plan {
   code: string;
   name: string;
@@ -190,6 +192,10 @@ export interface Plan {
   version?: number;
   /** Whether new subscriptions get this version. */
   is_current?: boolean;
+  /** `archived` plans take no new subscriptions; their existing subscriptions keep billing (Core 11.51.0). */
+  status?: PlanStatus;
+  /** When the plan was archived, `null` while it is active (Core 11.51.0). */
+  archived_at?: string | null;
   /** The plan family this plan is a variant of. Absent for a plan without a family. */
   family?: PlanFamilyRef;
   /** Every current variant of the family: one price per interval and currency. Absent for a plan without a family. */
@@ -221,6 +227,8 @@ export interface PlansOptions {
    * the organization allows several currencies per customer.
    */
   externalCustomerId?: string;
+  /** Secret key only: `active` or `archived` lists one kind (Core 11.51.0). Without it a secret key gets both; a publishable key never gets archived plans. */
+  status?: PlanStatus;
 }
 
 /**

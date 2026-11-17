@@ -1,5 +1,14 @@
 # Changelog
 
+## Node.js 0.42.0 — 2026-11-17
+
+Types follow Core 11.51.0 (archived plans). The new fields are optional: older Cores do not send them.
+
+### Added
+
+- `Plan` carries `status` (`"active"` or `"archived"`) and `archived_at`. An archived plan takes no new subscriptions; its existing subscriptions keep billing.
+- `plans({ status })` lists only `"active"` or only `"archived"` plans with a secret key. Without it a secret key gets both. A publishable key never gets archived plans. `PlanStatus` is exported.
+
 ## Node.js 0.41.0 — 2026-11-14
 
 Types follow Core 11.45.0 to 11.46.1 (lost disputes, out-of-band refunds). The new fields are optional: older Cores do not send them.

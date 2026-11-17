@@ -190,6 +190,7 @@ export class Nozle {
     const url = new URL(`${this.baseUrl}/api/v1/plans`);
     if (options.includeHidden !== undefined) url.searchParams.set("include_hidden", String(options.includeHidden));
     if (options.currency) url.searchParams.set("currency", options.currency);
+    if (options.status) url.searchParams.set("status", options.status);
     if (options.externalCustomerId) url.searchParams.set("external_customer_id", options.externalCustomerId);
     const res = await request(this.policy, url.toString(), {
       headers: { Authorization: `Bearer ${this.apiKey}` },

@@ -92,6 +92,7 @@ export type {
   Plan,
   PlanFamilyRef,
   PlanPrice,
+  PlanStatus,
   PlansOptions,
   PlanFamilySelection,
   CheckoutResult,
