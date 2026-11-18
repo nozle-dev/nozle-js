@@ -13,6 +13,20 @@ function capture(body: unknown = {}) {
 const nozle = () => new Nozle({ apiKey: "sk_test", host: "https://api.example" });
 afterEach(() => vi.unstubAllGlobals());
 
+describe("archived plans", () => {
+  it("passes the status filter and returns status and archived_at", async () => {
+    const plan: Plan = {
+      code: "old", name: "Old", amount_cents: 900, amount_currency: "USD", interval: "monthly",
+      status: "archived", archived_at: "2026-11-17T09:00:00Z",
+    };
+    const calls = capture({ plans: [plan] });
+    expect(await nozle().plans({ status: "archived" })).toEqual([plan]);
+    expect(new URL(calls[0].url).searchParams.get("status")).toBe("archived");
+    await nozle().plans();
+    expect(new URL(calls[1].url).searchParams.has("status")).toBe(false);
+  });
+});
+
 describe("multi-currency plan families", () => {
   it("lists the catalog in a currency or the customer's currency and returns family and prices", async () => {
     const plan: Plan = {
