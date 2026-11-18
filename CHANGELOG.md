@@ -1,5 +1,14 @@
 # Changelog
 
+## Node.js 0.44.0 — 2026-11-18
+
+Types follow Core 11.55.0 (invoice usage cap). The new fields are optional: older Cores do not send them.
+
+### Added
+
+- Invoices carry `usage_cap_amount_cents`, the usage billed past a spend limit's invoice cap and taken back by a `usage_cap` credit. `0` without a capped spend limit.
+- `currentUsage` results carry `usage_cap_amount_cents`, the part of `amount_cents` past the invoice cap, which the invoice will not bill. `total_amount_cents` and taxes are on the capped usage.
+
 ## Node.js 0.42.0 — 2026-11-17
 
 Types follow Core 11.51.0 (archived plans). The new fields are optional: older Cores do not send them.
