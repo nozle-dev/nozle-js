@@ -727,6 +727,8 @@ export interface CustomerUpsertResult extends CustomerTaxFields {
   external_id: string;
   name?: string;
   email?: string;
+  /** When `customers.erase` erased the customer's personal data, `null` before (Core 11.54.0). */
+  erased_at?: string | null;
 }
 
 export interface CheckAndDeductParams {

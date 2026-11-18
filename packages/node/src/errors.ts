@@ -150,6 +150,16 @@ export const EventVoidErrorCode = {
 } as const;
 export type EventVoidErrorCode = (typeof EventVoidErrorCode)[keyof typeof EventVoidErrorCode];
 
+/**
+ * Why Core refused `customers.erase`: a 422 with these codes in `errorDetails.customer`. Test with `error.hasCode(...)`.
+ */
+export const CustomerEraseErrorCode = {
+  HasActiveSubscriptions: "has_active_subscriptions",
+  HasDraftInvoices: "has_draft_invoices",
+  HasUnpaidInvoices: "has_unpaid_invoices",
+} as const;
+export type CustomerEraseErrorCode = (typeof CustomerEraseErrorCode)[keyof typeof CustomerEraseErrorCode];
+
 /** True when the error means the customer has no active subscription, whichever service or SDK path raised it. */
 export function isNoActiveSubscription(error: unknown): boolean {
   return error instanceof NozleApiError && error.hasCode(NO_ACTIVE_SUBSCRIPTION);

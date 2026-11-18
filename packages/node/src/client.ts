@@ -895,6 +895,34 @@ class CustomersNamespace {
   }
 
   /**
+   * Erases the customer's personal data (GDPR), irreversibly: Core sets `erased_at` and finishes in the background.
+   * Refused with 422 while the customer has active subscriptions or draft or unpaid invoices
+   * ({@link CustomerEraseErrorCode} in `errorDetails.customer`). Erasing an erased customer changes nothing. Secret key.
+   */
+  async erase(externalId: string): Promise<CustomerUpsertResult> {
+    return this.write("customers.erase", "POST", externalId, "/erase");
+  }
+
+  /**
+   * Deletes the customer and ends its subscriptions. Not an erasure: the customer's personal data stays; use
+   * {@link erase} for that. Secret key.
+   */
+  async delete(externalId: string): Promise<CustomerUpsertResult> {
+    return this.write("customers.delete", "DELETE", externalId, "");
+  }
+
+  private async write(operation: string, method: string, externalId: string, suffix: string): Promise<CustomerUpsertResult> {
+    if (!this.apiKey.startsWith("sk_")) throw new Error(`${operation} requires a secret key`);
+    if (!externalId?.trim()) throw new Error(`${operation} requires externalId`);
+    const res = await request(this.policy, `${this.baseUrl}/api/v1/customers/${encodeURIComponent(externalId)}${suffix}`, {
+      method,
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
+    if (!res.ok) throw await apiError(operation, res);
+    return ((await res.json()) as { customer: CustomerUpsertResult }).customer;
+  }
+
+  /**
    * Polls `get` until `tax_identification_status` is not `pending` (a VIES check is running), then returns the
    * customer. Call it before a checkout so the price already reflects reverse charge. Throws after `timeoutMs`
    * (default 10 000) with the last customer unchanged on Core's side; the check keeps running.
