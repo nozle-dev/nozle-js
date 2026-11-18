@@ -1,5 +1,16 @@
 # Changelog
 
+## Node.js 0.43.0 — 2026-11-18
+
+Types follow Core 11.54.0 (customer erasure) and Engine 2.60.0. The new fields are optional: older Cores do not send them.
+
+### Added
+
+- `customers.erase(externalId)` (`POST /customers/{external_id}/erase`) erases a customer's personal data and returns the customer with `erased_at`. A 422 carries `CustomerEraseErrorCode` (`has_active_subscriptions`, `has_draft_invoices`, `has_unpaid_invoices`) in `errorDetails.customer`. A repeat call changes nothing. Not retried automatically.
+- `customers.delete(externalId)` (`DELETE /customers/{external_id}`) deletes a customer and ends its subscriptions. It is not an erasure. Not retried automatically.
+- Customer results carry `erased_at`.
+- `usage.track` and `usage.holds.finalize` surface Engine's 409 `period_invoiced` (usage dated in an invoiced period) as a `NozleApiError` that `hasCode(EventVoidErrorCode.PeriodInvoiced)`, and never retry it.
+
 ## Node.js 0.42.0 — 2026-11-17
 
 Types follow Core 11.51.0 (archived plans). The new fields are optional: older Cores do not send them.
