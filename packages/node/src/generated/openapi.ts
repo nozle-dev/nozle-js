@@ -11516,6 +11516,11 @@ export interface components {
              */
             amount_cents: number;
             /**
+             * @description Core 11.55.0, current usage only. The part of `amount_cents` past the subscription's invoice cap, which the invoice will not bill. `taxes_amount_cents` and `total_amount_cents` are computed on the capped usage; each charge keeps its amount. `0` without a cap, and on a usage filtered to a charge or a group.
+             * @example 0
+             */
+            usage_cap_amount_cents?: number;
+            /**
              * @description The tax amount in cents.
              * @example 200
              */
