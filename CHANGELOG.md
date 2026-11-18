@@ -2,7 +2,7 @@
 
 ## Node.js 0.43.0 — 2026-11-18
 
-Types follow Core 11.54.0 (customer erasure) and Engine 2.60.0. The new fields are optional: older Cores do not send them.
+Types follow Core 11.52.0 (customer erasure) and Engine 2.60.0. The new fields are optional: older Cores do not send them.
 
 ### Added
 
