@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Nozle } from "../client";
 import { NozleApiError, NozleValidationError, TrialErrorCode } from "../errors";
-import type { CancellationPolicy } from "../types";
+import type { CancellationPolicy, CustomerUsage } from "../types";
 
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
@@ -217,6 +217,14 @@ describe("Nozle", () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe("currentUsage", () => {
+    it("returns usage_cap_amount_cents, the usage past the invoice cap", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ customer_usage: { amount_cents: 1240, usage_cap_amount_cents: 240 } }));
+      const usage: CustomerUsage = await new Nozle({ apiKey: "sk_test" }).currentUsage("cust_1", { subscriptionId: "sub_1" });
+      expect(usage.usage_cap_amount_cents).toBe(240);
     });
   });
 

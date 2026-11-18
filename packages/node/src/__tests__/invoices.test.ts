@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentTokenErrorCode, X402ErrorCode, Nozle, NozleApiError, createBillingHandler } from "../index";
+import { AgentTokenErrorCode, X402ErrorCode, Nozle, NozleApiError, createBillingHandler, type Invoice } from "../index";
 
 const CORE = "https://api.example/core/api/v1";
 const invoice = { nozle_id: "inv_1", number: "INV-1", file_url: "https://files.example/inv_1.pdf", customer: { external_id: "cus_1" } };
@@ -27,6 +27,12 @@ describe("invoices", () => {
     expect(Object.fromEntries(url.searchParams)).toEqual({
       external_customer_id: "cus 1", status: "finalized", payment_status: "failed", payment_overdue: "true", page: "2", per_page: "5",
     });
+  });
+
+  it("returns usage_cap_amount_cents, the usage past the invoice cap", async () => {
+    stub({ "GET /core/api/v1/invoices/inv_1": () => Response.json({ invoice: { ...invoice, usage_cap_amount_cents: 2500 } }) });
+    const capped: Invoice = await nozle().invoices.get("inv_1");
+    expect(capped.usage_cap_amount_cents).toBe(2500);
   });
 
   it("returns the PDF URL, or null while Core is still generating it", async () => {
