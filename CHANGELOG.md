@@ -2,7 +2,7 @@
 
 ## Node.js 0.44.0 — 2026-11-18
 
-Types follow Core 11.55.0 (invoice usage cap). The new fields are optional: older Cores do not send them.
+Types follow Core 11.53.0 (invoice usage cap). The new fields are optional: older Cores do not send them.
 
 ### Added
 
