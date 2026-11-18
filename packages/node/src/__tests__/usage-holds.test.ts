@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Nozle, NozleApiError } from "../index";
+import { EventVoidErrorCode, Nozle, NozleApiError } from "../index";
 
 const hold = {
   hold_id: "hold_1",
@@ -171,5 +171,22 @@ describe("usage.holds", () => {
     expect(await codeOf(client.usage.holds.release("hold_1"))).toEqual([409, "hold_already_resolved"]);
     expect(await codeOf(client.usage.holds.get("missing"))).toEqual([404, "hold_not_found"]);
     expect(await codeOf(client.usage.holds.create({ customerId: "a", featureCode: "f" }, { idempotencyKey: "k" }))).toEqual([400, "hold_ttl_invalid"]);
+  });
+
+  it("surfaces 409 period_invoiced from track and finalize as EventVoidErrorCode.PeriodInvoiced, without a retry", async () => {
+    const periodInvoiced = () =>
+      new Response(JSON.stringify({ code: "period_invoiced", error_details: { timestamp: ["period_invoiced"] } }), {
+        status: 409,
+        headers: { "content-type": "application/json" },
+      });
+    const fetch = stub({
+      [`POST ${engine}/usage/track`]: periodInvoiced,
+      [`POST ${engine}/usage/holds/hold_1/finalize`]: periodInvoiced,
+    });
+    const client = nozle();
+    const track = client.usage.track({ customerId: "acme", featureCode: "emails", timestamp: "2026-09-30T23:00:00Z" }, { idempotencyKey: "t1" });
+    await expect(track).rejects.toSatisfy((error: NozleApiError) => error.status === 409 && error.hasCode(EventVoidErrorCode.PeriodInvoiced));
+    await expect(client.usage.holds.finalize("hold_1")).rejects.toSatisfy((error: NozleApiError) => error.hasCode(EventVoidErrorCode.PeriodInvoiced));
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
