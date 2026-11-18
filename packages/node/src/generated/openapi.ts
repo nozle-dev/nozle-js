@@ -9762,6 +9762,11 @@ export interface components {
              */
             progressive_billing_credit_amount_cents: number;
             /**
+             * @description The usage billed past the spend limit's invoice cap and taken back by a `usage_cap` credit, expressed in cents. 0 without a capped spend limit. Core 11.55.0; absent on older Cores.
+             * @example 0
+             */
+            usage_cap_amount_cents?: number;
+            /**
              * @description The sum of the amount and taxes amount on the invoice, expressed in cents. It calculates the total financial value of the invoice, including both the original amount and any applicable taxes.
              * @example 100
              */
