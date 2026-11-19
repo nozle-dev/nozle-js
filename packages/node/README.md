@@ -358,6 +358,21 @@ A checkout call refuses with `customer_tax_location_required` (422) when the bil
 
 A payment provider assignment needs `providerCustomerId` or `syncWithProvider: true`; otherwise Core drops it. The same applies to `provider_customer_id` and `sync_with_provider` when you call the REST API directly.
 
+### Deleting and erasing a customer
+
+`customers.delete(externalId)` deletes the customer and ends its subscriptions. It is not an erasure: the customer's personal data stays. `customers.erase(externalId)` erases that personal data (GDPR), irreversibly, and returns the customer with `erased_at` set; Core finishes in the background and sends a `customer.erased` webhook. Erase refuses with 422 while the customer has active subscriptions or draft or unpaid invoices. Erasing an erased customer changes nothing. Neither call is retried automatically.
+
+```ts
+try {
+  const customer = await nozle.customers.erase("cust_123");
+  customer.erased_at; // "2026-11-18T10:00:00Z"
+} catch (error) {
+  if (error instanceof NozleApiError && error.hasCode(CustomerEraseErrorCode.HasUnpaidInvoices)) {
+    // collect or void the open invoices first
+  }
+}
+```
+
 ### Importing billing state and opening credit balances
 
 When you move customers from another billing system, import each subscription that system still bills, then its current credit balance. Both calls need a secret key and an `idempotencyKey` (at most 255 bytes): retry an uncertain call with the same key and the same body. `dryRun: true` validates without writing.

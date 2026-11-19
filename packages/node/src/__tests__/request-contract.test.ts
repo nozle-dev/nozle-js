@@ -80,6 +80,8 @@ const calls: Record<string, (nozle: Nozle) => Promise<unknown>> = {
   "usage.holds.release": (n) => n.usage.holds.release("hold_1"),
   "costEvents.track": (n) => n.costEvents.track({ costMeterCode: "llm_tokens", externalCustomerId: "cust" }),
   "customers.upsert": (n) => n.customers.upsert({ externalId: "cust" }),
+  "customers.erase": (n) => n.customers.erase("cust"),
+  "customers.delete": (n) => n.customers.delete("cust"),
   "customers.upsert with tax data": (n) =>
     n.customers.upsert({
       externalId: "cust",

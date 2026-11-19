@@ -20,6 +20,7 @@ export {
   NO_ACTIVE_SUBSCRIPTION,
   TrialErrorCode,
   EventVoidErrorCode,
+  CustomerEraseErrorCode,
   CustomerTaxErrorCode,
   CUSTOMER_PAYMENT_OVERDUE,
   isNoActiveSubscription,
