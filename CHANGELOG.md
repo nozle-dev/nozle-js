@@ -1,5 +1,14 @@
 # Changelog
 
+## Node.js 0.44.0 and React 0.25.0 — unreleased
+
+Needs Core 11.66.0 and Engine 2.64.0 (customer tokens).
+
+### Added
+
+- Node.js: `customerTokens.create(customerId, { ttlSeconds?, features? })` (`POST /customer_tokens`, secret key with `customer:read`) mints a short-lived, read-only token that lets the signed-in customer's browser read that customer's entitlements, usage, credit balances and subscription with your publishable key. Returns `{ token, customer_id, expires_at }`. `customerTokens.revoke()` (`POST /customer_tokens/revoke`, `customer:write`) refuses every token minted until now. `CustomerToken` and `CreateCustomerTokenOptions` are exported.
+- React: `BillingProvider getCustomerToken` (and `coreUrl`). Instead of `billingEndpoint`, `useEntitlement`, `useCreditBalance`, `useCreditHistory`, `useUsage` and `useSubscription` read the signed-in customer straight from Nozle with the publishable key and the token your backend returns from `customerTokens.create`. The provider caches the token, asks for a new one a minute before it expires, and retries a read once after `401 customer_token_expired` or `invalid_customer_token`. `useUpgradePreview`, `useInvoices` and `useInvoiceDownload` still need `billingEndpoint`. `CustomerToken`, `GetCustomerToken` and `CUSTOMER_TOKEN_HEADER` are exported.
+
 ## Node.js 0.43.0 — 2026-11-18
 
 Types follow Core 11.52.0 (customer erasure) and Engine 2.60.0. The new fields are optional: older Cores do not send them.
