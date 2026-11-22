@@ -373,6 +373,18 @@ try {
 }
 ```
 
+### Customer tokens for the browser
+
+`customerTokens.create(customerId, { ttlSeconds, features })` mints a short-lived, read-only token for one customer (Core 11.66.0). The browser sends it as `X-Nozle-Customer-Token` with your publishable key and reads that customer's entitlements, usage, credit balances and subscription, nothing else. Take `customerId` from your session, never from the request. `ttlSeconds` is 60 to 86400 (Nozle's default 3600); `features` limits `/can` and usage reads. `customerTokens.revoke()` refuses every token minted until now. Both need a secret key.
+
+```ts
+export async function POST(request: Request) {
+  const customerId = (await auth(request))?.workspaceId;
+  if (!customerId) return new Response(null, { status: 401 });
+  return Response.json(await nozle.customerTokens.create(customerId, { ttlSeconds: 900 }));
+}
+```
+
 ### Importing billing state and opening credit balances
 
 When you move customers from another billing system, import each subscription that system still bills, then its current credit balance. Both calls need a secret key and an `idempotencyKey` (at most 255 bytes): retry an uncertain call with the same key and the same body. `dryRun: true` validates without writing.
