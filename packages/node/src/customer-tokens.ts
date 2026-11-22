@@ -12,7 +12,7 @@ export interface CustomerToken {
 }
 
 export interface CreateCustomerTokenOptions {
-  /** Lifetime in seconds, 60 to 86400. Nozle's default is 3600. */
+  /** Lifetime in seconds, 60 to 3600 (one hour, also the default). Nozle answers 422 outside that range. */
   ttlSeconds?: number;
   /** Feature codes: `can` and usage reads are limited to these. Subscription and credit reads are not affected. */
   features?: string[];
