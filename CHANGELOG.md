@@ -2,7 +2,7 @@
 
 ## Node.js 0.44.0 and React 0.25.0 — unreleased
 
-Needs Core 11.66.0 and Engine 2.64.0 (customer tokens).
+Needs Core 11.59.0 and Engine 2.64.0 (customer tokens).
 
 ### Added
 
