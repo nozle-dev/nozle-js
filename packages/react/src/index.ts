@@ -60,6 +60,8 @@ export type {
 } from "./provider.js";
 
 export { usePlans } from "./hooks/use-plans.js";
+export { CUSTOMER_TOKEN_HEADER } from "./core/customer-token.js";
+export type { CustomerToken, GetCustomerToken } from "./core/customer-token.js";
 export { PoweredByNozle, useNozleBranding } from "./components/branding/PoweredByNozle.js";
 export {
   useSubscription,

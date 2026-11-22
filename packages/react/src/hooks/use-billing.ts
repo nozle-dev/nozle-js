@@ -60,11 +60,13 @@ interface CreditHistoryPage {
 }
 
 function useBilling(): { fetchRoute: BillingFetch; queryClient: ReturnType<typeof useBillingContext>["queryClient"]; endpoint: string } {
-  const { billingFetch, billingEndpoint, queryClient } = useBillingContext();
-  if (!billingFetch || !billingEndpoint) {
-    throw new Error("Billing hooks need BillingProvider billingEndpoint, a backend route served by createBillingHandler");
+  const { billingFetch, billingKey, queryClient } = useBillingContext();
+  if (!billingFetch || !billingKey) {
+    throw new Error(
+      "Billing hooks need BillingProvider billingEndpoint (a backend route served by createBillingHandler) or getCustomerToken",
+    );
   }
-  return { fetchRoute: billingFetch, queryClient, endpoint: billingEndpoint };
+  return { fetchRoute: billingFetch, queryClient, endpoint: billingKey };
 }
 
 /** The signed-in customer's subscription, plan and scheduled change. */

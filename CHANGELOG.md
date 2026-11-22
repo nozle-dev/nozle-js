@@ -1,5 +1,15 @@
 # Changelog
 
+## Node.js 0.44.0 and React 0.25.0 — unreleased
+
+Needs Core 11.59.0 and Engine 2.64.0 (customer tokens).
+
+### Added
+
+- Node.js: `customerTokens.create(customerId, { ttlSeconds?, features? })` (`POST /customer_tokens`, secret key with `customer:read`) mints a short-lived, read-only token that lets the signed-in customer's browser read that customer's entitlements, usage, credit balances and subscription with your publishable key. `ttlSeconds` is 60 to 3600 (one hour, also the default; Core answers 422 outside it). The token reads only what both the minting key and the publishable key may read, and stops working when its customer is deleted. Returns `{ token, customer_id, expires_at }`. `customerTokens.revoke()` (`POST /customer_tokens/revoke`, `customer:write`) refuses every token minted until now. `CustomerToken` and `CreateCustomerTokenOptions` are exported.
+- React: `BillingProvider getCustomerToken` with `customerId` (and `coreUrl`). `customerId`, the signed-in customer's external id, is required with `getCustomerToken` (by type and at runtime). It keys the token and the hooks' cache, so changing it on a sign-out and sign-in drops the previous customer's cached reads and token, and a token whose `customer_id` is another customer is refused and never sent. Instead of `billingEndpoint`, `useEntitlement`, `useCreditBalance`, `useCreditHistory`, `useUsage` and `useSubscription` read the signed-in customer straight from Nozle with the publishable key and the token your backend returns from `customerTokens.create`. The provider caches the token, asks for a new one a minute before it expires, and retries a read once after `401 customer_token_expired` or `invalid_customer_token`. `useUpgradePreview`, `useInvoices` and `useInvoiceDownload` still need `billingEndpoint`. `CustomerToken`, `GetCustomerToken` and `CUSTOMER_TOKEN_HEADER` are exported.
+- React: `BillingProvider customerId` with `billingEndpoint` (optional). It keys the hooks' cache the same way, so changing it on a sign-out and sign-in drops the previous customer's cached `billingEndpoint` reads. Without it the cache is keyed on `billingEndpoint` alone, as before: a provider that stays mounted across a sign-in in the same tab (at the app root) can show the previous customer's reads for up to 30 seconds. Pass it, or remount the provider on sign-in.
+
 ## Node.js 0.43.0 — 2026-11-18
 
 Types follow Core 11.52.0 (customer erasure) and Engine 2.60.0. The new fields are optional: older Cores do not send them.

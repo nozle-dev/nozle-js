@@ -81,6 +81,8 @@ const calls: Record<string, (nozle: Nozle) => Promise<unknown>> = {
   "costEvents.track": (n) => n.costEvents.track({ costMeterCode: "llm_tokens", externalCustomerId: "cust" }),
   "customers.upsert": (n) => n.customers.upsert({ externalId: "cust" }),
   "customers.erase": (n) => n.customers.erase("cust"),
+  "customerTokens.create": (n) => n.customerTokens.create("cust", { ttlSeconds: 600, features: ["seats"] }),
+  "customerTokens.revoke": (n) => n.customerTokens.revoke(),
   "customers.delete": (n) => n.customers.delete("cust"),
   "customers.upsert with tax data": (n) =>
     n.customers.upsert({

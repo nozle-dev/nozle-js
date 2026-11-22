@@ -3,7 +3,9 @@
 import React, {
   createContext,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -12,6 +14,7 @@ import { catalogQuery } from "./hooks/use-plans.js";
 import { AppearanceProvider } from "./appearance/context.js";
 import type { Appearance } from "./appearance/tokens.js";
 import { sanitizeSavedAppearance } from "./appearance/saved.js";
+import { createCustomerTokenFetch, customerTokenSource, type GetCustomerToken } from "./core/customer-token.js";
 
 export interface CheckoutSubscriptionResult {
   external_entity_id?: string;
@@ -223,9 +226,11 @@ export interface BillingContextValue {
   createManagePaymentMethod?: CreateManagePaymentMethod;
   /** The query client the billing hooks use: the `queryClient` prop, or one the provider made. */
   queryClient: QueryClient;
-  /** Reads a route of your billing endpoint; undefined when `billingEndpoint` is not set. */
+  /** Reads a route of your billing endpoint, or of Nozle with `getCustomerToken`; undefined when neither is set. */
   billingFetch?: BillingFetch;
   billingEndpoint?: string;
+  /** Names the billing hooks' cache entries: `billingEndpoint`, or the customer-token reads of `baseUrl`. */
+  billingKey?: string;
 }
 
 function createBillingFetch(
@@ -269,7 +274,42 @@ function createQueryClient(): QueryClient {
 
 export const BillingContext = createContext<BillingContextValue | null>(null);
 
-export interface BillingProviderProps {
+/**
+ * `customerId` is the signed-in customer's external id. It keys every hook's cache, so a sign-out and sign-in never
+ * serve one customer's cached state (or token) to the next. Required with `getCustomerToken`; pass it with
+ * `billingEndpoint` too when the provider outlives a sign-in (mounted at the app root).
+ */
+export type BillingProviderProps = BillingProviderBaseProps &
+  (
+    | {
+        getCustomerToken?: undefined;
+        /**
+         * The signed-in customer's external id. Changing it (a sign-out and sign-in) drops the previous customer's
+         * cached `billingEndpoint` reads. Without it the cache is keyed on `billingEndpoint` alone, so a provider
+         * that stays mounted across a sign-in can show the previous customer's reads for up to 30 seconds.
+         */
+        customerId?: string;
+      }
+    | {
+        /**
+         * Instead of `billingEndpoint`: calls your authenticated backend, which returns
+         * `nozle.customerTokens.create(signedInCustomerId)` (`@nozle-js/node`). `useEntitlement`, `useUsage`,
+         * `useCreditBalance`, `useCreditHistory` and `useSubscription` then read the signed-in customer straight
+         * from Nozle with the publishable key and that token. The provider caches the token and asks for a new one
+         * before it expires. Previews and invoices still need `billingEndpoint`. Keep the function stable
+         * (`useCallback`).
+         */
+        getCustomerToken: GetCustomerToken;
+        /**
+         * The signed-in customer's external id, the one your backend mints tokens for. Changing it (a sign-out
+         * and sign-in) drops the previous customer's cached reads and token. A token minted for another customer
+         * is refused.
+         */
+        customerId: string;
+      }
+  );
+
+export interface BillingProviderBaseProps {
   publishableKey: string;
   createCheckout?: CreateCheckout;
   verifyCheckout?: VerifyCheckout;
@@ -284,6 +324,11 @@ export interface BillingProviderProps {
   billingEndpoint?: string;
   /** Extra headers for billing endpoint requests, such as a CSRF token. */
   billingHeaders?: () => HeadersInit | Promise<HeadersInit>;
+  /**
+   * Core's URL, for usage and subscription reads with `getCustomerToken`. Defaults to `baseUrl` with its final
+   * `/engine` replaced by `/core` (`https://api.nozle.app/core`).
+   */
+  coreUrl?: string;
   /**
    * Your app's TanStack Query client, to share its cache and devtools. Without it the provider
    * makes its own. The hooks pass their client explicitly, so they never use or replace a
@@ -320,6 +365,9 @@ export function BillingProvider({
   baseUrl = "https://api.nozle.app/engine",
   billingEndpoint,
   billingHeaders,
+  getCustomerToken,
+  customerId,
+  coreUrl,
   queryClient,
   appearance,
   savedAppearance = true,
@@ -332,16 +380,31 @@ export function BillingProvider({
     );
   }
 
+  if (getCustomerToken && !customerId) {
+    throw new Error("BillingProvider getCustomerToken needs customerId, the signed-in customer's external id");
+  }
+
   const client = useMemo(
     () => createClient(publishableKey, baseUrl),
     [publishableKey, baseUrl],
   );
   const [ownQueryClient] = useState(createQueryClient);
   const activeQueryClient = queryClient ?? ownQueryClient;
-  const billingFetch = useMemo(
-    () => (billingEndpoint ? createBillingFetch(billingEndpoint, billingHeaders) : undefined),
-    [billingEndpoint, billingHeaders],
-  );
+  const billingFetch = useMemo(() => {
+    if (billingEndpoint) return createBillingFetch(billingEndpoint, billingHeaders);
+    if (!getCustomerToken) return undefined;
+    const core = coreUrl ?? (client.baseUrl.endsWith("/engine") ? `${client.baseUrl.slice(0, -"/engine".length)}/core` : undefined);
+    return createCustomerTokenFetch(client, core, customerTokenSource(getCustomerToken, customerId!));
+  }, [billingEndpoint, billingHeaders, getCustomerToken, customerId, coreUrl, client]);
+  const billingSource = billingEndpoint ?? (getCustomerToken ? `customer-token:${client.baseUrl}` : undefined);
+  const billingKey = billingSource && customerId ? `${billingSource}:${customerId}` : billingSource;
+  // The hooks already read the new key; drop what the previous customer left in the cache.
+  const previousKey = useRef(billingKey);
+  useEffect(() => {
+    const previous = previousKey.current;
+    previousKey.current = billingKey;
+    if (previous !== undefined && previous !== billingKey) activeQueryClient.removeQueries({ queryKey: ["nozle", previous] });
+  }, [billingKey, activeQueryClient]);
   const contextValue = useMemo(
     () => ({
       client,
@@ -352,8 +415,9 @@ export function BillingProvider({
       queryClient: activeQueryClient,
       billingFetch,
       billingEndpoint,
+      billingKey,
     }),
-    [client, createCheckout, verifyCheckout, getCheckoutStatus, createManagePaymentMethod, activeQueryClient, billingFetch, billingEndpoint],
+    [client, createCheckout, verifyCheckout, getCheckoutStatus, createManagePaymentMethod, activeQueryClient, billingFetch, billingEndpoint, billingKey],
   );
 
   // Same cache entry as PricingTable and usePlans, so one request. A failure leaves it unset.

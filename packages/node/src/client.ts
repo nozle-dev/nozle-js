@@ -21,6 +21,7 @@ import { CreditNotesNamespace } from "./credit-notes";
 import { BillingEntitiesNamespace } from "./billing-entities";
 import { InvoicesNamespace } from "./invoices";
 import { AlertsNamespace } from "./alerts";
+import { CustomerTokensNamespace } from "./customer-tokens";
 import { PlanVersionsNamespace } from "./plan-versions";
 import { addressToWire } from "./customer-tax";
 import type {
@@ -111,6 +112,8 @@ export class Nozle {
   readonly billingEntities: BillingEntitiesNamespace;
   /** Usage and wallet-balance alerts; Nozle sends `alert.triggered` when one fires. */
   readonly alerts: AlertsNamespace;
+  /** Short-lived read-only tokens for one customer's browser (`@nozle-js/react` `getCustomerToken`). Secret key. */
+  readonly customerTokens: CustomerTokensNamespace;
   /** The versions of a plan code and the migrations that move subscribers between them (secret keys). */
   readonly planVersions: PlanVersionsNamespace;
 
@@ -145,6 +148,7 @@ export class Nozle {
     this.creditNotes = new CreditNotesNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.billingEntities = new BillingEntitiesNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.alerts = new AlertsNamespace(this.eventsUrl, this.apiKey, this.policy);
+    this.customerTokens = new CustomerTokensNamespace(this.eventsUrl, this.apiKey, this.policy);
     this.planVersions = new PlanVersionsNamespace(this.eventsUrl, this.apiKey, this.policy);
   }
 

@@ -47,6 +47,8 @@ export { InvoicesNamespace, AgentTokenErrorCode, X402ErrorCode } from "./invoice
 export type { X402Requirements } from "./invoices";
 export { CreditNotesNamespace, CREDIT_NOTE_ERROR_CODES } from "./credit-notes";
 export { AlertsNamespace } from "./alerts";
+export { CustomerTokensNamespace } from "./customer-tokens";
+export type { CustomerToken, CreateCustomerTokenOptions } from "./customer-tokens";
 export { BillingEntitiesNamespace } from "./billing-entities";
 export type {
   BillingEntity, BillingEntityConfiguration, BillingEntityDetails, BillingEntityTaxFields, BillingEntityTaxProvider,
