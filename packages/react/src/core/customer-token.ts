@@ -22,10 +22,10 @@ export interface CustomerTokenSource {
 }
 
 /**
- * Caches the token and asks for a new one when less than a minute (or half its lifetime, for a short one) is left,
- * one request at a time.
+ * Caches `customerId`'s token and asks for a new one when less than a minute (or half its lifetime, for a short one)
+ * is left, one request at a time. A token minted for another customer is refused, never cached or sent.
  */
-export function customerTokenSource(get: GetCustomerToken, now: () => number = Date.now): CustomerTokenSource {
+export function customerTokenSource(get: GetCustomerToken, customerId: string, now: () => number = Date.now): CustomerTokenSource {
   let current: { token: CustomerToken; refreshAt: number } | undefined;
   let pending: Promise<CustomerToken> | undefined;
   return {
@@ -33,6 +33,10 @@ export function customerTokenSource(get: GetCustomerToken, now: () => number = D
       if (current && now() < current.refreshAt) return Promise.resolve(current.token);
       pending ??= get()
         .then((token) => {
+          // The merchant's session can lag a sign-out: never read one customer's state under another's id.
+          if (token.customer_id !== customerId) {
+            throw new Error("getCustomerToken returned a token for another customer than BillingProvider customerId");
+          }
           const obtained = now();
           const expires = Date.parse(token.expires_at);
           current = { token, refreshAt: expires - Math.min(REFRESH_MARGIN_MS, (expires - obtained) / 2) };

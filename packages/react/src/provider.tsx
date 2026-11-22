@@ -3,7 +3,9 @@
 import React, {
   createContext,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -272,7 +274,33 @@ function createQueryClient(): QueryClient {
 
 export const BillingContext = createContext<BillingContextValue | null>(null);
 
-export interface BillingProviderProps {
+/**
+ * `getCustomerToken` comes with `customerId`, the signed-in customer's external id, so a sign-out and sign-in never
+ * serve one customer's cached state or token to the next.
+ */
+export type BillingProviderProps = BillingProviderBaseProps &
+  (
+    | { getCustomerToken?: undefined; customerId?: undefined }
+    | {
+        /**
+         * Instead of `billingEndpoint`: calls your authenticated backend, which returns
+         * `nozle.customerTokens.create(signedInCustomerId)` (`@nozle-js/node`). `useEntitlement`, `useUsage`,
+         * `useCreditBalance`, `useCreditHistory` and `useSubscription` then read the signed-in customer straight
+         * from Nozle with the publishable key and that token. The provider caches the token and asks for a new one
+         * before it expires. Previews and invoices still need `billingEndpoint`. Keep the function stable
+         * (`useCallback`).
+         */
+        getCustomerToken: GetCustomerToken;
+        /**
+         * The signed-in customer's external id, the one your backend mints tokens for. Changing it (a sign-out
+         * and sign-in) drops the previous customer's cached reads and token. A token minted for another customer
+         * is refused.
+         */
+        customerId: string;
+      }
+  );
+
+export interface BillingProviderBaseProps {
   publishableKey: string;
   createCheckout?: CreateCheckout;
   verifyCheckout?: VerifyCheckout;
@@ -287,14 +315,6 @@ export interface BillingProviderProps {
   billingEndpoint?: string;
   /** Extra headers for billing endpoint requests, such as a CSRF token. */
   billingHeaders?: () => HeadersInit | Promise<HeadersInit>;
-  /**
-   * Instead of `billingEndpoint`: calls your authenticated backend, which returns
-   * `nozle.customerTokens.create(signedInCustomerId)` (`@nozle-js/node`). `useEntitlement`, `useUsage`,
-   * `useCreditBalance`, `useCreditHistory` and `useSubscription` then read the signed-in customer straight from
-   * Nozle with the publishable key and that token. The provider caches the token and asks for a new one before it
-   * expires. Previews and invoices still need `billingEndpoint`. Keep the function stable (`useCallback`).
-   */
-  getCustomerToken?: GetCustomerToken;
   /**
    * Core's URL, for usage and subscription reads with `getCustomerToken`. Defaults to `baseUrl` with its final
    * `/engine` replaced by `/core` (`https://api.nozle.app/core`).
@@ -337,6 +357,7 @@ export function BillingProvider({
   billingEndpoint,
   billingHeaders,
   getCustomerToken,
+  customerId,
   coreUrl,
   queryClient,
   appearance,
@@ -350,6 +371,10 @@ export function BillingProvider({
     );
   }
 
+  if (getCustomerToken && !customerId) {
+    throw new Error("BillingProvider getCustomerToken needs customerId, the signed-in customer's external id");
+  }
+
   const client = useMemo(
     () => createClient(publishableKey, baseUrl),
     [publishableKey, baseUrl],
@@ -360,9 +385,16 @@ export function BillingProvider({
     if (billingEndpoint) return createBillingFetch(billingEndpoint, billingHeaders);
     if (!getCustomerToken) return undefined;
     const core = coreUrl ?? (client.baseUrl.endsWith("/engine") ? `${client.baseUrl.slice(0, -"/engine".length)}/core` : undefined);
-    return createCustomerTokenFetch(client, core, customerTokenSource(getCustomerToken));
-  }, [billingEndpoint, billingHeaders, getCustomerToken, coreUrl, client]);
-  const billingKey = billingEndpoint ?? (getCustomerToken ? `customer-token:${client.baseUrl}` : undefined);
+    return createCustomerTokenFetch(client, core, customerTokenSource(getCustomerToken, customerId!));
+  }, [billingEndpoint, billingHeaders, getCustomerToken, customerId, coreUrl, client]);
+  const billingKey = billingEndpoint ?? (getCustomerToken ? `customer-token:${client.baseUrl}:${customerId}` : undefined);
+  // The hooks already read the new key; drop what the previous customer left in the cache.
+  const previousKey = useRef(billingKey);
+  useEffect(() => {
+    const previous = previousKey.current;
+    previousKey.current = billingKey;
+    if (previous !== undefined && previous !== billingKey) activeQueryClient.removeQueries({ queryKey: ["nozle", previous] });
+  }, [billingKey, activeQueryClient]);
   const contextValue = useMemo(
     () => ({
       client,

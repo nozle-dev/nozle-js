@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { render, renderHook, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -67,6 +67,7 @@ function wrapperWith(getCustomerToken: () => Promise<CustomerToken>) {
       publishableKey="pk_test"
       baseUrl="https://api.example/engine"
       getCustomerToken={getCustomerToken}
+      customerId="cus 1"
       queryClient={queryClient}
       savedAppearance={false}
     >
@@ -156,12 +157,97 @@ describe("customer token reads", () => {
   });
 });
 
+describe("customer switch", () => {
+  // The merchant's session decides who is signed in; the stable callback mints for that customer.
+  function signInSession() {
+    const session = { customerId: "alice" };
+    const getToken = vi.fn(async () => ({ token: `tok_${session.customerId}`, customer_id: session.customerId, expires_at: inOneHour() }));
+    const calls = stubNozle((url) =>
+      url.pathname.endsWith("/credit-systems")
+        ? Response.json({ balances: [{ credit_system: "ai", available: url.pathname.includes("alice") ? "ALICE" : "BOB" }] })
+        : undefined,
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <BillingProvider
+        publishableKey="pk_test"
+        baseUrl="https://api.example/engine"
+        getCustomerToken={getToken}
+        customerId={session.customerId}
+        queryClient={queryClient}
+        savedAppearance={false}
+      >
+        {children}
+      </BillingProvider>
+    );
+    return { session, getToken, calls, queryClient, wrapper };
+  }
+
+  it("serves the new customer only, with the provider mounted at the app root", async () => {
+    const { session, calls, queryClient, wrapper } = signInSession();
+    const seen: (string | undefined)[] = [];
+    const hook = renderHook(() => {
+      const balance = useCreditBalance();
+      seen.push(balance.data?.available);
+      return balance;
+    }, { wrapper });
+    await waitFor(() => expect(hook.result.current.data?.available).toBe("ALICE"));
+
+    const callsBefore = calls.length;
+    const seenBefore = seen.length;
+    session.customerId = "bob";
+    hook.rerender();
+
+    await waitFor(() => expect(hook.result.current.data?.available).toBe("BOB"));
+    expect(seen.slice(seenBefore)).not.toContain("ALICE");
+    expect(calls.slice(callsBefore).map((call) => call.token)).toEqual(["tok_bob"]);
+    expect(queryClient.getQueryCache().findAll().some((query) => JSON.stringify(query.queryKey).includes("alice"))).toBe(false);
+  });
+
+  it("serves the new customer only after the provider remounts", async () => {
+    const { session, calls, wrapper } = signInSession();
+    const first = renderHook(() => useCreditBalance(), { wrapper });
+    await waitFor(() => expect(first.result.current.data?.available).toBe("ALICE"));
+    first.unmount();
+
+    const callsBefore = calls.length;
+    session.customerId = "bob";
+    const seen: (string | undefined)[] = [];
+    const second = renderHook(() => {
+      const balance = useCreditBalance();
+      seen.push(balance.data?.available);
+      return balance;
+    }, { wrapper });
+
+    await waitFor(() => expect(second.result.current.data?.available).toBe("BOB"));
+    expect(seen).not.toContain("ALICE");
+    expect(calls.slice(callsBefore).map((call) => call.token)).toEqual(["tok_bob"]);
+  });
+
+  it("refuses a token minted for another customer and sends nothing", async () => {
+    const calls = stubNozle();
+    const getToken = vi.fn(async () => ({ token: "tok_other", customer_id: "someone else", expires_at: inOneHour() }));
+
+    const { result } = renderHook(() => useCreditBalance(), { wrapper: wrapperWith(getToken) });
+
+    await waitFor(() => expect(result.current.error?.message).toContain("another customer"));
+    expect(calls).toEqual([]);
+  });
+
+  it("requires customerId with getCustomerToken", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const props = { publishableKey: "pk_test", getCustomerToken: async () => ({ token: "t", customer_id: "c", expires_at: inOneHour() }) };
+    // @ts-expect-error customerId is required with getCustomerToken
+    expect(() => render(<BillingProvider {...props} savedAppearance={false}>{null}</BillingProvider>)).toThrow("customerId");
+  });
+});
+
 describe("customerTokenSource", () => {
   it("reuses the token until a minute before it expires, with one request at a time", async () => {
     let now = Date.parse("2026-11-22T12:00:00Z");
     let n = 0;
     const get = vi.fn(async () => ({ token: `tok_${++n}`, customer_id: "cus", expires_at: "2026-11-22T13:00:00Z" }));
-    const source = customerTokenSource(get, () => now);
+    const source = customerTokenSource(get, "cus", () => now);
 
     const [a, b] = await Promise.all([source.token(), source.token()]);
     expect([a.token, b.token]).toEqual(["tok_1", "tok_1"]);
@@ -176,7 +262,7 @@ describe("customerTokenSource", () => {
   it("refreshes a short-lived token at half its lifetime", async () => {
     let now = Date.parse("2026-11-22T12:00:00Z");
     const get = vi.fn(async () => ({ token: "tok", customer_id: "cus", expires_at: "2026-11-22T12:01:00Z" }));
-    const source = customerTokenSource(get, () => now);
+    const source = customerTokenSource(get, "cus", () => now);
 
     await source.token();
     now += 29_000;
