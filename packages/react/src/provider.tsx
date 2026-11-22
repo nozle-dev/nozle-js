@@ -12,6 +12,7 @@ import { catalogQuery } from "./hooks/use-plans.js";
 import { AppearanceProvider } from "./appearance/context.js";
 import type { Appearance } from "./appearance/tokens.js";
 import { sanitizeSavedAppearance } from "./appearance/saved.js";
+import { createCustomerTokenFetch, customerTokenSource, type GetCustomerToken } from "./core/customer-token.js";
 
 export interface CheckoutSubscriptionResult {
   external_entity_id?: string;
@@ -223,9 +224,11 @@ export interface BillingContextValue {
   createManagePaymentMethod?: CreateManagePaymentMethod;
   /** The query client the billing hooks use: the `queryClient` prop, or one the provider made. */
   queryClient: QueryClient;
-  /** Reads a route of your billing endpoint; undefined when `billingEndpoint` is not set. */
+  /** Reads a route of your billing endpoint, or of Nozle with `getCustomerToken`; undefined when neither is set. */
   billingFetch?: BillingFetch;
   billingEndpoint?: string;
+  /** Names the billing hooks' cache entries: `billingEndpoint`, or the customer-token reads of `baseUrl`. */
+  billingKey?: string;
 }
 
 function createBillingFetch(
@@ -285,6 +288,19 @@ export interface BillingProviderProps {
   /** Extra headers for billing endpoint requests, such as a CSRF token. */
   billingHeaders?: () => HeadersInit | Promise<HeadersInit>;
   /**
+   * Instead of `billingEndpoint`: calls your authenticated backend, which returns
+   * `nozle.customerTokens.create(signedInCustomerId)` (`@nozle-js/node`). `useEntitlement`, `useUsage`,
+   * `useCreditBalance`, `useCreditHistory` and `useSubscription` then read the signed-in customer straight from
+   * Nozle with the publishable key and that token. The provider caches the token and asks for a new one before it
+   * expires. Previews and invoices still need `billingEndpoint`. Keep the function stable (`useCallback`).
+   */
+  getCustomerToken?: GetCustomerToken;
+  /**
+   * Core's URL, for usage and subscription reads with `getCustomerToken`. Defaults to `baseUrl` with its final
+   * `/engine` replaced by `/core` (`https://api.nozle.app/core`).
+   */
+  coreUrl?: string;
+  /**
    * Your app's TanStack Query client, to share its cache and devtools. Without it the provider
    * makes its own. The hooks pass their client explicitly, so they never use or replace a
    * `QueryClientProvider` of your app.
@@ -320,6 +336,8 @@ export function BillingProvider({
   baseUrl = "https://api.nozle.app/engine",
   billingEndpoint,
   billingHeaders,
+  getCustomerToken,
+  coreUrl,
   queryClient,
   appearance,
   savedAppearance = true,
@@ -338,10 +356,13 @@ export function BillingProvider({
   );
   const [ownQueryClient] = useState(createQueryClient);
   const activeQueryClient = queryClient ?? ownQueryClient;
-  const billingFetch = useMemo(
-    () => (billingEndpoint ? createBillingFetch(billingEndpoint, billingHeaders) : undefined),
-    [billingEndpoint, billingHeaders],
-  );
+  const billingFetch = useMemo(() => {
+    if (billingEndpoint) return createBillingFetch(billingEndpoint, billingHeaders);
+    if (!getCustomerToken) return undefined;
+    const core = coreUrl ?? (client.baseUrl.endsWith("/engine") ? `${client.baseUrl.slice(0, -"/engine".length)}/core` : undefined);
+    return createCustomerTokenFetch(client, core, customerTokenSource(getCustomerToken));
+  }, [billingEndpoint, billingHeaders, getCustomerToken, coreUrl, client]);
+  const billingKey = billingEndpoint ?? (getCustomerToken ? `customer-token:${client.baseUrl}` : undefined);
   const contextValue = useMemo(
     () => ({
       client,
@@ -352,8 +373,9 @@ export function BillingProvider({
       queryClient: activeQueryClient,
       billingFetch,
       billingEndpoint,
+      billingKey,
     }),
-    [client, createCheckout, verifyCheckout, getCheckoutStatus, createManagePaymentMethod, activeQueryClient, billingFetch, billingEndpoint],
+    [client, createCheckout, verifyCheckout, getCheckoutStatus, createManagePaymentMethod, activeQueryClient, billingFetch, billingEndpoint, billingKey],
   );
 
   // Same cache entry as PricingTable and usePlans, so one request. A failure leaves it unset.

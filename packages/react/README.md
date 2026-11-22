@@ -4,7 +4,8 @@ React components for Nozle's public catalog, checkout, and customer billing port
 
 ## Credential boundary
 
-- `pk_` is used only for `GET /api/v1/plans`.
+- `pk_` alone is used only for `GET /api/v1/plans`.
+- With `getCustomerToken`, `pk_` plus a customer token minted by your backend reads the signed-in customer's entitlements, usage, credits and subscription, read only.
 - Secret keys stay on the merchant backend.
 - Presentational components consume caller-supplied customer state.
 - `BillingPortal` uses a customer-scoped session from your backend for Core GraphQL reads.
@@ -16,7 +17,7 @@ React components for Nozle's public catalog, checkout, and customer billing port
 npm install @nozle-js/react@0.11.0 @tanstack/react-query react react-dom
 ```
 
-The billing hooks (`useSubscription`, `useUsage`, `useInvoices` and the others) read your backend through `BillingProvider billingEndpoint`, served by `createBillingHandler` from `@nozle-js/node`; see [Hooks](https://docs.nozle.dev/sdks/react/hooks). Components need no Tailwind or host CSS. Style them with `appearance` on `BillingProvider` or on a component, using a theme from `@nozle-js/react/themes`, your own variables and per-element overrides; see [Styling](https://docs.nozle.dev/sdks/react/styling). The theme, colours and pricing table options saved in the dashboard (Developers > Customize SDK) apply automatically as the lowest layer, read from the same `/api/v1/plans` request as `PricingTable`; set `savedAppearance={false}` on `BillingProvider` to opt out. They arrive with that request, so the first paint uses the default look; to avoid that (and to server-render the saved theme), read `meta.sdk_appearance` of `GET /api/v1/plans` on your server and pass it as `initialSavedAppearance`.
+The billing hooks (`useSubscription`, `useUsage`, `useInvoices` and the others) read your backend through `BillingProvider billingEndpoint`, served by `createBillingHandler` from `@nozle-js/node`; or, for `useEntitlement`, `useUsage`, `useCreditBalance`, `useCreditHistory` and `useSubscription`, read Nozle directly with `BillingProvider getCustomerToken`, a function that returns `nozle.customerTokens.create(signedInCustomerId)` from your backend; see [Hooks](https://docs.nozle.dev/sdks/react/hooks). Components need no Tailwind or host CSS. Style them with `appearance` on `BillingProvider` or on a component, using a theme from `@nozle-js/react/themes`, your own variables and per-element overrides; see [Styling](https://docs.nozle.dev/sdks/react/styling). The theme, colours and pricing table options saved in the dashboard (Developers > Customize SDK) apply automatically as the lowest layer, read from the same `/api/v1/plans` request as `PricingTable`; set `savedAppearance={false}` on `BillingProvider` to opt out. They arrive with that request, so the first paint uses the default look; to avoid that (and to server-render the saved theme), read `meta.sdk_appearance` of `GET /api/v1/plans` on your server and pass it as `initialSavedAppearance`.
 
 ## Merchant-backed checkout
 
