@@ -191,3 +191,35 @@ describe("billing hooks", () => {
     expect(fetch.mock.calls.some(([u]) => String(u) === "/api/nozle/invoice-download?id=inv_1")).toBe(true);
   });
 });
+
+describe("billing endpoint customer switch", () => {
+  // The merchant's session cookie decides who the endpoint answers for; the endpoint path never changes.
+  it("serves the new customer only, with the provider mounted at the app root", async () => {
+    const session = { customerId: "alice" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ balances: [{ credit_system: "ai", available: session.customerId === "alice" ? "ALICE" : "BOB" }] }),
+      ),
+    );
+    const root = ({ children }: { children: React.ReactNode }) => (
+      <BillingProvider publishableKey="pk_test" billingEndpoint="/api/nozle" customerId={session.customerId} savedAppearance={false}>
+        {children}
+      </BillingProvider>
+    );
+    const seen: (string | undefined)[] = [];
+    const hook = renderHook(() => {
+      const balance = useCreditBalance();
+      seen.push(balance.data?.available);
+      return balance;
+    }, { wrapper: root });
+    await waitFor(() => expect(hook.result.current.data?.available).toBe("ALICE"));
+
+    const seenBefore = seen.length;
+    session.customerId = "bob";
+    hook.rerender();
+
+    await waitFor(() => expect(hook.result.current.data?.available).toBe("BOB"));
+    expect(seen.slice(seenBefore)).not.toContain("ALICE");
+  });
+});

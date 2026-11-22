@@ -275,12 +275,21 @@ function createQueryClient(): QueryClient {
 export const BillingContext = createContext<BillingContextValue | null>(null);
 
 /**
- * `getCustomerToken` comes with `customerId`, the signed-in customer's external id, so a sign-out and sign-in never
- * serve one customer's cached state or token to the next.
+ * `customerId` is the signed-in customer's external id. It keys every hook's cache, so a sign-out and sign-in never
+ * serve one customer's cached state (or token) to the next. Required with `getCustomerToken`; pass it with
+ * `billingEndpoint` too when the provider outlives a sign-in (mounted at the app root).
  */
 export type BillingProviderProps = BillingProviderBaseProps &
   (
-    | { getCustomerToken?: undefined; customerId?: undefined }
+    | {
+        getCustomerToken?: undefined;
+        /**
+         * The signed-in customer's external id. Changing it (a sign-out and sign-in) drops the previous customer's
+         * cached `billingEndpoint` reads. Without it the cache is keyed on `billingEndpoint` alone, so a provider
+         * that stays mounted across a sign-in can show the previous customer's reads for up to 30 seconds.
+         */
+        customerId?: string;
+      }
     | {
         /**
          * Instead of `billingEndpoint`: calls your authenticated backend, which returns
@@ -387,7 +396,8 @@ export function BillingProvider({
     const core = coreUrl ?? (client.baseUrl.endsWith("/engine") ? `${client.baseUrl.slice(0, -"/engine".length)}/core` : undefined);
     return createCustomerTokenFetch(client, core, customerTokenSource(getCustomerToken, customerId!));
   }, [billingEndpoint, billingHeaders, getCustomerToken, customerId, coreUrl, client]);
-  const billingKey = billingEndpoint ?? (getCustomerToken ? `customer-token:${client.baseUrl}:${customerId}` : undefined);
+  const billingSource = billingEndpoint ?? (getCustomerToken ? `customer-token:${client.baseUrl}` : undefined);
+  const billingKey = billingSource && customerId ? `${billingSource}:${customerId}` : billingSource;
   // The hooks already read the new key; drop what the previous customer left in the cache.
   const previousKey = useRef(billingKey);
   useEffect(() => {
