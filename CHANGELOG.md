@@ -1,6 +1,6 @@
 # Changelog
 
-## Node.js 0.44.0 and React 0.25.0 — unreleased
+## Node.js 0.44.0 and React 0.25.0 — 2026-11-23
 
 Needs Core 11.59.0 and Engine 2.64.0 (customer tokens).
 
