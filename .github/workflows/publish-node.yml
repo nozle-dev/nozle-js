@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: [self-hosted, Linux, X64, nozle-ci]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,8 +49,8 @@ jobs:
 
   publish:
     needs: build
-    # npm trusted publishing requires a GitHub-hosted runner. Build/test stay
-    # on the existing Nozle runner; only the registry operation runs here.
+    # npm trusted publishing requires a GitHub-hosted runner. Only the registry
+    # operation runs here; the build job never holds the id-token.
     runs-on: ubuntu-latest
     permissions:
       contents: read

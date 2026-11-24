@@ -37,7 +37,7 @@ concurrency:
 jobs:
   test:
     name: Node ${{ matrix.node-version }}
-    runs-on: [self-hosted, Linux, X64, nozle-ci]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -81,7 +81,7 @@ jobs:
 
   react:
     name: React ${{ matrix.node-version }}
-    runs-on: [self-hosted, Linux, X64, nozle-ci]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
